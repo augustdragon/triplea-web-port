@@ -1,6 +1,7 @@
 package org.triplea.web.server.map;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasEntry;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
@@ -36,6 +37,16 @@ class MapGeometryConverterTest {
     final MapGeometry geometry = MapGeometryConverter.fromMapFolder(TEST_MAP);
     // Both fixture territories have centers; this guards the null path stays serializable below.
     assertThat(geometry.territories().get(0).center(), notNullValue());
+  }
+
+  @Test
+  void readsDimensionsAndPlayerColorsFromMapProperties() throws IOException {
+    final MapGeometry geometry = MapGeometryConverter.fromMapFolder(TEST_MAP);
+
+    assertThat(geometry.mapWidth(), is(100));
+    assertThat(geometry.mapHeight(), is(80));
+    assertThat(geometry.playerColors(), hasEntry("Red", "ff0000"));
+    assertThat(geometry.playerColors(), hasEntry("Blue", "0000ff"));
   }
 
   @Test

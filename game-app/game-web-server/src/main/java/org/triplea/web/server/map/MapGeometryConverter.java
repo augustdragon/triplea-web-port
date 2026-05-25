@@ -22,26 +22,41 @@ public final class MapGeometryConverter {
   private MapGeometryConverter() {}
 
   /**
-   * Reads {@code polygons.txt} (required) and {@code centers.txt} (optional) from the given map
-   * folder. The result has no connection data.
+   * Reads geometry and {@code map.properties} from the given map folder. The result has no game
+   * data (connections or owners).
    *
    * @throws IOException if {@code polygons.txt} is missing or malformed.
    */
   public static MapGeometry fromMapFolder(final Path mapFolder) throws IOException {
-    return new MapGeometry(readTerritories(mapFolder), null);
+    final MapProperties properties = MapProperties.readFrom(mapFolder);
+    return new MapGeometry(
+        properties.mapWidth(),
+        properties.mapHeight(),
+        properties.playerColors(),
+        readTerritories(mapFolder),
+        null,
+        null);
   }
 
   /**
-   * Reads geometry from {@code mapFolder} and merges the territory adjacency graph parsed from
-   * {@code gameXml}, producing the complete map data the web client needs.
+   * Reads geometry and {@code map.properties} from {@code mapFolder} and merges the territory
+   * adjacency graph and initial ownership parsed from {@code gameXml}, producing the complete map
+   * data the web client needs for the static render.
    *
    * @throws IOException if {@code polygons.txt} is missing or malformed.
    * @throws IllegalStateException if {@code gameXml} cannot be parsed.
    */
   public static MapGeometry fromMapFolderAndGame(final Path mapFolder, final Path gameXml)
       throws IOException {
+    final MapProperties properties = MapProperties.readFrom(mapFolder);
+    final var gameData = GameDataLoader.load(gameXml);
     return new MapGeometry(
-        readTerritories(mapFolder), MapConnections.from(GameDataLoader.load(gameXml)));
+        properties.mapWidth(),
+        properties.mapHeight(),
+        properties.playerColors(),
+        readTerritories(mapFolder),
+        MapConnections.from(gameData),
+        GameStateReader.initialOwners(gameData));
   }
 
   private static List<TerritoryGeometry> readTerritories(final Path mapFolder) throws IOException {
