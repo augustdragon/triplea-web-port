@@ -33,3 +33,23 @@ Entries: the pattern → what went wrong → the rule to follow.
 ## Verify integration work by running the real artifact, not just unit tests
 - **What worked:** Each web-port increment was proven by running it (smoke test, `runAiGame`, `runSpectator` + a live browser screenshot) — which surfaced real-world facts unit tests wouldn't: geometry-only territories (`Box1-3`, `Suiyuyan`), the autosave call path, live ownership changes. Pairs with the global "verify before complete" rule.
 - **Rule:** For integration/porting, a green unit test isn't proof. Run the actual CLI/server/UI against real data and observe the output.
+
+## Drive browser/canvas verification from the data, not from pixel-hunting
+- **What went wrong:** Verifying a land move meant clicking a source territory then an adjacent enemy on a Canvas map. Guessing screen pixels for a named territory was slow and wrong — the live pan/zoom transform isn't known, so map→screen conversion drifts.
+- **Rule:** For canvas-app verification, pick targets from the underlying data, not the picture. Read `geometry.json` (PowerShell `ConvertFrom-Json`) for adjacency/owners/centers to choose a valid move (e.g. "Kiangsu borders Anhwe, which is Chinese"), then use the in-app hover tooltip to confirm a tile's identity before clicking. Confirm the *outcome* from data too (hover Anhwe → "owner: Japanese").
+
+## Re-send outstanding decision requests on (re)connect, not just latest state
+- **What went wrong:** The WebSocket server's catch-up re-sent only the latest state snapshot. A browser that connected *after* a blocking decision request was broadcast never saw it, so the engine thread sat parked forever waiting for a reply.
+- **Rule:** For a request/response bridge over a broadcast socket, the server must remember the outstanding request and re-send it on connect (clear it when any reply arrives). State catch-up alone strands a late/reloading client mid-decision.
+
+## Engine `whoAmI` label must be a single colon-free token
+- **What went wrong:** Constructed `WebPlayer` with label `"Human:Web"`. `ServerGame` sets `whoAmI = (isAi?"AI":"Human") + ":" + playerLabel`, and `GamePlayer.setWhoAmI` requires *exactly two* colon-separated parts — `"Human:Human:Web"` threw and killed the game on the first step.
+- **Rule:** A player's label is a bare token (e.g. `"Web"`), never `"Type:Label"`. When feeding a value the engine will compose into a delimited string, don't pre-include the delimiter.
+
+## `implementation` deps are not transitive — add the module you import directly
+- **What went wrong:** `game-web-server` depends on `:game-core`, whose own deps are `implementation` (not `api`). Using `org.triplea.java.collections.IntegerMap` directly failed to compile — it lives in `:java-extras`, which `game-core` doesn't re-export.
+- **Rule:** If you `import` a type, declare a direct dependency on the module that *defines* it (here `implementation(project(":java-extras"))`); don't rely on transitive visibility through `implementation` edges.
+
+## Match the test game-XML to the rulebook edition; the engine spans variants
+- **What went wrong:** Built/verified 3a–3b against `ww2pac40.xml` (1st-ed "Original"), but the saved rules PDF is **2nd edition** — they differ in real combat stats (e.g. aaGun cost 6 vs 5). Cross-checking battle logic against the PDF would have surfaced phantom "bugs" that are just edition differences. Also: the 2nd-ed XML existed in the map zip but wasn't in the first extraction.
+- **Rule:** A printed rulebook describes *one* ruleset; the engine is parameterized across many (multiple game XMLs + ~130 properties). Pick the target edition explicitly and point the runner/export at the matching XML. The engine XML governs behavior on any divergence; the rulebook is a cross-check, not the authority.
