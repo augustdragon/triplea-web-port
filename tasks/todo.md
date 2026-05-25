@@ -70,12 +70,15 @@ The existing `game.runNextStep()` loop naturally pauses on a human turn because
 - [ ] Deferred (cosmetic, needs out-of-repo PNG pipeline): base relief image under polygons; real unit sprite art (typed counts suffice to test logic). Scroll-wrap edges deferred too.
 - [x] **Exit check MET (verified live):** Pacific 1940 in the browser over the AI spectator runner — hover/click resolves the right territory (e.g. "Jehol — land · PU 1 · owner Japanese" with full unit breakdown), sea zones blue, capital dots, stacks update live as the game advanced (americansTech → chineseEndTurn → anzacTech), no console errors.
 
-#### 3b — Bridge + purchase (the mechanism proof)
-- [ ] `WebDecisionBridge` (ID-keyed request/response over the now-bidirectional WS server) + `WebPlayer extends AbstractBasePlayer` skeleton with **all ~30 Player methods stubbed to safe defaults** (accept default casualties, no retreat/scramble) so a full game still runs while only purchase is interactive.
-- [ ] Hand-build `Set<Player>` in `WebGameHost`: `WebPlayer` for the human seat + factory AI for the rest; designate which seats are human.
-- [ ] `WebPlayer.start(stepName)` dispatches like `TripleAPlayer.start()`; handle the **Purchase** step interactively → submit to `IPurchaseDelegate` (delegate validates, loops on error).
-- [ ] Browser purchase panel (production rules, costs, remaining PUs) on the 3a map surface.
-- [ ] **Exit check:** a human buys units in the browser, PUs deduct, the delegate rejects illegal buys, and AI plays the other seats to game end.
+#### 3b — Bridge + purchase (the mechanism proof) ✅ verified live
+- [x] `WebDecisionBridge` — ID-keyed request/response: engine thread parks on a `CompletableFuture`, WS thread completes it. `close()` unblocks on game stop.
+- [x] Bidirectional WS: `GameWebSocketServer` (replaces the spectator-only one) carries a `{type}` envelope — `state`/`request` out, `decision` in. Both runners use it. **Request catch-up**: a client joining mid-decision is re-sent the outstanding request (else the engine parks forever).
+- [x] `WebPlayer extends AbstractBasePlayer` — `isAi()→false`, all ~30 Player methods stubbed to safe defaults (engine-default casualties, no retreat/scramble/kamikaze, etc.); `start()` handles purchase/bid.
+- [x] Hand-build `Set<Player>` in `WebGameHost.startGame(...)`: `WebPlayer` for named human seats + factory AI for the rest. (No engine change, as predicted.)
+- [x] `WebPlayer.start()` purchase: read PUs + production frontier (rule name/cost/produces), send to browser, reconstruct `IntegerMap<ProductionRule>` from the name-keyed reply, submit to `IPurchaseDelegate`, validate-loop relaying the delegate's error.
+- [x] Browser `PurchasePanel` (per-rule +/- steppers, running cost vs. budget, error banner, Buy / Buy nothing) on the 3a map surface; `App` handles the envelope protocol; new `:game-web-server:runPlayable --args="<gameXml> <humanPlayer> [port] [maxRounds] [stepDelayMs]"`.
+- [x] **Exit check MET (verified live):** Japan as a browser human on Pacific 1940 — panel showed the real production list + 26-PU budget; bought 3 infantry + armour + fighter (25 PUs); **Buy** advanced the engine `japanesePurchase → japaneseCombatMove` (delegate accepted). Two bugs caught & fixed in verification: player label must be a single token (engine builds `whoAmI="Human:<label>"`, so `"Human:Web"` → 3 colon-parts crash → use `"Web"`); and the request catch-up above.
+- [ ] Not exercised live: delegate **rejection** path (client disables Buy when over-budget; the server validate-loop + error banner are implemented but a rejection wasn't triggered). Note: human seat's move/place auto-pass in 3b, so units bought are not placed (lost) — expected; 3c+ adds those phases.
 
 #### 3c — Combat move
 - [ ] Route-building on the clickable 3a map (select units → click destination chain) → `MoveDescription` → `IMoveDelegate.performMove()` (delegate enforces legality; relay errors).

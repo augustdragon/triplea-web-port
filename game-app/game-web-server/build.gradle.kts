@@ -9,6 +9,9 @@ dependencies {
     // the headless game-boot path. gson, guava, lombok and the JUnit5 test stack are injected
     // into every subproject by the root build.gradle.kts.
     implementation(project(":game-core"))
+    // IntegerMap / engine collection types used directly by WebPlayer (game-core depends on this
+    // but doesn't re-export it).
+    implementation(project(":java-extras"))
     // In-memory preferences so the headless server doesn't touch the user's real TripleA settings.
     implementation(libs.sonatype.goodies.prefs)
 
@@ -41,5 +44,14 @@ tasks.register<JavaExec>("runSpectator") {
     group = "web-port"
     description = "Runs an AI game and broadcasts state snapshots over WebSocket."
     mainClass.set("org.triplea.web.server.game.WebSpectatorServer")
+    classpath = sourceSets["main"].runtimeClasspath
+}
+
+// Playable: one seat driven from the browser (3b: purchase), the rest AI.
+// Run: ./gradlew :game-web-server:runPlayable --args="<gameXml> <humanPlayer> [port] [maxRounds] [stepDelayMs]"
+tasks.register<JavaExec>("runPlayable") {
+    group = "web-port"
+    description = "Runs a game with one browser-driven human seat over WebSocket."
+    mainClass.set("org.triplea.web.server.game.WebPlayableServer")
     classpath = sourceSets["main"].runtimeClasspath
 }

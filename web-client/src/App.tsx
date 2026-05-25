@@ -1,16 +1,19 @@
-import { useEffect, useState } from "react";
-import type { MapGeometry, StateSnapshot } from "./types";
+import { useEffect, useRef, useState } from "react";
+import type { DecisionRequest, MapGeometry, StateSnapshot } from "./types";
 import { MapCanvas } from "./MapCanvas";
+import { PurchasePanel } from "./PurchasePanel";
 
-// The spectator WebSocket server (see :game-web-server:runSpectator). Same host as the page,
-// so it works over LAN/ZeroTier too.
+// The game WebSocket server (see :game-web-server:runSpectator / runPlayable). Same host as the
+// page, so it works over LAN/ZeroTier too.
 const WS_URL = `ws://${location.hostname}:8080`;
 
 export default function App() {
   const [geometry, setGeometry] = useState<MapGeometry | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<StateSnapshot | null>(null);
+  const [request, setRequest] = useState<DecisionRequest | null>(null);
   const [wsStatus, setWsStatus] = useState("connecting…");
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     fetch("/geometry.json")
@@ -24,12 +27,30 @@ export default function App() {
 
   useEffect(() => {
     const ws = new WebSocket(WS_URL);
+    wsRef.current = ws;
     ws.onopen = () => setWsStatus("live");
-    ws.onmessage = (e) => setSnapshot(JSON.parse(e.data) as StateSnapshot);
+    ws.onmessage = (e) => {
+      const env = JSON.parse(e.data) as
+        | { type: "state"; snapshot: StateSnapshot }
+        | ({ type: "request" } & DecisionRequest);
+      if (env.type === "state") {
+        setSnapshot(env.snapshot);
+      } else if (env.type === "request") {
+        setRequest(env);
+      }
+    };
     ws.onclose = () => setWsStatus("disconnected");
-    ws.onerror = () => setWsStatus("error — is :game-web-server:runSpectator running?");
+    ws.onerror = () => setWsStatus("error — is a :game-web-server run task running?");
     return () => ws.close();
   }, []);
+
+  function submitDecision(choices: Record<string, number>) {
+    const ws = wsRef.current;
+    if (ws && request) {
+      ws.send(JSON.stringify({ type: "decision", requestId: request.requestId, payload: { choices } }));
+    }
+    setRequest(null);
+  }
 
   if (error) {
     return (
@@ -58,6 +79,9 @@ export default function App() {
         <span style={{ color: "#778" }}>drag = pan · wheel = zoom · click = select</span>
       </div>
       <MapCanvas geometry={geometry} owners={owners} units={units} />
+      {request?.kind === "purchase" && (
+        <PurchasePanel request={request.payload} onSubmit={submitDecision} />
+      )}
     </div>
   );
 }

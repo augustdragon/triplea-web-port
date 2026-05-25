@@ -185,6 +185,26 @@ Deferred (cosmetic, needs out-of-repo PNG pipeline): base relief image, unit spr
 scroll-wrap. **Re-export needed** for the new fields: re-run `:game-web-server:exportGeometry`
 with the 3-arg (game-aware) form, then copy `geometry.json` → `web-client/public/`.
 
-**Next → 3b (bridge + purchase):** `WebDecisionBridge` + bidirectional WS + `WebPlayer`
-skeleton (safe-default stubs) + interactive Purchase phase on this map surface. See
-`tasks/todo.md` for 3b–3g.
+**✅ 3b (bridge + purchase) DONE — verified live.** `WebDecisionBridge` parks the
+engine thread on a `CompletableFuture` keyed by `requestId`; the WS thread completes
+it. `GameWebSocketServer` (replaced the spectator-only class) carries a `{type}`
+envelope (`state`/`request` out, `decision` in) and **re-sends an outstanding request
+on (re)connect** so a late client doesn't park the engine. `WebPlayer extends
+AbstractBasePlayer` (`isAi()→false`, ~30 methods stubbed to safe defaults) drives the
+purchase step: read PUs + production frontier → browser → reconstruct
+`IntegerMap<ProductionRule>` from the name-keyed reply → `IPurchaseDelegate.purchase`
+→ validate-loop. `WebGameHost.startGame` hand-builds a mixed `WebPlayer`+AI seat set
+(no engine change). Client: `PurchasePanel` + envelope handling in `App`. New task
+`:game-web-server:runPlayable --args="<gameXml> <humanPlayer> [port] [maxRounds]
+[stepDelayMs]"`. Build dep added: `:java-extras` (for `IntegerMap`). Verified: Japan
+human bought 25 PUs of units, **Buy** advanced `japanesePurchase → japaneseCombatMove`.
+Two bugs caught in verification (both fixed): player label must be a single token
+(`whoAmI = "Human:<label>"`); request catch-up. `:game-web-server:check` + `tsc` clean.
+
+**Caveat carried into 3c:** the human seat's move/place phases auto-pass (stubs), so
+units bought in 3b are never placed (lost). 3c starts giving those phases real panels.
+
+**Next → 3c (combat move):** route-building on the clickable map (select units →
+destination chain) → `MoveDescription` → `IMoveDelegate.performMove()` (delegate
+enforces legality; relay errors). Reuses the 3a hit-testing and the 3b bridge. See
+`tasks/todo.md` for 3c–3g.

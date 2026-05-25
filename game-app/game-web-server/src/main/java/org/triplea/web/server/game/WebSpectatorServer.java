@@ -33,21 +33,21 @@ public final class WebSpectatorServer {
     final int maxRounds = args.length > 2 ? Integer.parseInt(args[2]) : 20;
     final long stepDelayMs = args.length > 3 ? Long.parseLong(args[3]) : 400;
 
-    final SpectatorWebSocketServer server = new SpectatorWebSocketServer(port);
+    final GameWebSocketServer server = new GameWebSocketServer(port);
     server.start();
     log.info("Spectating {} — connect a client to ws://<host>:{}", gameXml.getFileName(), port);
 
     final ServerGame game =
         WebGameHost.startAiGame(gameXml, PlayerTypes.FAST_AI, new HeadlessDisplay());
     game.setStopGameOnDelegateExecutionStop(true);
-    server.publish(GSON.toJson(StateProjector.project(game.getData())));
+    server.publishState(GSON.toJson(StateProjector.project(game.getData())));
 
     int steps = 0;
     while (!game.isGameOver()
         && game.getData().getSequence().getRound() <= maxRounds
         && steps < STEP_SAFETY_LIMIT) {
       game.runNextStep();
-      server.publish(GSON.toJson(StateProjector.project(game.getData())));
+      server.publishState(GSON.toJson(StateProjector.project(game.getData())));
       steps++;
       Thread.sleep(stepDelayMs);
     }

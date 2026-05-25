@@ -16,6 +16,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
@@ -67,8 +68,39 @@ public final class WebGameHost {
     for (final var player : gameData.getPlayerList().getPlayers()) {
       playerTypes.put(player.getName(), aiType);
     }
-    final Set<Player> players = gameData.getGameLoader().newPlayers(playerTypes);
+    return launch(gameData, gameData.getGameLoader().newPlayers(playerTypes), display);
+  }
 
+  /**
+   * Like {@link #startAiGame} but the players named in {@code humanPlayers} get a browser-driven
+   * {@link WebPlayer} (blocking on {@code bridge}); everyone else gets {@code aiType}. The mixed
+   * {@link Player} set is hand-built and passed straight to the engine — {@code PlayerTypes.Type}
+   * is an open class and neither {@code ServerGame} nor {@code startGame} validates player
+   * provenance, so this needs no engine change.
+   */
+  public static ServerGame startGame(
+      final Path gameXml,
+      final Set<String> humanPlayers,
+      final PlayerTypes.Type aiType,
+      final WebDecisionBridge bridge,
+      final IDisplay display) {
+    initEngine();
+    final GameData gameData = GameDataLoader.load(gameXml);
+
+    final Set<Player> players = new HashSet<>();
+    for (final var player : gameData.getPlayerList().getPlayers()) {
+      final String name = player.getName();
+      players.add(
+          humanPlayers.contains(name)
+              ? new WebPlayer(name, "Web", bridge)
+              : aiType.newPlayerWithName(name));
+    }
+    return launch(gameData, players, display);
+  }
+
+  /** Shared engine-host construction: no UI, no real networking, ready to step. */
+  private static ServerGame launch(
+      final GameData gameData, final Set<Player> players, final IDisplay display) {
     final WebLaunchAction launchAction = new WebLaunchAction(display);
     final Messengers messengers = new Messengers(new LocalNoOpMessenger());
     final ServerGame game =
