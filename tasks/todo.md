@@ -38,13 +38,62 @@ NOT modified. First map: World War II Pacific (Pacific 1940).
 - Deferred: full `WebDisplay` (IDisplay → push for fine-grained battle events) — built in Phase 3 where it's actually needed; Phase 2 polls state after each step. Also still serving the client via Vite dev + a separate WS port; unifying HTTP+WS under one server is a later cleanup.
 
 ### Phase 3 — Hotseat playable ⭐ (first milestone)
-- [ ] Implement `WebPlayer` (Player) with future/queue bridge for blocking decisions
-- [ ] Purchase panel → submit to purchase delegate
-- [ ] Combat-move panel → submit to move delegate (rules enforced by delegate)
-- [ ] Battle / casualty-selection panel (`selectCasualties`, `retreatQuery`)
-- [ ] Naval/air decision methods required by Pacific 1940 (`scrambleUnitsQuery`, `selectKamikazeSuicideAttacks`, shore bombard, fighters-to-carrier, air-to-land)
-- [ ] Non-combat move + place panels
-- [ ] **Exit check:** a complete Pacific 1940 game, playable start to finish, hotseat on one machine
+
+**Feasibility confirmed (research, this session): ZERO engine changes needed.**
+`PlayerTypes.Type` is an open abstract class (not an enum); `TripleA.newPlayers()`
+just calls `type.newPlayerWithName(name)` with no validation, and `ServerGame`/
+`startGame()` don't validate player provenance. So we hand-build the `Set<Player>`:
+a custom `WebPlayer extends AbstractBasePlayer` for human seats + factory AI for the
+rest. The only engine-called method we must get right is `isAi()` → `false`
+(`getPlayerType()` is a deprecated default that throws and is never called in-flow).
+`TripleAPlayer` is Swing-coupled in `game-headed` (we depend only on `:game-core`),
+so we model `WebPlayer` on its *structure* — dispatch in `start(stepName)`, validate
+every decision through the phase **delegate** — using our own WebSocket bridge
+instead of `CountDownLatch`+EDT.
+
+**Load-bearing primitive — `WebDecisionBridge`:** park the engine thread until the
+browser answers. Engine thread calls `bridge.await(request)` → assigns a `requestId`,
+registers a `CompletableFuture`, sends request JSON, blocks on `future.get()`. The
+WebSocket thread (org.java_websocket, off the game-loop thread) receives
+`{type:"decision", requestId, payload}`, completes the future by ID; engine wakes,
+deserializes, returns. Invalid input is rejected by the **delegate** (error string)
+→ relay to browser, re-prompt. Rules stay enforced by the engine, never the client.
+The existing `game.runNextStep()` loop naturally pauses on a human turn because
+`start()` blocks. ID-keyed so 3f / Phase 4 (multi-seat) extends cleanly.
+
+#### 3a — Map foundation (view + controls) — makes hotseat usable, no engine play changes
+- [ ] **Hit-testing (essential):** point-in-polygon → click selects a territory (highlight); foundation for every control.
+- [ ] **Units on the board (essential):** extend `StateProjector`/`StateSnapshot` (read-only) with units-per-territory (owner → unit type → count); render typed stack counts at centers.
+- [ ] **Pan / zoom (essential):** drag-pan + wheel-zoom; Pacific is huge, islands are unclickable at fit-scale.
+- [ ] Water flag: add `isWater` per territory to the export (`TerritoryAttachment`/`Matches.territoryIsWater`); render sea zones blue, not gray.
+- [ ] Hover tooltip + production/capital: export `production` value + capital markers (`TerritoryAttachment`); tooltip shows name / units / production on hover.
+- [ ] Deferred (cosmetic, needs out-of-repo PNG pipeline): base relief image under polygons; real unit sprite art (typed counts suffice to test logic). Scroll-wrap edges deferred too.
+- [ ] **Exit check:** against the existing AI spectator runner — navigate the full Pacific map, click any territory to select it and see its unit stacks, sea zones blue, watch stacks update live, no console errors.
+
+#### 3b — Bridge + purchase (the mechanism proof)
+- [ ] `WebDecisionBridge` (ID-keyed request/response over the now-bidirectional WS server) + `WebPlayer extends AbstractBasePlayer` skeleton with **all ~30 Player methods stubbed to safe defaults** (accept default casualties, no retreat/scramble) so a full game still runs while only purchase is interactive.
+- [ ] Hand-build `Set<Player>` in `WebGameHost`: `WebPlayer` for the human seat + factory AI for the rest; designate which seats are human.
+- [ ] `WebPlayer.start(stepName)` dispatches like `TripleAPlayer.start()`; handle the **Purchase** step interactively → submit to `IPurchaseDelegate` (delegate validates, loops on error).
+- [ ] Browser purchase panel (production rules, costs, remaining PUs) on the 3a map surface.
+- [ ] **Exit check:** a human buys units in the browser, PUs deduct, the delegate rejects illegal buys, and AI plays the other seats to game end.
+
+#### 3c — Combat move
+- [ ] Route-building on the clickable 3a map (select units → click destination chain) → `MoveDescription` → `IMoveDelegate.performMove()` (delegate enforces legality; relay errors).
+- [ ] **Exit check:** human performs a legal combat move; an illegal one is rejected with the engine's reason.
+
+#### 3d — Battle resolution
+- [ ] Real `selectCasualties` + `retreatQuery` panels; void notifications (`reportError`, `reportMessage`, `confirmOwnCasualties`, `confirmEnemyCasualties`).
+- [ ] **Exit check:** human fights a battle to resolution, picking casualties and a retreat.
+
+#### 3e — Non-combat move + place
+- [ ] Non-combat move (reuses 3c) + Place panel → place delegate; includes `getNumberOfFightersToMoveToNewCarrier`.
+
+#### 3f — Pacific-mandatory naval/air queries
+- [ ] `scrambleUnitsQuery`, `selectKamikazeSuicideAttacks`, `selectBombardingTerritory`, `selectTerritoryForAirToLand`, `selectShoreBombard`.
+
+#### 3g — Hotseat seat-switching + tech/politics
+- [ ] Pass-and-play: route each seat's queries to the one browser (seat banner / pass screen); tech & politics panels if the map uses them.
+- [ ] **Exit check:** a complete Pacific 1940 game, playable start to finish, hotseat on one machine.
 
 ### Phase 4 — LAN / ZeroTier multiplayer
 - [ ] Seat-claiming / session management (multiple browsers, one server)

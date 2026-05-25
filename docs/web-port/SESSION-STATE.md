@@ -159,6 +159,23 @@ real data, extract the `map/` geometry files (or read straight from the zip).
 - To demo: terminal 1 `:game-web-server:runSpectator --args="...\map\games\ww2pac40.xml 8080 6 350"`; terminal 2 `npm --prefix web-client run dev`; open http://localhost:5173/.
 
 ## Immediate next action when resuming
-Two tracks, pick per priority:
-- **Phase 3 (playable)**: implement `WebPlayer implements Player` + full `WebDisplay implements IDisplay`, wire human seats so the browser submits purchase/move/battle/place decisions (delegates enforce rules). Pacific 1940 forces naval/scramble/kamikaze `Player` methods early.
-- **Phase 1/2 polish**: base map tiles under polygons; pan/zoom; `water` flag (sea zones blue); units-per-territory in `StateSnapshot` + unit sprites; unify HTTP+WS under one server (currently Vite dev + separate WS port).
+**Phase 3 (playable) is the chosen track.** Full sub-phase breakdown + the
+feasibility findings are in `tasks/todo.md` (Phase 3). Key facts locked in:
+- **ZERO engine changes.** Hand-build `Set<Player>`: `WebPlayer extends
+  AbstractBasePlayer` (human seats) + factory AI (rest). `PlayerTypes.Type` is an
+  open abstract class; `newPlayers()`/`ServerGame`/`startGame()` don't validate
+  player provenance. Must get `isAi()`→`false` right; `getPlayerType()` is a
+  deprecated throwing default, never called in-flow. `TripleAPlayer` is Swing-coupled
+  in `game-headed` — model on its structure (dispatch in `start(stepName)`, validate
+  via the phase **delegate**), don't import it.
+- **`WebDecisionBridge`** is the load-bearing primitive: engine thread parks on a
+  `CompletableFuture` keyed by `requestId`; the WS thread completes it when the
+  browser answers; delegate rejects illegal input → re-prompt.
+
+**Start here → 3a (map foundation), built on the existing AI spectator runner, no
+engine play changes yet:** hit-testing (point-in-polygon click→select), units-per-
+territory in `StateProjector`/`StateSnapshot` + stack counts, pan/zoom, water flag
+(sea zones blue), hover tooltip + production/capital export. These three essentials
+(hit-test, units, pan/zoom) are blockers for a *usable* hotseat; deferred (cosmetic,
+needs out-of-repo PNG pipeline): base relief image, real unit sprites, scroll-wrap.
+Then 3b (bridge + purchase) lands on that surface. See `tasks/todo.md` for 3c–3g.
