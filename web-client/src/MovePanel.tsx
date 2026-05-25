@@ -1,10 +1,12 @@
-import type { MoveRequest } from "./types";
+import type { MovableUnit, MoveRequest } from "./types";
 
 /**
- * The combat-move panel (3c, land). The player clicks a source territory on the map (one with
- * movable units), then clicks further territories to extend the route; this panel picks how many of
- * each movable unit type to send, and submits one move at a time. The engine's move delegate
- * validates each move; a rejection comes back as `error`. "Done" ends the move phase.
+ * The move panel (3c — combat and non-combat; land, sea, air, transport load/unload). The player
+ * clicks a source territory on the map (one with movable units), then clicks further territories to
+ * extend the route; this panel picks how many of each movable unit type to send, and submits one
+ * move at a time. A land→sea route auto-loads the chosen land units onto transports in the
+ * destination sea zone. The engine's move delegate validates each move; a rejection comes back as
+ * `error`. "Done" ends the move phase.
  */
 export function MovePanel({
   request,
@@ -24,7 +26,7 @@ export function MovePanel({
   onDone: () => void;
 }) {
   const source = route[0];
-  const movable = source ? (request.movableUnits[source] ?? {}) : {};
+  const movable: MovableUnit[] = source ? (request.movableUnits[source] ?? []) : [];
   const totalChosen = Object.values(units).reduce((a, b) => a + b, 0);
   const canMove = route.length >= 2 && totalChosen > 0;
 
@@ -86,11 +88,14 @@ export function MovePanel({
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            {Object.entries(movable).map(([type, max]) => {
-              const n = units[type] ?? 0;
+            {movable.map((mu) => {
+              const n = units[mu.type] ?? 0;
+              const max = mu.count;
+              const kind = mu.air ? "✈" : mu.sea ? "⚓" : "▮";
+              const kindColor = mu.air ? "#7ec8ff" : mu.sea ? "#9fd0ff" : "#cdb98a";
               return (
                 <div
-                  key={type}
+                  key={mu.type}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -101,13 +106,19 @@ export function MovePanel({
                   }}
                 >
                   <span style={{ flex: 1 }}>
-                    {type} <span style={{ color: "#9fb6c9" }}>({max})</span>
+                    <span title={mu.air ? "air" : mu.sea ? "sea" : "land"} style={{ color: kindColor }}>
+                      {kind}
+                    </span>{" "}
+                    {mu.type} <span style={{ color: "#9fb6c9" }}>({max})</span>
+                    {mu.movementLeft > 0 && (
+                      <span style={{ color: "#7a8a78", fontSize: 11 }}> · move {mu.movementLeft}</span>
+                    )}
                   </span>
-                  <button onClick={() => bump(type, -1, max)} style={btn} disabled={n === 0}>
+                  <button onClick={() => bump(mu.type, -1, max)} style={btn} disabled={n === 0}>
                     −
                   </button>
                   <span style={{ width: 24, textAlign: "center" }}>{n}</span>
-                  <button onClick={() => bump(type, +1, max)} style={btn} disabled={n >= max}>
+                  <button onClick={() => bump(mu.type, +1, max)} style={btn} disabled={n >= max}>
                     +
                   </button>
                 </div>

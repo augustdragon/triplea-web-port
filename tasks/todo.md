@@ -84,14 +84,25 @@ The existing `game.runNextStep()` loop naturally pauses on a human turn because
 - [x] `WebPlayer.handleMove` (combat step): loop sending a `kind:"move"` request (carrying `movableUnits` = territory → type → count for units with movement left) until the browser says `{done:true}`; each `{route:[names], units:{type:count}}` reply → resolve `Unit`s from the route's first territory + build `Route` → `IMoveDelegate.performMove` (`Optional<String>`), relay errors. Mirrors `TripleAPlayer.move`.
 - [x] Client move mode: click a source (must have movable units) → pick unit counts → click adjacent territories to extend the path → Move / Clear / Done. `MapCanvas` gains a `highlight` prop (orange route outline); click handler ignores re-clicking the tail and only extends to a neighbor (via `geometry.connections`).
 - [x] **Exit check MET (verified live, 2nd-ed Pacific):** Japan moved 2 infantry Kiangsu → adjacent **Anhwe** (Chinese, undefended); delegate accepted; on Done the engine resolved combat and Anhwe flipped to **Japanese with 2 infantry**. Adjacency guard confirmed live (Hunan rejected, Anhwe accepted).
-- [ ] Deferred to 3d+: sea-zone moves + amphibious transport loading (`unitsToSeaTransports`), air range/landing, multi-unit-from-multiple-sources. Land/adjacent-path only for now (the panel still *offers* naval units in a sea zone, but transport-needing moves will be rejected by the delegate).
+- [ ] Deferred to 3d+: multi-unit-from-multiple-sources in one submission, air range/landing UX hints (engine still enforces). (Sea/air/transport-load all done in 3c+ below.)
+
+#### 3c+ — Full movement system (sea, air, transport load) ✅ verified live
+- [x] Non-combat move wired: `WebPlayer.start` dispatches `handleMove(false)` on the non-combat step too (same path; place still pending in 3e).
+- [x] Enriched move payload: `MoveRequest.movableUnits` is now territory → `List<MovableUnit>` (`{type, count, air, sea, movementLeft}`); `WebPlayer.movableUnits` reports air/sea flags + max movement-left (engine-authoritative, so base/airfield bonuses show automatically) and **includes transported land cargo** (`unitIsBeingTransported`) so it can unload.
+- [x] `WebPlayer.buildMove` (extracted, package-visible, unit-tested): resolves route + units from the reply; for a land→sea (`Route.isLoad()`) route builds `unitsToSeaTransports` via `TransportUtils.mapTransports` (transports drawn from the destination sea zone). Sea→land unloads / amphibious assaults and plain moves use the 2-arg `MoveDescription` (engine infers carrying transports). Submitted to `IMoveDelegate.performMove`; rejections relayed.
+- [x] Client `MovePanel` consumes the array: ⚓ sea / ✈ air / ▮ land badge + per-type movement-left. Route building unchanged (already crosses sea zones via `geometry.connections`).
+- [x] **Hit-test fix (`MapCanvas.territoryAt`)** — iterate territories in **reverse** (topmost-drawn first). Large sea-zone polygons overlap coastal/island land; forward iteration matched the sea zone first, leaving **29/90 land territories (every Pacific island) unclickable**. Required for amphibious/island play.
+- [x] **JUnit** `WebPlayerMoveTest` (7 tests) — guards `buildMove` against the engine's real `MoveValidator`: plain land, land→sea load (transport map built + validates), no-transport rejection, naval routing, and input guards. Map geography discovered from the graph (robust across maps).
+- [x] **Exit check MET (verified live, 2nd-ed Pacific, Japan):** enriched panel renders badges + movement (battleship move 3 = base 2 +1 naval base, surfaced from the engine); naval move destroyer 6 Sea Zone → 16 Sea Zone (count 2→1 confirmed); transport load 2 infantry Japan → 6 Sea Zone onto a transport (Japan infantry 6→4 confirmed); island selection works after the hit-test fix.
+- See `docs/web-port/state-model.md` for how the engine stores/tracks all this state.
 
 #### 3d — Battle resolution
 - [ ] Real `selectCasualties` + `retreatQuery` panels; void notifications (`reportError`, `reportMessage`, `confirmOwnCasualties`, `confirmEnemyCasualties`).
 - [ ] **Exit check:** human fights a battle to resolution, picking casualties and a retreat.
 
 #### 3e — Non-combat move + place
-- [ ] Non-combat move (reuses 3c) + Place panel → place delegate; includes `getNumberOfFightersToMoveToNewCarrier`.
+- [x] Non-combat move — dispatched via the same `handleMove` path (done in 3c+).
+- [ ] Place panel → place delegate; includes `getNumberOfFightersToMoveToNewCarrier`.
 
 #### 3f — Pacific-mandatory naval/air queries
 - [ ] `scrambleUnitsQuery`, `selectKamikazeSuicideAttacks`, `selectBombardingTerritory`, `selectTerritoryForAirToLand`, `selectShoreBombard`.

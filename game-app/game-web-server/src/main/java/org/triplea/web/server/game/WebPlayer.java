@@ -21,8 +21,11 @@ import games.strategy.triplea.delegate.data.CasualtyList;
 import games.strategy.triplea.delegate.remote.IMoveDelegate;
 import games.strategy.triplea.delegate.remote.IPurchaseDelegate;
 import games.strategy.triplea.player.AbstractBasePlayer;
+import games.strategy.triplea.util.TransportUtils;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -31,6 +34,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.function.Predicate;
 import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.triplea.java.collections.IntegerMap;
@@ -42,10 +46,10 @@ import org.triplea.util.Tuple;
  * engine enforces the rules) but blocks on a {@link WebDecisionBridge} instead of {@code
  * CountDownLatch}/EDT.
  *
- * <p>Phase 3b scope: only the <b>purchase</b> step is interactive. Every other decision method
- * returns a safe default so a full game still runs (the human's move/place phases auto-pass — units
- * bought but not placed are lost, which is fine for proving the purchase round-trip). 3c+ replaces
- * the defaults with real browser panels.
+ * <p>Interactive so far: <b>purchase</b> (3b) and both <b>combat</b> and <b>non-combat move</b>
+ * (3c) — land, sea, air, and transport load/unload. Every other decision method returns a safe
+ * default so a full game still runs (e.g. the place phase auto-passes — units bought but not placed
+ * are lost). 3d+ replaces more defaults with real browser panels (battle resolution next).
  */
 @Slf4j
 public final class WebPlayer extends AbstractBasePlayer {
@@ -71,8 +75,10 @@ public final class WebPlayer extends AbstractBasePlayer {
       handlePurchase(GameStep.isBidStepName(stepName));
     } else if (GameStep.isCombatMoveStepName(stepName)) {
       handleMove(true);
+    } else if (GameStep.isNonCombatMoveStepName(stepName)) {
+      handleMove(false);
     }
-    // Other steps (non-combat move, place, battle, tech, politics): no action yet; 3d+ add them.
+    // Other steps (place, battle, tech, politics): no action yet; 3d+ add them.
   }
 
   /** Ask the browser what to buy, submit to the purchase delegate, loop until accepted. */
@@ -132,9 +138,11 @@ public final class WebPlayer extends AbstractBasePlayer {
   }
 
   /**
-   * Combat move (3c, land only): loop asking the browser for one move at a time — drawing the units
+   * Move (combat or non-combat): loop asking the browser for one move at a time — drawing the units
    * from the route's first territory and submitting to the move delegate — until the browser says
-   * done. Mirrors {@code TripleAPlayer.move}'s submit-then-recurse loop. Transports/air come later.
+   * done. Mirrors {@code TripleAPlayer.move}'s submit-then-recurse loop. Land, sea, air, and
+   * transport load/unload (incl. amphibious assault) all go through the same path; the engine's
+   * move delegate validates each one and the rejection text comes back as {@code error}.
    */
   private void handleMove(final boolean combat) {
     final GamePlayer player = getGamePlayer();
@@ -151,23 +159,53 @@ public final class WebPlayer extends AbstractBasePlayer {
     }
   }
 
-  /** Territory name -> (unit type -> count) for the player's units that still have movement. */
-  private static Map<String, Map<String, Integer>> movableUnits(
+  /**
+   * What can still act this phase: a unit may move (movement left + can move) or it is land cargo
+   * still aboard a transport (which "moves" by unloading, with zero movement left). Mirrors the
+   * engine's own {@code MoveDelegate.delegateCurrentlyRequiresUserInput} predicate.
+   */
+  static Predicate<Unit> movableMatch(final GamePlayer player) {
+    final var canAct = Matches.unitHasMovementLeft().and(Matches.unitCanMove());
+    final var transportedCargo = Matches.unitIsLand().and(Matches.unitIsBeingTransported());
+    return Matches.unitIsOwnedBy(player).and(canAct.or(transportedCargo));
+  }
+
+  /**
+   * Territory name -> the player's actable units there, grouped by type (with display metadata).
+   */
+  private static Map<String, List<MovableUnit>> movableUnits(
       final GamePlayer player, final GameData data) {
-    final var matcher =
-        Matches.unitIsOwnedBy(player).and(Matches.unitHasMovementLeft()).and(Matches.unitCanMove());
-    final Map<String, Map<String, Integer>> result = new TreeMap<>();
+    final Predicate<Unit> matcher = movableMatch(player);
+    final Map<String, List<MovableUnit>> result = new TreeMap<>();
     for (final Territory territory : data.getMap().getTerritories()) {
       final List<Unit> movable =
           territory.getUnitCollection().getUnits().stream().filter(matcher).toList();
       if (movable.isEmpty()) {
         continue;
       }
-      final Map<String, Integer> byType = new TreeMap<>();
+      final Map<String, List<Unit>> byType = new TreeMap<>();
       for (final Unit unit : movable) {
-        byType.merge(unit.getType().getName(), 1, Integer::sum);
+        byType.computeIfAbsent(unit.getType().getName(), k -> new ArrayList<>()).add(unit);
       }
-      result.put(territory.getName(), byType);
+      final List<MovableUnit> rows = new ArrayList<>();
+      byType.forEach(
+          (type, units) -> {
+            final Unit sample = units.get(0);
+            final double maxMove =
+                units.stream()
+                    .map(Unit::getMovementLeft)
+                    .max(Comparator.naturalOrder())
+                    .orElse(BigDecimal.ZERO)
+                    .doubleValue();
+            rows.add(
+                new MovableUnit(
+                    type,
+                    units.size(),
+                    Matches.unitIsAir().test(sample),
+                    Matches.unitIsSea().test(sample),
+                    maxMove));
+          });
+      result.put(territory.getName(), rows);
     }
     return result;
   }
@@ -177,40 +215,79 @@ public final class WebPlayer extends AbstractBasePlayer {
    */
   private @Nullable String submitMove(
       final GamePlayer player, final GameData data, final JsonObject reply) {
-    if (!reply.has("route") || !reply.get("route").isJsonArray()) {
-      return "Move is missing a route";
+    final List<String> routeNames = new ArrayList<>();
+    if (reply.has("route") && reply.get("route").isJsonArray()) {
+      for (final JsonElement element : reply.getAsJsonArray("route")) {
+        routeNames.add(element.getAsString());
+      }
     }
+    final Map<String, Integer> unitCounts = new HashMap<>();
+    if (reply.has("units") && reply.get("units").isJsonObject()) {
+      for (final var entry : reply.getAsJsonObject("units").entrySet()) {
+        unitCounts.put(entry.getKey(), entry.getValue().getAsInt());
+      }
+    }
+
+    final MoveDescription move;
+    try {
+      move = buildMove(data, player, routeNames, unitCounts);
+    } catch (final IllegalArgumentException e) {
+      return e.getMessage(); // surfaced back to the browser as the rejection reason
+    }
+
+    final IMoveDelegate delegate = (IMoveDelegate) getPlayerBridge().getRemoteDelegate();
+    return delegate.performMove(move).orElse(null);
+  }
+
+  /**
+   * Turn a route (ordered territory names) and a unit-type→count selection into a {@link
+   * MoveDescription} the move delegate can validate, resolving the actual {@link Unit}s from the
+   * route's first territory. A land→sea route is treated as a transport <b>load</b>: the chosen
+   * land units are mapped onto transports sitting in the destination sea zone (via {@link
+   * TransportUtils#mapTransports}). Sea→land routes (unloads / amphibious assaults) and plain moves
+   * need no mapping — the engine recovers any carrying transports from the source. Throws {@link
+   * IllegalArgumentException} (with a user-facing message) on malformed input; rule legality is
+   * left to the engine's {@code MoveValidator}. Package-visible for direct testing.
+   */
+  static MoveDescription buildMove(
+      final GameData data,
+      final GamePlayer player,
+      final List<String> routeNames,
+      final Map<String, Integer> unitCounts) {
     final List<Territory> path = new ArrayList<>();
-    for (final JsonElement element : reply.getAsJsonArray("route")) {
-      final Territory territory = data.getMap().getTerritoryOrNull(element.getAsString());
+    for (final String name : routeNames) {
+      final Territory territory = data.getMap().getTerritoryOrNull(name);
       if (territory == null) {
-        return "Unknown territory: " + element.getAsString();
+        throw new IllegalArgumentException("Unknown territory: " + name);
       }
       path.add(territory);
     }
     if (path.size() < 2) {
-      return "A move needs a source and at least one destination";
+      throw new IllegalArgumentException("A move needs a source and at least one destination");
     }
+    final Route route = new Route(path);
     final Territory source = path.get(0);
 
     final List<Unit> units = new ArrayList<>();
-    if (reply.has("units") && reply.get("units").isJsonObject()) {
-      for (final var entry : reply.getAsJsonObject("units").entrySet()) {
-        final String type = entry.getKey();
-        final int count = entry.getValue().getAsInt();
-        source.getUnitCollection().getUnits().stream()
-            .filter(u -> u.isOwnedBy(player) && u.getType().getName().equals(type))
-            .filter(Unit::hasMovementLeft)
-            .limit(count)
-            .forEach(units::add);
-      }
-    }
+    unitCounts.forEach(
+        (type, count) ->
+            source.getUnitCollection().getUnits().stream()
+                .filter(u -> u.isOwnedBy(player) && u.getType().getName().equals(type))
+                .filter(movableMatch(player))
+                .limit(Math.max(0, count))
+                .forEach(units::add));
     if (units.isEmpty()) {
-      return "No matching movable units in " + source.getName();
+      throw new IllegalArgumentException("No matching movable units in " + source.getName());
     }
 
-    final IMoveDelegate delegate = (IMoveDelegate) getPlayerBridge().getRemoteDelegate();
-    return delegate.performMove(new MoveDescription(units, new Route(path))).orElse(null);
+    if (route.isLoad()) {
+      final Collection<Unit> transports =
+          route.getEnd().getUnitCollection().getMatches(Matches.unitIsSeaTransport());
+      final Map<Unit, Unit> unitsToTransports =
+          TransportUtils.mapTransports(route, units, transports);
+      return new MoveDescription(units, route, unitsToTransports);
+    }
+    return new MoveDescription(units, route);
   }
 
   // ---- Safe-default stubs (3c+ replaces these with real browser panels). ----

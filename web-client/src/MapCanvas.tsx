@@ -43,7 +43,13 @@ function pointInPolygon(px: number, py: number, ring: XyPoint[]): boolean {
 }
 
 function territoryAt(geometry: MapGeometry, mx: number, my: number): string | null {
-  for (const t of geometry.territories) {
+  // Territories are drawn in array order, so later entries paint on top. Sea-zone polygons are
+  // large and overlap coastal/island land, so hit-test in reverse (topmost first) — a click resolves
+  // to the territory the user actually sees, not a sea zone beneath it. (Forward iteration left ~1/3
+  // of land — essentially every Pacific island — unclickable, since the sea zone matched first.)
+  const terrs = geometry.territories;
+  for (let i = terrs.length - 1; i >= 0; i--) {
+    const t = terrs[i];
     for (const poly of t.polygons) {
       if (pointInPolygon(mx, my, poly)) return t.name;
     }

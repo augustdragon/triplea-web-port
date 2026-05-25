@@ -227,8 +227,30 @@ Verified: Japan moved 2 infantry Kiangsu → Anhwe (adjacent, Chinese, undefende
 delegate accepted, and after Done the engine resolved combat — **Anhwe became Japanese
 with 2 infantry**. `:game-web-server:check` + `tsc` clean.
 
+**✅ 3c+ (full movement: sea, air, transport load) DONE — verified live.**
+Extended movement to all unit types through one path. `WebPlayer.start` now also
+dispatches **non-combat move** (`handleMove(false)`). `MoveRequest.movableUnits`
+became territory → `List<MovableUnit>` (`{type,count,air,sea,movementLeft}`) —
+flags + engine-authoritative movement-left (so base/airfield bonuses show
+automatically), and it now includes transported land cargo (`unitIsBeingTransported`)
+for unloads. Extracted `WebPlayer.buildMove` (package-visible, unit-tested):
+resolves route+units; a land→sea `Route.isLoad()` builds `unitsToSeaTransports` via
+`TransportUtils.mapTransports` (transports from the destination sea zone); sea→land
+unloads / amphibious + plain moves use the 2-arg `MoveDescription` (engine infers
+transports). Client `MovePanel` shows ⚓/✈/▮ badges + movement. **Hit-test fix:**
+`MapCanvas.territoryAt` now iterates **reverse** (topmost-drawn wins) — sea-zone
+polygons overlap coastal/island land, and forward iteration left 29/90 land
+territories (every Pacific island) unclickable, blocking amphibious play. New JUnit
+`WebPlayerMoveTest` (7 tests) guards `buildMove` against the real `MoveValidator`.
+Verified live (Japan, 2nd ed): badges + battleship move 3 (= base 2 +1 naval base);
+destroyer 6 Sea Zone → 16 Sea Zone (2→1); transport-load 2 infantry Japan → 6 Sea
+Zone (infantry 6→4); islands selectable after the fix. `:game-web-server:test` +
+`tsc` clean. **New doc:** `docs/web-port/state-model.md` (how the engine stores &
+tracks state — in-memory object graph, units as objects not region properties,
+Change command pattern, serialized saves; what the web port reads).
+
 **Next → 3d (battle resolution):** real `selectCasualties` + `retreatQuery` panels +
-the void notifications, so a *defended* attack is fought interactively (3c only
-exercised an undefended conquest). Then 3e non-combat+place, 3f Pacific naval/air,
-3g hotseat seat-switching. Sea/amphibious moves (transport loading) also still
-deferred from 3c. See `tasks/todo.md` for 3d–3g.
+the void notifications, so a *defended* attack is fought interactively (so far only an
+undefended conquest + uncontested moves). Then 3e place (non-combat move already wired),
+3f Pacific naval/air queries, 3g hotseat seat-switching. Deferred from 3c+: multi-source
+single submission, air range/landing UX hints. See `tasks/todo.md` for 3d–3g.

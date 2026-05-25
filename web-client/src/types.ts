@@ -62,15 +62,28 @@ export interface PurchaseRequest {
   error: string | null;
 }
 
+/** One movable unit type in a territory: count plus display metadata (the engine validates moves). */
+export interface MovableUnit {
+  type: string;
+  count: number;
+  /** Air unit (can cross sea zones; must end able to land). */
+  air: boolean;
+  /** Sea unit (stays in sea zones; transports carry land units). */
+  sea: boolean;
+  /** Max remaining movement among this type here; 0 for cargo aboard a transport. */
+  movementLeft: number;
+}
+
 /**
- * Payload of a kind:"move" request: who's moving, combat vs non-combat, and the units that still
- * have movement (territory -> type -> count) so the client offers only valid picks; plus any prior
- * rejection error. Reply is {done:true} or {route:[territoryNames], units:{type:count}}.
+ * Payload of a kind:"move" request: who's moving, combat vs non-combat, and the units that can still
+ * act (territory -> MovableUnit[]) so the client offers only valid picks and can label them; plus
+ * any prior rejection error. Reply is {done:true} or {route:[territoryNames], units:{type:count}};
+ * a land→sea route auto-loads the chosen land units onto transports in the destination sea zone.
  */
 export interface MoveRequest {
   player: string;
   combat: boolean;
-  movableUnits: Record<string, Record<string, number>>;
+  movableUnits: Record<string, MovableUnit[]>;
   error: string | null;
 }
 
