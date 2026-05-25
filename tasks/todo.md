@@ -9,6 +9,7 @@ NOT modified. First map: World War II Pacific (Pacific 1940).
 ## Plan
 
 ### Phase 0 — Boot engine headless, in-process
+- [ ] **PREREQUISITE: install JDK 21** — machine currently has NO JDK (only a VASSAL-bundled JRE). Nothing builds without this. `winget install --id EclipseAdoptium.Temurin.21.JDK -e`, then confirm `java -version` / `JAVA_HOME`, then `./gradlew :game-app:smoke-testing:test --tests AiGameTest` to prove the engine builds+runs here.
 - [ ] Create `game-app/game-web-server` Gradle module (depends on game-core, game-headless); add its own `AGENTS.md`
 - [ ] Download/cache the `world_war_ii_pacific` map repo (art + polygons + centers) locally
 - [ ] Programmatically load the Pacific 1940 game XML and start a `ServerGame` with AI players, no UI
