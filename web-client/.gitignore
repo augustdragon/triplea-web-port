@@ -1,0 +1,7 @@
+node_modules
+dist
+dist-ssr
+*.local
+
+# Generated map data — produce locally with the :game-web-server:exportGeometry Gradle task.
+public/geometry.json
