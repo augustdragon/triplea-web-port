@@ -23,11 +23,28 @@ public final class MapGeometryConverter {
 
   /**
    * Reads {@code polygons.txt} (required) and {@code centers.txt} (optional) from the given map
-   * folder.
+   * folder. The result has no connection data.
    *
    * @throws IOException if {@code polygons.txt} is missing or malformed.
    */
   public static MapGeometry fromMapFolder(final Path mapFolder) throws IOException {
+    return new MapGeometry(readTerritories(mapFolder), null);
+  }
+
+  /**
+   * Reads geometry from {@code mapFolder} and merges the territory adjacency graph parsed from
+   * {@code gameXml}, producing the complete map data the web client needs.
+   *
+   * @throws IOException if {@code polygons.txt} is missing or malformed.
+   * @throws IllegalStateException if {@code gameXml} cannot be parsed.
+   */
+  public static MapGeometry fromMapFolderAndGame(final Path mapFolder, final Path gameXml)
+      throws IOException {
+    return new MapGeometry(
+        readTerritories(mapFolder), MapConnections.from(GameDataLoader.load(gameXml)));
+  }
+
+  private static List<TerritoryGeometry> readTerritories(final Path mapFolder) throws IOException {
     final Map<String, List<Polygon>> polygonsByTerritory =
         PointFileReaderWriter.readOneToManyPolygons(mapFolder.resolve("polygons.txt"));
 
@@ -47,7 +64,7 @@ public final class MapGeometryConverter {
           new TerritoryGeometry(
               name, polygons, center == null ? null : new XyPoint(center.x, center.y)));
     }
-    return new MapGeometry(territories);
+    return territories;
   }
 
   /** Serializes a {@link MapGeometry} to JSON for delivery to the web client. */

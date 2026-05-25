@@ -11,6 +11,8 @@ dependencies {
     implementation(project(":game-core"))
 
     testImplementation(project(":test-common"))
+    // TestMapGameData / TestMapGameDataLoader for loading real test maps in tests.
+    testImplementation(testFixtures(project(":game-core")))
 }
 
 // Exports a map folder's geometry to geometry.json for the web client.
