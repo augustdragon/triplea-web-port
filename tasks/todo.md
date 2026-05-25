@@ -9,13 +9,14 @@ NOT modified. First map: World War II Pacific (Pacific 1940).
 ## Plan
 
 ### Phase 0 — Boot engine headless, in-process
-- [ ] **PREREQUISITE: install JDK 21** — machine currently has NO JDK (only a VASSAL-bundled JRE). Nothing builds without this. `winget install --id EclipseAdoptium.Temurin.21.JDK -e`, then confirm `java -version` / `JAVA_HOME`, then `./gradlew :game-app:smoke-testing:test --tests AiGameTest` to prove the engine builds+runs here.
-- [ ] Create `game-app/game-web-server` Gradle module (depends on game-core, game-headless); add its own `AGENTS.md`
-- [ ] Download/cache the `world_war_ii_pacific` map repo (art + polygons + centers) locally
-- [ ] Programmatically load the Pacific 1940 game XML and start a `ServerGame` with AI players, no UI
-- [ ] Confirm a full game runs to completion in-process (driven by AI), logging step transitions
-- [ ] Build map-folder → `geometry.json` converter, reusing the engine's `MapData` reader (polygons + centers + connections + anchors)
-- [ ] **Exit check:** engine runs a full Pacific 1940 game from our code; `geometry.json` exported
+- [x] **PREREQUISITE: JDK 21** — installed (Temurin 21.0.11). `:smoke-testing:test --tests AiGameTest` PASSED (3m12s): engine builds + plays a full AI game headless on this machine. (Note: Gradle project paths are flat, e.g. `:smoke-testing`, not `:game-app:smoke-testing`.)
+- [x] Create `game-app/game-web-server` Gradle module + its `AGENTS.md` — compiles and passes `:game-web-server:check`. Deps: `:game-core` (gson/junit injected by root build). `:game-headless` to be added with the engine-host path.
+- [x] Map geometry converter `MapGeometryConverter` — reads `polygons.txt`/`centers.txt` via the engine's `PointFileReaderWriter`, emits `MapGeometry` JSON. 3 unit tests pass against a synthetic fixture. **Remaining:** merge territory connections from parsed `GameData`; read `map.properties` (width/height/scroll-wrap); validate on a real map.
+- [x] Confirm a full game runs to completion (AI) — proven at engine level by `AiGameTest` (reused, not re-implemented).
+- [ ] Download/cache the `world_war_ii_pacific` map repo (art + polygons + centers) locally — NEXT
+- [ ] Run the converter on the real Pacific 1940 map folder; export `geometry.json`
+- [ ] Drive the engine **from our module** (not just engine-level): a minimal `WebLaunchAction`/reuse `HeadlessLaunchAction`, load Pacific 1940 XML, start `ServerGame`, step it
+- [ ] **Exit check:** engine runs a full Pacific 1940 game from our code; `geometry.json` exported from the real map
 
 ### Phase 1 — Static rendering
 - [ ] Scaffold `web-client/` React app (Vite + TypeScript)

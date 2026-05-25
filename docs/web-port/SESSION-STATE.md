@@ -130,7 +130,15 @@ bombing, likely scroll-wrap rendering. Makes Phase 3 (and Phase 1 rendering)
 larger — several `Player` methods that could otherwise be stubbed are mandatory.
 Architecture unchanged. Accepted deliberately (user's choice).
 
+## Progress (updates as we go)
+- ✅ JDK 21 installed; `:smoke-testing:test --tests AiGameTest` PASSED — engine builds + plays a full AI game headless here.
+- ✅ `game-app/game-web-server` module created, wired to `:game-core`, passes `:game-web-server:check`.
+- ✅ `MapGeometryConverter` (reads polygons.txt/centers.txt via engine's `PointFileReaderWriter` → `MapGeometry` JSON), 3 passing unit tests on a synthetic fixture.
+- Build note: set `$env:JAVA_HOME='C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot'` before `gradlew` until shells pick up the machine var.
+
 ## Immediate next action when resuming
-JDK 21 install → `java -version` check → run `AiGameTest` smoke test → begin
-Phase 0 (create `game-web-server` module + `geometry.json` converter), verifying
-each step compiles/tests.
+Continue Phase 0: (1) download the `world_war_ii_pacific` map repo locally;
+(2) run `MapGeometryConverter` on its real map folder and export `geometry.json`;
+(3) extend the converter to merge territory connections from parsed `GameData`
+and read `map.properties`; (4) drive the engine from our module (reuse
+`HeadlessLaunchAction` as `GameTestUtils` does, or a minimal `WebLaunchAction`).
