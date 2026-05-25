@@ -42,7 +42,7 @@ public final class WebPlayableServer {
 
     final GameWebSocketServer server = new GameWebSocketServer(port);
     server.start();
-    final WebDecisionBridge bridge = new WebDecisionBridge(server::send);
+    final WebDecisionBridge bridge = new WebDecisionBridge(server::send, server::publishState);
     server.setInboundHandler(bridge::onClientMessage);
     log.info(
         "Playable {} as '{}' — connect a client to ws://<host>:{}",

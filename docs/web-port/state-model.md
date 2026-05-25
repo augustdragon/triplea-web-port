@@ -131,11 +131,12 @@ storage model. Two read paths only:
 | `geometry.json` | Map *shape*: polygons, centers + a few static attachment values (water, production, capital) | Exported **once**, offline (`exportGeometry`); served as a static file | Never changes |
 | `StateSnapshot` (WebSocket) | Live projection: owners map, units-by-territory (aggregated from each `UnitCollection`), round/step/current player | `StateProjector` reads `GameData` per step; broadcast as JSON | The engine's RAM is authoritative; the browser holds only a copy |
 
-The browser never holds state of record — just this projection. That's the source of the
-per-step display lag (e.g. a tooltip showing stale units mid-phase): the snapshot refreshes
-at step boundaries while the engine's `UnitCollection` updates on every accepted move. The
-fix, if we want it, is to re-project after each accepted move — not to store anything new
-client-side. If the process dies without a save, in-memory state is gone.
+The browser never holds state of record — just this projection. The runner publishes a
+snapshot after each engine step; additionally, because a move phase runs entirely inside one
+step, `WebPlayer.handleMove` re-projects and broadcasts after **each accepted move** (via
+`bridge.publishState`), so the map reflects unit movement immediately rather than only at
+step boundaries. The browser still stores nothing new — it just renders the latest
+projection. If the process dies without a save, in-memory state is gone.
 
 ## Key files
 

@@ -245,7 +245,11 @@ territories (every Pacific island) unclickable, blocking amphibious play. New JU
 Verified live (Japan, 2nd ed): badges + battleship move 3 (= base 2 +1 naval base);
 destroyer 6 Sea Zone → 16 Sea Zone (2→1); transport-load 2 infantry Japan → 6 Sea
 Zone (infantry 6→4); islands selectable after the fix. `:game-web-server:test` +
-`tsc` clean. **New doc:** `docs/web-port/state-model.md` (how the engine stores &
+`tsc` clean. **Per-move state broadcast:** the playable runner published a snapshot
+only per engine step, but a move phase runs entirely inside one step — so units
+looked frozen mid-phase. `WebPlayer.handleMove` now re-projects + broadcasts after
+each accepted move via a second `Consumer<String>` (`server::publishState`) on the
+bridge; verified live (16 Sea Zone showed the destroyer immediately, source 12→11). **New doc:** `docs/web-port/state-model.md` (how the engine stores &
 tracks state — in-memory object graph, units as objects not region properties,
 Change command pattern, serialized saves; what the web port reads).
 

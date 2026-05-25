@@ -26,14 +26,19 @@ import lombok.extern.slf4j.Slf4j;
 public final class WebDecisionBridge {
   private final Gson gson = new Gson();
   private final Consumer<String> sender;
+  private final Consumer<String> statePublisher;
   private final Map<String, CompletableFuture<JsonObject>> pending = new ConcurrentHashMap<>();
   private volatile boolean closed = false;
 
   /**
    * @param sender pushes a request-envelope JSON string to the browser (e.g. WS broadcast).
+   * @param statePublisher pushes a state-snapshot JSON (the raw snapshot; wrapped into a {@code
+   *     state} envelope by the server) so the map can refresh between an engine step's individual
+   *     decisions — e.g. after each accepted move, not just at step boundaries.
    */
-  public WebDecisionBridge(final Consumer<String> sender) {
+  public WebDecisionBridge(final Consumer<String> sender, final Consumer<String> statePublisher) {
     this.sender = sender;
+    this.statePublisher = statePublisher;
   }
 
   /**
@@ -67,6 +72,17 @@ public final class WebDecisionBridge {
       throw new IllegalStateException("Browser decision failed", e.getCause());
     } finally {
       pending.remove(requestId);
+    }
+  }
+
+  /**
+   * Engine thread: broadcast a fresh state snapshot mid-step (e.g. after an accepted move) so the
+   * browser's map reflects the change immediately rather than waiting for the step to end. No-op
+   * once closed.
+   */
+  public void publishState(final String snapshotJson) {
+    if (!closed) {
+      statePublisher.accept(snapshotJson);
     }
   }
 

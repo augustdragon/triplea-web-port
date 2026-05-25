@@ -1,5 +1,6 @@
 package org.triplea.web.server.game;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import games.strategy.engine.data.GameData;
@@ -53,6 +54,7 @@ import org.triplea.util.Tuple;
  */
 @Slf4j
 public final class WebPlayer extends AbstractBasePlayer {
+  private static final Gson GSON = new Gson();
   private final WebDecisionBridge bridge;
 
   public WebPlayer(final String name, final String playerLabel, final WebDecisionBridge bridge) {
@@ -156,6 +158,11 @@ public final class WebPlayer extends AbstractBasePlayer {
         return; // browser ended the phase
       }
       error = submitMove(player, data, reply);
+      if (error == null) {
+        // Refresh the map now — the move phase runs entirely inside one engine step, so without
+        // this the browser wouldn't see units shift until the whole phase ends.
+        bridge.publishState(GSON.toJson(StateProjector.project(data)));
+      }
     }
   }
 
