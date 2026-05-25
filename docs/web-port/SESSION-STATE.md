@@ -142,12 +142,15 @@ real data, extract the `map/` geometry files (or read straight from the zip).
 ## Progress (updates as we go)
 - ✅ JDK 21 installed; `:smoke-testing:test --tests AiGameTest` PASSED — engine builds + plays a full AI game headless here.
 - ✅ `game-app/game-web-server` module created, wired to `:game-core`, passes `:game-web-server:check`.
-- ✅ `MapGeometryConverter` (reads polygons.txt/centers.txt via engine's `PointFileReaderWriter` → `MapGeometry` JSON), 3 passing unit tests on a synthetic fixture.
-- Build note: set `$env:JAVA_HOME='C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot'` before `gradlew` until shells pick up the machine var.
+- ✅ `MapGeometryConverter` (polygons.txt/centers.txt via engine's `PointFileReaderWriter`) + `GameDataLoader`/`MapConnections` (parse game XML → adjacency). Unit-tested.
+- ✅ `GeometryExportCli` + `:game-web-server:exportGeometry` Gradle task. Run on the **real Pacific map**: `geometry.json` = 153 territories, 149 with connections, at `C:\Users\ndhay\triplea-webport-work\world_war_ii_pacific\geometry.json`.
+- ⚠️ Finding: `Box1/Box2/Box3` (UI decoration boxes) + `Suiyuyan` (polygons/XML name mismatch) are in geometry but not game data; 0 playable territories lack geometry. The web client must tolerate geometry-only territories.
+- Build note: set `$env:JAVA_HOME='C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot'` before `gradlew` until shells pick up the machine var. Work dir for extracted Pacific files: `C:\Users\ndhay\triplea-webport-work\world_war_ii_pacific\`.
 
 ## Immediate next action when resuming
-Continue Phase 0: (1) download the `world_war_ii_pacific` map repo locally;
-(2) run `MapGeometryConverter` on its real map folder and export `geometry.json`;
-(3) extend the converter to merge territory connections from parsed `GameData`
-and read `map.properties`; (4) drive the engine from our module (reuse
-`HeadlessLaunchAction` as `GameTestUtils` does, or a minimal `WebLaunchAction`).
+Phase 0 exit is met (geometry+connections exported from the real map; engine
+parses Pacific 1940 from our module). Next, **start Phase 1 (static rendering)**:
+scaffold `web-client/` (Vite + TS), render `geometry.json` over the map's base
+image (polygons + ownership tint + unit anchors). Deferred to Phase 2: running a
+full `ServerGame` from our module (built with `WebDisplay`); also fold in reading
+`map.properties` (width/height/scroll-wrap) into the geometry export.
