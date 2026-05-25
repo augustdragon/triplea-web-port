@@ -17,3 +17,19 @@ Entries: the pattern → what went wrong → the rule to follow.
 ## Gradle project paths here are flat
 - **What went wrong (potential):** AGENTS.md shows `./gradlew :game-app:game-core:test`, but `settings.gradle.kts` registers projects flat via `include(":game-core")` + `projectDir` override.
 - **Rule:** Trust `settings.gradle.kts` for project paths: use `:game-core`, `:smoke-testing`, `:game-headless`, etc. — not `:game-app:...`.
+
+## When integrating with a large codebase, copy its proven recipe — don't invent
+- **What worked:** The headless engine-boot path was non-obvious, but `smoke-testing/GameTestUtils` already had the exact in-process recipe (GameParser.parse → assign AI players → build ServerGame with LocalNoOpMessenger + NO_OP_SENDER → runNextStep). Reusing `PointFileReaderWriter` (polygons), `GameParser` (rules), and that recipe saved re-deriving fragile setup.
+- **Rule:** Before writing integration glue, find the existing seam — test utilities, `Headless*` classes, the interface the real UI implements — and copy the working recipe. The codebase usually already shows how.
+
+## A minimal interface impl: stub only what's truly never called — run to find out
+- **What went wrong:** `WebLaunchAction` blanket-threw `UnsupportedOperationException` on the LaunchAction methods I assumed were lobby-only. But `getAutoSaveFileUtils()` IS called mid-run (ServerGame writes a round-boundary autosave — separate from `setDelegateAutosavesEnabled(false)`), so the game crashed at the first round transition.
+- **Rule:** Don't assume which interface methods the runtime invokes. Implement the obvious ones, then RUN it and let the stack trace reveal the rest. `setX(false)`-style flags often don't disable every related code path.
+
+## Isolate an embedded/headless server from the user's real app settings
+- **What worked:** Used `ClientSetting.setPreferences(new MemoryPreferences())` (not `ClientSetting.initialize()`, which uses the real on-disk prefs) and redirected autosaves to a temp dir. The server neither reads the user's GUI prefs nor persists changes back.
+- **Rule:** When embedding an app's engine, run it on isolated/in-memory config and a throwaway working dir, so the server can't mutate or leak the user's real environment.
+
+## Verify integration work by running the real artifact, not just unit tests
+- **What worked:** Each web-port increment was proven by running it (smoke test, `runAiGame`, `runSpectator` + a live browser screenshot) — which surfaced real-world facts unit tests wouldn't: geometry-only territories (`Box1-3`, `Suiyuyan`), the autosave call path, live ownership changes. Pairs with the global "verify before complete" rule.
+- **Rule:** For integration/porting, a green unit test isn't proof. Run the actual CLI/server/UI against real data and observe the output.
