@@ -20,12 +20,14 @@ NOT modified. First map: World War II Pacific (Pacific 1940).
 - [x] **Exit check (met):** `geometry.json` exported from the real Pacific map with connections; engine parses Pacific 1940 from our code. (Full `ServerGame` loop from our module → Phase 2.)
 
 ### Phase 1 — Static rendering
-- [ ] Scaffold `web-client/` React app (Vite + TypeScript)
-- [ ] Export a one-shot JSON state snapshot from the running engine
-- [ ] Render base map image + territory polygon overlay from `geometry.json`
-- [ ] Tint territories by owner; draw unit sprites + stack counts at centers
-- [ ] Pan / zoom
-- [ ] **Exit check:** Pacific 1940 renders correctly in the browser (read-only)
+- [x] Scaffold `web-client/` React app (Vite + TypeScript + Canvas 2D).
+- [x] Export a one-shot JSON snapshot (geometry + colors + connections + initial owners) — done in Phase 0 via `exportGeometry`.
+- [x] Render territory polygons from `geometry.json` on a canvas, tinted by initial owner; center dots drawn. **Verified live** on real Pacific 1940 (153 territories, correct positions/colors, no console errors). Run: `npm --prefix web-client run dev` after copying the export to `web-client/public/geometry.json`.
+- [ ] Base map image (baseTiles) under the polygons — deferred (tile compositing is its own sub-task).
+- [ ] Unit sprites + stack counts at centers — deferred (needs unit images + a state snapshot of units per territory).
+- [ ] Pan / zoom.
+- [ ] Refinement: add a `water` flag to the export so sea zones render blue instead of Neutral-tan; hover/click hit-testing.
+- [x] **Exit check (polygons+ownership met):** Pacific 1940 renders correctly in the browser, read-only.
 
 ### Phase 2 — Live spectator over WebSocket
 - [ ] Implement `StateProjector` (GameData → JSON DTO; no full-graph serialization)

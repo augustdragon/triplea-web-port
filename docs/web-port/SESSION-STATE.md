@@ -147,10 +147,15 @@ real data, extract the `map/` geometry files (or read straight from the zip).
 - ⚠️ Finding: `Box1/Box2/Box3` (UI decoration boxes) + `Suiyuyan` (polygons/XML name mismatch) are in geometry but not game data; 0 playable territories lack geometry. The web client must tolerate geometry-only territories.
 - Build note: set `$env:JAVA_HOME='C:\Program Files\Eclipse Adoptium\jdk-21.0.11.10-hotspot'` before `gradlew` until shells pick up the machine var. Work dir for extracted Pacific files: `C:\Users\ndhay\triplea-webport-work\world_war_ii_pacific\`.
 
+## Phase 1 status — static render WORKING
+- ✅ `web-client/` (Vite + React + TS + Canvas 2D). `MapCanvas` renders `geometry.json` polygons tinted by initial owner; center dots drawn. **Verified live** on real Pacific 1940 — 153 territories, correct positions and faction colors, no console errors. `Suiyuyan`/`Box1-3` fall back to gray as designed.
+- Run it: copy `C:\Users\ndhay\triplea-webport-work\world_war_ii_pacific\geometry.json` → `web-client\public\geometry.json`, then `npm --prefix web-client run dev` (or from `web-client/`: `npm run dev`). Open `http://localhost:5173/`. `node` v22 / `npm` 10 already installed. `public/geometry.json` is gitignored (regenerate via `:game-web-server:exportGeometry`).
+- Tooling note: `npm --prefix <dir> install` misbehaved on Windows (looked for repo-root package.json); use `Push-Location web-client; npm install` instead.
+
 ## Immediate next action when resuming
-Phase 0 exit is met (geometry+connections exported from the real map; engine
-parses Pacific 1940 from our module). Next, **start Phase 1 (static rendering)**:
-scaffold `web-client/` (Vite + TS), render `geometry.json` over the map's base
-image (polygons + ownership tint + unit anchors). Deferred to Phase 2: running a
-full `ServerGame` from our module (built with `WebDisplay`); also fold in reading
-`map.properties` (width/height/scroll-wrap) into the geometry export.
+Finish Phase 1 polish, then Phase 2. Remaining Phase 1: (a) base map image
+(baseTiles) under the polygons; (b) pan/zoom; (c) add a `water` flag to the
+export so sea zones render blue not Neutral-tan; (d) hover/click hit-testing.
+Phase 2: `StateProjector` + `WebDisplay` + WebSocket, and run a full `ServerGame`
+from our module (the deferred Phase 0 item). Also fold `map.properties`
+scroll-wrap flags into the export when base tiles land.
