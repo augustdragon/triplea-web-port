@@ -12,3 +12,12 @@ dependencies {
 
     testImplementation(project(":test-common"))
 }
+
+// Exports a map folder's geometry to geometry.json for the web client.
+// Run: ./gradlew :game-web-server:exportGeometry --args="<mapFolder> <outputJsonFile>"
+tasks.register<JavaExec>("exportGeometry") {
+    group = "web-port"
+    description = "Converts a map folder's polygons.txt/centers.txt into geometry.json."
+    mainClass.set("org.triplea.web.server.map.GeometryExportCli")
+    classpath = sourceSets["main"].runtimeClasspath
+}
