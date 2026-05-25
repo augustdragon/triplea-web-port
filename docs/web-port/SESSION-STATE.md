@@ -172,10 +172,19 @@ feasibility findings are in `tasks/todo.md` (Phase 3). Key facts locked in:
   `CompletableFuture` keyed by `requestId`; the WS thread completes it when the
   browser answers; delegate rejects illegal input → re-prompt.
 
-**Start here → 3a (map foundation), built on the existing AI spectator runner, no
-engine play changes yet:** hit-testing (point-in-polygon click→select), units-per-
-territory in `StateProjector`/`StateSnapshot` + stack counts, pan/zoom, water flag
-(sea zones blue), hover tooltip + production/capital export. These three essentials
-(hit-test, units, pan/zoom) are blockers for a *usable* hotseat; deferred (cosmetic,
-needs out-of-repo PNG pipeline): base relief image, real unit sprites, scroll-wrap.
-Then 3b (bridge + purchase) lands on that surface. See `tasks/todo.md` for 3c–3g.
+**✅ 3a (map foundation) DONE — verified live.** Server: `StateSnapshot.units`
+(territory → `UnitStack[]`) built read-only in `StateProjector`; export enriched with
+per-territory `water`/`production`/`capitalOf` (`TerritoryGeometry`, filled from
+`Territory.isWater()`/`TerritoryAttachment` in the game-aware converter path). Client
+(`MapCanvas.tsx` rewritten): pan/zoom transform, point-in-polygon hit-testing
+(hover+click, yellow highlight), unit stack counts at centers, blue sea zones, capital
+dots, and a hover tooltip (name / land-or-sea / PU / capital / owner / per-type units).
+Real Pacific export = 63 sea zones, 5 capitals. `:game-web-server:check` green;
+`tsc --noEmit` clean. Verified in Chrome against `:game-web-server:runSpectator`.
+Deferred (cosmetic, needs out-of-repo PNG pipeline): base relief image, unit sprites,
+scroll-wrap. **Re-export needed** for the new fields: re-run `:game-web-server:exportGeometry`
+with the 3-arg (game-aware) form, then copy `geometry.json` → `web-client/public/`.
+
+**Next → 3b (bridge + purchase):** `WebDecisionBridge` + bidirectional WS + `WebPlayer`
+skeleton (safe-default stubs) + interactive Purchase phase on this map surface. See
+`tasks/todo.md` for 3b–3g.

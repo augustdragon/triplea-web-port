@@ -1,6 +1,9 @@
 package org.triplea.web.server.map;
 
 import com.google.gson.Gson;
+import games.strategy.engine.data.GameData;
+import games.strategy.engine.data.Territory;
+import games.strategy.triplea.attachments.TerritoryAttachment;
 import java.awt.Point;
 import java.awt.Polygon;
 import java.io.IOException;
@@ -9,6 +12,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import javax.annotation.Nullable;
 import org.triplea.util.PointFileReaderWriter;
 
 /**
@@ -33,7 +37,7 @@ public final class MapGeometryConverter {
         properties.mapWidth(),
         properties.mapHeight(),
         properties.playerColors(),
-        readTerritories(mapFolder),
+        readTerritories(mapFolder, null),
         null,
         null);
   }
@@ -54,12 +58,13 @@ public final class MapGeometryConverter {
         properties.mapWidth(),
         properties.mapHeight(),
         properties.playerColors(),
-        readTerritories(mapFolder),
+        readTerritories(mapFolder, gameData),
         MapConnections.from(gameData),
         GameStateReader.ownersByTerritory(gameData));
   }
 
-  private static List<TerritoryGeometry> readTerritories(final Path mapFolder) throws IOException {
+  private static List<TerritoryGeometry> readTerritories(
+      final Path mapFolder, @Nullable final GameData gameData) throws IOException {
     final Map<String, List<Polygon>> polygonsByTerritory =
         PointFileReaderWriter.readOneToManyPolygons(mapFolder.resolve("polygons.txt"));
 
@@ -75,9 +80,26 @@ public final class MapGeometryConverter {
         polygons.add(toPoints(polygon));
       }
       final Point center = centersByTerritory.get(name);
+      // Semantic attributes come from the game data when available. Geometry-only territories
+      // (in polygons.txt but not the game, e.g. UI decoration boxes) get safe defaults.
+      final Territory territory =
+          gameData == null ? null : gameData.getMap().getTerritoryOrNull(name);
+      final boolean water = territory != null && territory.isWater();
+      final int production = territory == null ? 0 : TerritoryAttachment.getProduction(territory);
+      final String capitalOf =
+          territory == null
+              ? null
+              : TerritoryAttachment.get(territory)
+                  .flatMap(TerritoryAttachment::getCapital)
+                  .orElse(null);
       territories.add(
           new TerritoryGeometry(
-              name, polygons, center == null ? null : new XyPoint(center.x, center.y)));
+              name,
+              polygons,
+              center == null ? null : new XyPoint(center.x, center.y),
+              water,
+              production,
+              capitalOf));
     }
     return territories;
   }

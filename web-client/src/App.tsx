@@ -1,13 +1,6 @@
 import { useEffect, useState } from "react";
-import type { MapGeometry } from "./types";
+import type { MapGeometry, StateSnapshot } from "./types";
 import { MapCanvas } from "./MapCanvas";
-
-interface StateSnapshot {
-  round: number;
-  step: string;
-  currentPlayer: string | null;
-  owners: Record<string, string>;
-}
 
 // The spectator WebSocket server (see :game-web-server:runSpectator). Same host as the page,
 // so it works over LAN/ZeroTier too.
@@ -49,8 +42,9 @@ export default function App() {
     return <div style={{ color: "#ccc", padding: 16, fontFamily: "sans-serif" }}>Loading map…</div>;
   }
 
-  // Live owners from the server when connected; otherwise the static initial ownership.
+  // Live owners/units from the server when connected; otherwise the static initial ownership.
   const owners = snapshot?.owners ?? geometry.initialOwners ?? {};
+  const units = snapshot?.units ?? {};
   return (
     <div style={{ color: "#ccc", fontFamily: "sans-serif", padding: 8 }}>
       <div style={{ marginBottom: 8, display: "flex", gap: 16 }}>
@@ -61,8 +55,9 @@ export default function App() {
         <span>step: {snapshot?.step ?? "—"}</span>
         <span>turn: {snapshot?.currentPlayer ?? "—"}</span>
         <span>{geometry.territories.length} territories</span>
+        <span style={{ color: "#778" }}>drag = pan · wheel = zoom · click = select</span>
       </div>
-      <MapCanvas geometry={geometry} owners={owners} />
+      <MapCanvas geometry={geometry} owners={owners} units={units} />
     </div>
   );
 }

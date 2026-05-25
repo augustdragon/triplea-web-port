@@ -61,14 +61,14 @@ deserializes, returns. Invalid input is rejected by the **delegate** (error stri
 The existing `game.runNextStep()` loop naturally pauses on a human turn because
 `start()` blocks. ID-keyed so 3f / Phase 4 (multi-seat) extends cleanly.
 
-#### 3a — Map foundation (view + controls) — makes hotseat usable, no engine play changes
-- [ ] **Hit-testing (essential):** point-in-polygon → click selects a territory (highlight); foundation for every control.
-- [ ] **Units on the board (essential):** extend `StateProjector`/`StateSnapshot` (read-only) with units-per-territory (owner → unit type → count); render typed stack counts at centers.
-- [ ] **Pan / zoom (essential):** drag-pan + wheel-zoom; Pacific is huge, islands are unclickable at fit-scale.
-- [ ] Water flag: add `isWater` per territory to the export (`TerritoryAttachment`/`Matches.territoryIsWater`); render sea zones blue, not gray.
-- [ ] Hover tooltip + production/capital: export `production` value + capital markers (`TerritoryAttachment`); tooltip shows name / units / production on hover.
+#### 3a — Map foundation (view + controls) — makes hotseat usable, no engine play changes ✅
+- [x] **Hit-testing (essential):** point-in-polygon → hover/click selects a territory (yellow highlight); foundation for every control. (`MapCanvas.tsx` `territoryAt`/`pointInPolygon`.)
+- [x] **Units on the board (essential):** `StateSnapshot.units` (territory → `UnitStack[]` of owner/type/count, empty territories omitted) built read-only in `StateProjector.unitsByTerritory`; client renders total counts at centers + full breakdown in tooltip.
+- [x] **Pan / zoom (essential):** drag-pan + wheel-zoom (cursor-anchored), fit-to-view on load. (`MapCanvas` `view` transform.)
+- [x] Water flag: `TerritoryGeometry.water` from `Territory.isWater()` in the export; sea zones render blue (`WATER_COLOR`). Real Pacific export = 63 sea zones.
+- [x] Hover tooltip + production/capital: export `production` (`TerritoryAttachment.getProduction`) + `capitalOf` (`getCapital`); tooltip shows name / land-or-sea / PU / capital / owner / per-type units. Capital dots drawn at centers (5 capitals on Pacific).
 - [ ] Deferred (cosmetic, needs out-of-repo PNG pipeline): base relief image under polygons; real unit sprite art (typed counts suffice to test logic). Scroll-wrap edges deferred too.
-- [ ] **Exit check:** against the existing AI spectator runner — navigate the full Pacific map, click any territory to select it and see its unit stacks, sea zones blue, watch stacks update live, no console errors.
+- [x] **Exit check MET (verified live):** Pacific 1940 in the browser over the AI spectator runner — hover/click resolves the right territory (e.g. "Jehol — land · PU 1 · owner Japanese" with full unit breakdown), sea zones blue, capital dots, stacks update live as the game advanced (americansTech → chineseEndTurn → anzacTech), no console errors.
 
 #### 3b — Bridge + purchase (the mechanism proof)
 - [ ] `WebDecisionBridge` (ID-keyed request/response over the now-bidirectional WS server) + `WebPlayer extends AbstractBasePlayer` skeleton with **all ~30 Player methods stubbed to safe defaults** (accept default casualties, no retreat/scramble) so a full game still runs while only purchase is interactive.
