@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import type { DecisionRequest, MapGeometry, StateSnapshot } from "./types";
+import type { DecisionRequest, MapGeometry, MoveRequest, PurchaseRequest, StateSnapshot } from "./types";
 import { MapCanvas } from "./MapCanvas";
 import { PurchasePanel } from "./PurchasePanel";
+import { MovePanel } from "./MovePanel";
 
 // The game WebSocket server (see :game-web-server:runSpectator / runPlayable). Same host as the
 // page, so it works over LAN/ZeroTier too.
@@ -13,6 +14,8 @@ export default function App() {
   const [snapshot, setSnapshot] = useState<StateSnapshot | null>(null);
   const [request, setRequest] = useState<DecisionRequest | null>(null);
   const [wsStatus, setWsStatus] = useState("connecting…");
+  const [moveRoute, setMoveRoute] = useState<string[]>([]);
+  const [moveUnits, setMoveUnits] = useState<Record<string, number>>({});
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -44,12 +47,45 @@ export default function App() {
     return () => ws.close();
   }, []);
 
-  function submitDecision(choices: Record<string, number>) {
+  function sendDecision(payload: object) {
     const ws = wsRef.current;
     if (ws && request) {
-      ws.send(JSON.stringify({ type: "decision", requestId: request.requestId, payload: { choices } }));
+      ws.send(JSON.stringify({ type: "decision", requestId: request.requestId, payload }));
     }
     setRequest(null);
+  }
+
+  // Purchase: one submission ends the phase.
+  function submitPurchase(choices: Record<string, number>) {
+    sendDecision({ choices });
+  }
+
+  // Move: click territories to build a route; submit one move (server loops for the next), or Done.
+  // First click must be a territory with movable units; each further click must extend to a
+  // neighbor (per the adjacency graph) and ignores re-clicking the current tail.
+  function onTerritoryClick(name: string | null) {
+    if (!name || request?.kind !== "move") return;
+    const movable = (request.payload as MoveRequest).movableUnits;
+    const connections = geometry?.connections ?? {};
+    setMoveRoute((prev) => {
+      if (prev.length === 0) return movable[name] ? [name] : prev;
+      const tail = prev[prev.length - 1];
+      if (name === tail) return prev; // ignore re-click of the current tail
+      if (!connections[tail]?.includes(name)) return prev; // only extend to an adjacent territory
+      return [...prev, name];
+    });
+  }
+  function resetMove() {
+    setMoveRoute([]);
+    setMoveUnits({});
+  }
+  function submitMove() {
+    sendDecision({ route: moveRoute, units: moveUnits });
+    resetMove();
+  }
+  function submitDone() {
+    sendDecision({ done: true });
+    resetMove();
   }
 
   if (error) {
@@ -78,9 +114,26 @@ export default function App() {
         <span>{geometry.territories.length} territories</span>
         <span style={{ color: "#778" }}>drag = pan · wheel = zoom · click = select</span>
       </div>
-      <MapCanvas geometry={geometry} owners={owners} units={units} />
+      <MapCanvas
+        geometry={geometry}
+        owners={owners}
+        units={units}
+        onSelect={onTerritoryClick}
+        highlight={request?.kind === "move" ? moveRoute : undefined}
+      />
       {request?.kind === "purchase" && (
-        <PurchasePanel request={request.payload} onSubmit={submitDecision} />
+        <PurchasePanel request={request.payload as PurchaseRequest} onSubmit={submitPurchase} />
+      )}
+      {request?.kind === "move" && (
+        <MovePanel
+          request={request.payload as MoveRequest}
+          route={moveRoute}
+          units={moveUnits}
+          setUnits={setMoveUnits}
+          onMove={submitMove}
+          onClear={resetMove}
+          onDone={submitDone}
+        />
       )}
     </div>
   );

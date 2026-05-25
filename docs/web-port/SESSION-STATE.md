@@ -130,6 +130,17 @@ bombing, likely scroll-wrap rendering. Makes Phase 3 (and Phase 1 rendering)
 larger — several `Player` methods that could otherwise be stubbed are mandatory.
 Architecture unchanged. Accepted deliberately (user's choice).
 
+## ⭐ Target edition = **2nd edition** (`ww2pac40_2nd_edition.xml`)
+Decided when adding the rulebook. The official rules PDF is saved at
+`docs/axis-allies-rules-pacific1940-2nd-edition.pdf` — page into its combat /
+casualty / retreat sections when building 3c/3d (use it as a cross-check; the
+engine XML governs behavior on any divergence). 3a/3b were originally built+verified
+against `ww2pac40.xml` (1st-ed "Original"); from 3c on we target the **2nd edition**
+so the engine matches the PDF. Geometry re-exported from the 2nd-ed XML and the
+playable server now runs it. **Note:** the 2nd-ed XML is in the zip but was not in
+the first extraction — extract it with
+`unzip -o -j <zip> "world_war_ii_pacific-master/map/games/ww2pac40_2nd_edition.xml" -d "<workdir>/map/games/"`.
+
 ## Pacific map is already local (no download needed)
 TripleA is installed here; the map is at
 `C:\Users\ndhay\triplea\downloadedMaps\world_war_ii_pacific-master.zip` (2597
@@ -204,7 +215,20 @@ Two bugs caught in verification (both fixed): player label must be a single toke
 **Caveat carried into 3c:** the human seat's move/place phases auto-pass (stubs), so
 units bought in 3b are never placed (lost). 3c starts giving those phases real panels.
 
-**Next → 3c (combat move):** route-building on the clickable map (select units →
-destination chain) → `MoveDescription` → `IMoveDelegate.performMove()` (delegate
-enforces legality; relay errors). Reuses the 3a hit-testing and the 3b bridge. See
-`tasks/todo.md` for 3c–3g.
+**✅ 3c (combat move, land) DONE — verified live.** `WebPlayer.handleMove` loops a
+`kind:"move"` request (payload `MoveRequest`: player/combat/`movableUnits` = territory
+→ type → count for units with movement) until the browser sends `{done:true}`; each
+`{route:[names],units:{type:count}}` reply → resolve `Unit`s from route[0] + build
+`Route` → `IMoveDelegate.performMove` (`Optional<String>`), relay errors. Mirrors
+`TripleAPlayer.move`. Client: move mode (click source → pick units → click adjacent
+path → Move/Clear/Done); `MapCanvas` gained a `highlight` prop (orange route); click
+handler ignores tail re-clicks and only extends to a neighbor via `geometry.connections`.
+Verified: Japan moved 2 infantry Kiangsu → Anhwe (adjacent, Chinese, undefended),
+delegate accepted, and after Done the engine resolved combat — **Anhwe became Japanese
+with 2 infantry**. `:game-web-server:check` + `tsc` clean.
+
+**Next → 3d (battle resolution):** real `selectCasualties` + `retreatQuery` panels +
+the void notifications, so a *defended* attack is fought interactively (3c only
+exercised an undefended conquest). Then 3e non-combat+place, 3f Pacific naval/air,
+3g hotseat seat-switching. Sea/amphibious moves (transport loading) also still
+deferred from 3c. See `tasks/todo.md` for 3d–3g.

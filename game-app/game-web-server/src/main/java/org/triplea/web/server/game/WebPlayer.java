@@ -1,19 +1,24 @@
 package org.triplea.web.server.game;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.GameStep;
+import games.strategy.engine.data.MoveDescription;
 import games.strategy.engine.data.NamedAttachable;
 import games.strategy.engine.data.ProductionFrontier;
 import games.strategy.engine.data.ProductionRule;
 import games.strategy.engine.data.Resource;
+import games.strategy.engine.data.Route;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.triplea.Constants;
 import games.strategy.triplea.delegate.DiceRoll;
+import games.strategy.triplea.delegate.Matches;
 import games.strategy.triplea.delegate.data.CasualtyDetails;
 import games.strategy.triplea.delegate.data.CasualtyList;
+import games.strategy.triplea.delegate.remote.IMoveDelegate;
 import games.strategy.triplea.delegate.remote.IPurchaseDelegate;
 import games.strategy.triplea.player.AbstractBasePlayer;
 import java.util.ArrayList;
@@ -24,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
@@ -63,8 +69,10 @@ public final class WebPlayer extends AbstractBasePlayer {
     }
     if (GameStep.isPurchaseStepName(stepName) || GameStep.isBidStepName(stepName)) {
       handlePurchase(GameStep.isBidStepName(stepName));
+    } else if (GameStep.isCombatMoveStepName(stepName)) {
+      handleMove(true);
     }
-    // Other steps: the human takes no action in 3b; returning ends the phase.
+    // Other steps (non-combat move, place, battle, tech, politics): no action yet; 3d+ add them.
   }
 
   /** Ask the browser what to buy, submit to the purchase delegate, loop until accepted. */
@@ -121,6 +129,88 @@ public final class WebPlayer extends AbstractBasePlayer {
       log.info("Purchase rejected for {}: {}", player.getName(), error);
       // loop: re-send the request with the error so the browser can re-choose
     }
+  }
+
+  /**
+   * Combat move (3c, land only): loop asking the browser for one move at a time — drawing the units
+   * from the route's first territory and submitting to the move delegate — until the browser says
+   * done. Mirrors {@code TripleAPlayer.move}'s submit-then-recurse loop. Transports/air come later.
+   */
+  private void handleMove(final boolean combat) {
+    final GamePlayer player = getGamePlayer();
+    final GameData data = getGameData();
+    String error = null;
+    while (!getPlayerBridge().isGameOver()) {
+      final var reply =
+          bridge.await(
+              "move", new MoveRequest(player.getName(), combat, movableUnits(player, data), error));
+      if (reply.has("done") && reply.get("done").getAsBoolean()) {
+        return; // browser ended the phase
+      }
+      error = submitMove(player, data, reply);
+    }
+  }
+
+  /** Territory name -> (unit type -> count) for the player's units that still have movement. */
+  private static Map<String, Map<String, Integer>> movableUnits(
+      final GamePlayer player, final GameData data) {
+    final var matcher =
+        Matches.unitIsOwnedBy(player).and(Matches.unitHasMovementLeft()).and(Matches.unitCanMove());
+    final Map<String, Map<String, Integer>> result = new TreeMap<>();
+    for (final Territory territory : data.getMap().getTerritories()) {
+      final List<Unit> movable =
+          territory.getUnitCollection().getUnits().stream().filter(matcher).toList();
+      if (movable.isEmpty()) {
+        continue;
+      }
+      final Map<String, Integer> byType = new TreeMap<>();
+      for (final Unit unit : movable) {
+        byType.merge(unit.getType().getName(), 1, Integer::sum);
+      }
+      result.put(territory.getName(), byType);
+    }
+    return result;
+  }
+
+  /**
+   * Resolve units + route from the reply, submit to the move delegate; return any error message.
+   */
+  private @Nullable String submitMove(
+      final GamePlayer player, final GameData data, final JsonObject reply) {
+    if (!reply.has("route") || !reply.get("route").isJsonArray()) {
+      return "Move is missing a route";
+    }
+    final List<Territory> path = new ArrayList<>();
+    for (final JsonElement element : reply.getAsJsonArray("route")) {
+      final Territory territory = data.getMap().getTerritoryOrNull(element.getAsString());
+      if (territory == null) {
+        return "Unknown territory: " + element.getAsString();
+      }
+      path.add(territory);
+    }
+    if (path.size() < 2) {
+      return "A move needs a source and at least one destination";
+    }
+    final Territory source = path.get(0);
+
+    final List<Unit> units = new ArrayList<>();
+    if (reply.has("units") && reply.get("units").isJsonObject()) {
+      for (final var entry : reply.getAsJsonObject("units").entrySet()) {
+        final String type = entry.getKey();
+        final int count = entry.getValue().getAsInt();
+        source.getUnitCollection().getUnits().stream()
+            .filter(u -> u.isOwnedBy(player) && u.getType().getName().equals(type))
+            .filter(Unit::hasMovementLeft)
+            .limit(count)
+            .forEach(units::add);
+      }
+    }
+    if (units.isEmpty()) {
+      return "No matching movable units in " + source.getName();
+    }
+
+    final IMoveDelegate delegate = (IMoveDelegate) getPlayerBridge().getRemoteDelegate();
+    return delegate.performMove(new MoveDescription(units, new Route(path))).orElse(null);
   }
 
   // ---- Safe-default stubs (3c+ replaces these with real browser panels). ----

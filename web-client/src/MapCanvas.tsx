@@ -56,11 +56,14 @@ export function MapCanvas({
   owners,
   units,
   onSelect,
+  highlight,
 }: {
   geometry: MapGeometry;
   owners: Record<string, string>;
   units: Record<string, UnitStack[]>;
   onSelect?: (territoryName: string | null) => void;
+  /** Territories to outline as the in-progress move route (drawn in order, distinct color). */
+  highlight?: string[];
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
@@ -99,12 +102,14 @@ export function MapCanvas({
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Territory polygons.
+    const routeSet = new Set(highlight ?? []);
     ctx.lineWidth = 0.6;
     for (const t of geometry.territories) {
       ctx.fillStyle = fillColor(geometry, owners, t);
+      const onRoute = routeSet.has(t.name);
       const highlighted = t.name === selected || t.name === hover?.name;
-      ctx.strokeStyle = highlighted ? "#ffd54a" : "rgba(0,0,0,0.45)";
-      ctx.lineWidth = highlighted ? 2 : 0.6;
+      ctx.strokeStyle = onRoute ? "#ff8c2a" : highlighted ? "#ffd54a" : "rgba(0,0,0,0.45)";
+      ctx.lineWidth = onRoute ? 3 : highlighted ? 2 : 0.6;
       for (const poly of t.polygons) {
         ctx.beginPath();
         poly.forEach((p, i) => {
@@ -147,7 +152,7 @@ export function MapCanvas({
         ctx.fillText(label, cx, cy);
       }
     }
-  }, [geometry, owners, units, view, selected, hover]);
+  }, [geometry, owners, units, view, selected, hover, highlight]);
 
   // ---- Pointer interaction: drag to pan, wheel to zoom, click to select, hover to inspect. ----
 

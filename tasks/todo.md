@@ -80,9 +80,11 @@ The existing `game.runNextStep()` loop naturally pauses on a human turn because
 - [x] **Exit check MET (verified live):** Japan as a browser human on Pacific 1940 — panel showed the real production list + 26-PU budget; bought 3 infantry + armour + fighter (25 PUs); **Buy** advanced the engine `japanesePurchase → japaneseCombatMove` (delegate accepted). Two bugs caught & fixed in verification: player label must be a single token (engine builds `whoAmI="Human:<label>"`, so `"Human:Web"` → 3 colon-parts crash → use `"Web"`); and the request catch-up above.
 - [ ] Not exercised live: delegate **rejection** path (client disables Buy when over-budget; the server validate-loop + error banner are implemented but a rejection wasn't triggered). Note: human seat's move/place auto-pass in 3b, so units bought are not placed (lost) — expected; 3c+ adds those phases.
 
-#### 3c — Combat move
-- [ ] Route-building on the clickable 3a map (select units → click destination chain) → `MoveDescription` → `IMoveDelegate.performMove()` (delegate enforces legality; relay errors).
-- [ ] **Exit check:** human performs a legal combat move; an illegal one is rejected with the engine's reason.
+#### 3c — Combat move (land) ✅ verified live
+- [x] `WebPlayer.handleMove` (combat step): loop sending a `kind:"move"` request (carrying `movableUnits` = territory → type → count for units with movement left) until the browser says `{done:true}`; each `{route:[names], units:{type:count}}` reply → resolve `Unit`s from the route's first territory + build `Route` → `IMoveDelegate.performMove` (`Optional<String>`), relay errors. Mirrors `TripleAPlayer.move`.
+- [x] Client move mode: click a source (must have movable units) → pick unit counts → click adjacent territories to extend the path → Move / Clear / Done. `MapCanvas` gains a `highlight` prop (orange route outline); click handler ignores re-clicking the tail and only extends to a neighbor (via `geometry.connections`).
+- [x] **Exit check MET (verified live, 2nd-ed Pacific):** Japan moved 2 infantry Kiangsu → adjacent **Anhwe** (Chinese, undefended); delegate accepted; on Done the engine resolved combat and Anhwe flipped to **Japanese with 2 infantry**. Adjacency guard confirmed live (Hunan rejected, Anhwe accepted).
+- [ ] Deferred to 3d+: sea-zone moves + amphibious transport loading (`unitsToSeaTransports`), air range/landing, multi-unit-from-multiple-sources. Land/adjacent-path only for now (the panel still *offers* naval units in a sea zone, but transport-needing moves will be rejected by the delegate).
 
 #### 3d — Battle resolution
 - [ ] Real `selectCasualties` + `retreatQuery` panels; void notifications (`reportError`, `reportMessage`, `confirmOwnCasualties`, `confirmEnemyCasualties`).

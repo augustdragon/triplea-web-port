@@ -62,9 +62,21 @@ export interface PurchaseRequest {
   error: string | null;
 }
 
+/**
+ * Payload of a kind:"move" request: who's moving, combat vs non-combat, and the units that still
+ * have movement (territory -> type -> count) so the client offers only valid picks; plus any prior
+ * rejection error. Reply is {done:true} or {route:[territoryNames], units:{type:count}}.
+ */
+export interface MoveRequest {
+  player: string;
+  combat: boolean;
+  movableUnits: Record<string, Record<string, number>>;
+  error: string | null;
+}
+
 /** A decision the active human seat must answer. payload shape depends on kind. */
 export interface DecisionRequest {
   requestId: string;
   kind: string;
-  payload: PurchaseRequest;
+  payload: PurchaseRequest | MoveRequest;
 }
