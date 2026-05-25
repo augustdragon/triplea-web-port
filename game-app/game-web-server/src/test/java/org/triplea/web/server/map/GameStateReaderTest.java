@@ -14,10 +14,10 @@ import org.junit.jupiter.api.Test;
 
 class GameStateReaderTest {
   @Test
-  void readsInitialOwnerForEveryTerritory() {
+  void readsOwnerForEveryTerritory() {
     final GameData gameData = TestMapGameData.REVISED.getGameData();
 
-    final Map<String, String> owners = GameStateReader.initialOwners(gameData);
+    final Map<String, String> owners = GameStateReader.ownersByTerritory(gameData);
 
     assertThat(owners, aMapWithSize(greaterThan(50)));
     // Every territory resolves to some owner name (a real player or the engine's neutral player).

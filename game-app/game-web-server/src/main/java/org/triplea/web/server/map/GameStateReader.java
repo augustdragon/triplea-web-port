@@ -6,17 +6,18 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * Reads a snapshot of dynamic game state from parsed {@link GameData} for the static first render.
- * For now this is just initial territory ownership; in Phase 2 a live {@code StateProjector} pushed
- * over WebSocket supersedes this static read.
+ * Reads territory ownership from {@link GameData}. Used both for the static first-render snapshot
+ * and live during a running game (it reflects ownership at call time, so it updates as territories
+ * change hands).
  */
 public final class GameStateReader {
   private GameStateReader() {}
 
   /**
-   * Returns territory name -> owning player name (the engine's neutral/null player for unowned).
+   * Returns territory name -> owning player name (the engine's neutral/null player for unowned), as
+   * of the moment of the call.
    */
-  public static Map<String, String> initialOwners(final GameData gameData) {
+  public static Map<String, String> ownersByTerritory(final GameData gameData) {
     final Map<String, String> owners = new TreeMap<>();
     for (final Territory territory : gameData.getMap().getTerritories()) {
       owners.put(territory.getName(), territory.getOwner().getName());

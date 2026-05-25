@@ -34,3 +34,12 @@ tasks.register<JavaExec>("runAiGame") {
     mainClass.set("org.triplea.web.server.game.AiGameRunnerCli")
     classpath = sourceSets["main"].runtimeClasspath
 }
+
+// Live spectator: runs an AI game and pushes state over WebSocket for the web client.
+// Run: ./gradlew :game-web-server:runSpectator --args="<gameXml> [port] [maxRounds] [stepDelayMs]"
+tasks.register<JavaExec>("runSpectator") {
+    group = "web-port"
+    description = "Runs an AI game and broadcasts state snapshots over WebSocket."
+    mainClass.set("org.triplea.web.server.game.WebSpectatorServer")
+    classpath = sourceSets["main"].runtimeClasspath
+}

@@ -56,7 +56,7 @@ public final class MapGeometryConverter {
         properties.playerColors(),
         readTerritories(mapFolder),
         MapConnections.from(gameData),
-        GameStateReader.initialOwners(gameData));
+        GameStateReader.ownersByTerritory(gameData));
   }
 
   private static List<TerritoryGeometry> readTerritories(final Path mapFolder) throws IOException {

@@ -6,13 +6,23 @@ const MAX_H = 1000;
 const FALLBACK_COLOR = "#888888";
 
 /** Owner color for a territory: player color from the map, or a fallback for unowned/geometry-only. */
-function ownerColor(geometry: MapGeometry, territoryName: string): string {
-  const owner = geometry.initialOwners?.[territoryName];
+function ownerColor(
+  geometry: MapGeometry,
+  owners: Record<string, string>,
+  territoryName: string,
+): string {
+  const owner = owners[territoryName];
   const hex = owner ? geometry.playerColors[owner] : undefined;
   return hex ? `#${hex}` : FALLBACK_COLOR;
 }
 
-export function MapCanvas({ geometry }: { geometry: MapGeometry }) {
+export function MapCanvas({
+  geometry,
+  owners,
+}: {
+  geometry: MapGeometry;
+  owners: Record<string, string>;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -30,7 +40,7 @@ export function MapCanvas({ geometry }: { geometry: MapGeometry }) {
     ctx.strokeStyle = "rgba(0,0,0,0.4)";
 
     for (const territory of geometry.territories) {
-      ctx.fillStyle = ownerColor(geometry, territory.name);
+      ctx.fillStyle = ownerColor(geometry, owners, territory.name);
       for (const polygon of territory.polygons) {
         ctx.beginPath();
         polygon.forEach((p, i) => {
@@ -54,7 +64,7 @@ export function MapCanvas({ geometry }: { geometry: MapGeometry }) {
         ctx.fill();
       }
     }
-  }, [geometry]);
+  }, [geometry, owners]);
 
   return <canvas ref={canvasRef} style={{ border: "1px solid #444", display: "block" }} />;
 }
