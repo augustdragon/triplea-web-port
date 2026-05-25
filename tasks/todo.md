@@ -13,7 +13,7 @@ NOT modified. First map: World War II Pacific (Pacific 1940).
 - [x] Create `game-app/game-web-server` Gradle module + its `AGENTS.md` — compiles and passes `:game-web-server:check`. Deps: `:game-core` (gson/junit injected by root build). `:game-headless` to be added with the engine-host path.
 - [x] Map geometry converter `MapGeometryConverter` — reads `polygons.txt`/`centers.txt` via the engine's `PointFileReaderWriter`, emits `MapGeometry` JSON. 3 unit tests pass against a synthetic fixture. **Remaining:** merge territory connections from parsed `GameData`; read `map.properties` (width/height/scroll-wrap); validate on a real map.
 - [x] Confirm a full game runs to completion (AI) — proven at engine level by `AiGameTest` (reused, not re-implemented).
-- [ ] Download/cache the `world_war_ii_pacific` map repo (art + polygons + centers) locally — NEXT
+- [x] ~~Download~~ map already local: `C:\Users\ndhay\triplea\downloadedMaps\world_war_ii_pacific-master.zip` (layout `world_war_ii_pacific-master/map/...`; Pacific 1940 = `games/ww2pac40.xml`).
 - [ ] Run the converter on the real Pacific 1940 map folder; export `geometry.json`
 - [ ] Drive the engine **from our module** (not just engine-level): a minimal `WebLaunchAction`/reuse `HeadlessLaunchAction`, load Pacific 1940 XML, start `ServerGame`, step it
 - [ ] **Exit check:** engine runs a full Pacific 1940 game from our code; `geometry.json` exported from the real map

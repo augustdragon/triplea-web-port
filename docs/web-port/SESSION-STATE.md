@@ -130,6 +130,15 @@ bombing, likely scroll-wrap rendering. Makes Phase 3 (and Phase 1 rendering)
 larger — several `Player` methods that could otherwise be stubbed are mandatory.
 Architecture unchanged. Accepted deliberately (user's choice).
 
+## Pacific map is already local (no download needed)
+TripleA is installed here; the map is at
+`C:\Users\ndhay\triplea\downloadedMaps\world_war_ii_pacific-master.zip` (2597
+entries, kept zipped). Internal layout: `world_war_ii_pacific-master/map/` holds
+`polygons.txt`, `centers.txt`, `map.properties`, and `games/ww2pac40.xml`
+(Pacific 1940 Original), `ww2pac40_2nd_edition.xml`, `ww2pac40_balanced_veqryn.xml`.
+Saved games dir: `C:\Users\ndhay\triplea\savedGames`. To run the converter on
+real data, extract the `map/` geometry files (or read straight from the zip).
+
 ## Progress (updates as we go)
 - ✅ JDK 21 installed; `:smoke-testing:test --tests AiGameTest` PASSED — engine builds + plays a full AI game headless here.
 - ✅ `game-app/game-web-server` module created, wired to `:game-core`, passes `:game-web-server:check`.
