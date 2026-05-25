@@ -17,6 +17,7 @@ import games.strategy.engine.data.Unit;
 import games.strategy.triplea.Constants;
 import games.strategy.triplea.delegate.DiceRoll;
 import games.strategy.triplea.delegate.Matches;
+import games.strategy.triplea.delegate.UndoableMove;
 import games.strategy.triplea.delegate.data.CasualtyDetails;
 import games.strategy.triplea.delegate.data.CasualtyList;
 import games.strategy.triplea.delegate.remote.IMoveDelegate;
@@ -151,19 +152,40 @@ public final class WebPlayer extends AbstractBasePlayer {
     final GameData data = getGameData();
     String error = null;
     while (!getPlayerBridge().isGameOver()) {
+      final IMoveDelegate delegate = (IMoveDelegate) getPlayerBridge().getRemoteDelegate();
       final var reply =
           bridge.await(
-              "move", new MoveRequest(player.getName(), combat, movableUnits(player, data), error));
+              "move",
+              new MoveRequest(
+                  player.getName(),
+                  combat,
+                  movableUnits(player, data),
+                  toUndoInfos(delegate.getMovesMade()),
+                  error));
       if (reply.has("done") && reply.get("done").getAsBoolean()) {
         return; // browser ended the phase
       }
-      error = submitMove(player, data, reply);
+      if (reply.has("undo") && reply.get("undo").isJsonPrimitive()) {
+        error = delegate.undoMove(reply.get("undo").getAsInt());
+      } else {
+        error = submitMove(player, data, reply);
+      }
       if (error == null) {
         // Refresh the map now — the move phase runs entirely inside one engine step, so without
-        // this the browser wouldn't see units shift until the whole phase ends.
+        // this the browser wouldn't see units shift (or snap back, on undo) until the phase ends.
         bridge.publishState(GSON.toJson(StateProjector.project(data)));
       }
     }
+  }
+
+  /** Map the delegate's undo list to the browser payload (list position = the undo index). */
+  static List<UndoableMoveInfo> toUndoInfos(final List<UndoableMove> moves) {
+    final List<UndoableMoveInfo> result = new ArrayList<>();
+    for (int i = 0; i < moves.size(); i++) {
+      final UndoableMove move = moves.get(i);
+      result.add(new UndoableMoveInfo(i, move.getMoveLabel(), move.getCanUndo()));
+    }
+    return result;
   }
 
   /**

@@ -16,6 +16,7 @@ export function MovePanel({
   onMove,
   onClear,
   onDone,
+  onUndo,
 }: {
   request: MoveRequest;
   route: string[];
@@ -24,6 +25,7 @@ export function MovePanel({
   onMove: () => void;
   onClear: () => void;
   onDone: () => void;
+  onUndo: (index: number) => void;
 }) {
   const source = route[0];
   const movable: MovableUnit[] = source ? (request.movableUnits[source] ?? []) : [];
@@ -71,6 +73,35 @@ export function MovePanel({
           }}
         >
           Rejected: {request.error}
+        </div>
+      )}
+
+      {request.undoableMoves.length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ color: "#9fb6c9", fontSize: 11, marginBottom: 3 }}>
+            Moves this phase (newest last):
+          </div>
+          {request.undoableMoves.map((m) => (
+            <div
+              key={m.index}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "2px 4px",
+              }}
+            >
+              <span style={{ flex: 1, color: "#cdd6df" }}>{m.label}</span>
+              <button
+                onClick={() => onUndo(m.index)}
+                disabled={!m.canUndo}
+                title={m.canUndo ? "Undo this move" : "A later move depends on this one"}
+                style={{ ...secondaryBtn, flex: "none", padding: "2px 8px", opacity: m.canUndo ? 1 : 0.5 }}
+              >
+                Undo
+              </button>
+            </div>
+          ))}
         </div>
       )}
 

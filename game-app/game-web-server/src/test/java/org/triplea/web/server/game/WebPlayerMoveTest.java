@@ -9,10 +9,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.MoveDescription;
+import games.strategy.engine.data.Route;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
 import games.strategy.triplea.delegate.GameDataTestUtil;
+import games.strategy.triplea.delegate.UndoableMove;
 import games.strategy.triplea.delegate.move.validation.MoveValidator;
 import games.strategy.triplea.xml.TestMapGameData;
 import java.util.List;
@@ -160,6 +162,24 @@ class WebPlayerMoveTest {
     assertThrows(
         IllegalArgumentException.class,
         () -> WebPlayer.buildMove(data, player, List.of(land.getName()), Map.of()));
+  }
+
+  @Test
+  void toUndoInfos_mapsIndexLabelAndCanUndo() {
+    final UnitType infantry = GameDataTestUtil.infantry(data);
+    final UndoableMove first = new UndoableMove(infantry.create(1, player), new Route(land, land2));
+    final UndoableMove second =
+        new UndoableMove(infantry.create(1, player), new Route(land2, land));
+    second.setCantUndo("a later move depends on this one");
+
+    final List<UndoableMoveInfo> infos = WebPlayer.toUndoInfos(List.of(first, second));
+
+    assertEquals(2, infos.size());
+    assertEquals(0, infos.get(0).index());
+    assertEquals(land.getName() + " -> " + land2.getName(), infos.get(0).label());
+    assertTrue(infos.get(0).canUndo());
+    assertEquals(1, infos.get(1).index());
+    assertFalse(infos.get(1).canUndo(), "setCantUndo should disable undo");
   }
 
   @Test

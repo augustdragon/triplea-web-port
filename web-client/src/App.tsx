@@ -87,6 +87,10 @@ export default function App() {
     sendDecision({ done: true });
     resetMove();
   }
+  function submitUndo(index: number) {
+    sendDecision({ undo: index });
+    resetMove();
+  }
 
   if (error) {
     return (
@@ -133,6 +137,7 @@ export default function App() {
           onMove={submitMove}
           onClear={resetMove}
           onDone={submitDone}
+          onUndo={submitUndo}
         />
       )}
     </div>

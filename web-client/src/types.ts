@@ -74,16 +74,25 @@ export interface MovableUnit {
   movementLeft: number;
 }
 
+/** A move already made this phase that can be undone. index is what {undo:index} refers to. */
+export interface UndoableMoveInfo {
+  index: number;
+  label: string;
+  canUndo: boolean;
+}
+
 /**
- * Payload of a kind:"move" request: who's moving, combat vs non-combat, and the units that can still
- * act (territory -> MovableUnit[]) so the client offers only valid picks and can label them; plus
- * any prior rejection error. Reply is {done:true} or {route:[territoryNames], units:{type:count}};
- * a land→sea route auto-loads the chosen land units onto transports in the destination sea zone.
+ * Payload of a kind:"move" request: who's moving, combat vs non-combat, the units that can still act
+ * (territory -> MovableUnit[]) so the client offers only valid picks and can label them, the moves
+ * already made this phase (undoableMoves), plus any prior rejection error. Reply is {done:true},
+ * {route:[territoryNames], units:{type:count}} (a land→sea route auto-loads onto transports in the
+ * destination sea zone), or {undo:index}.
  */
 export interface MoveRequest {
   player: string;
   combat: boolean;
   movableUnits: Record<string, MovableUnit[]>;
+  undoableMoves: UndoableMoveInfo[];
   error: string | null;
 }
 
