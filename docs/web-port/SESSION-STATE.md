@@ -152,10 +152,13 @@ real data, extract the `map/` geometry files (or read straight from the zip).
 - Run it: copy `C:\Users\ndhay\triplea-webport-work\world_war_ii_pacific\geometry.json` → `web-client\public\geometry.json`, then `npm --prefix web-client run dev` (or from `web-client/`: `npm run dev`). Open `http://localhost:5173/`. `node` v22 / `npm` 10 already installed. `public/geometry.json` is gitignored (regenerate via `:game-web-server:exportGeometry`).
 - Tooling note: `npm --prefix <dir> install` misbehaved on Windows (looked for repo-root package.json); use `Push-Location web-client; npm install` instead.
 
+## Phase 2 status — live spectator WORKING
+- ✅ `WebGameHost`/`WebLaunchAction` run an AI `ServerGame` in-process (in-memory prefs isolate the user's TripleA settings; autosaves redirected to a temp dir). `:game-web-server:runAiGame` smoke-runs it.
+- ✅ `StateProjector` → `StateSnapshot` (round/step/currentPlayer/owners). `SpectatorWebSocketServer` (org.java_websocket, already on classpath via root build) broadcasts; `WebSpectatorServer` main runs the game and publishes per step. `:game-web-server:runSpectator --args="<gameXml> [port=8080] [maxRounds] [stepDelayMs]"`.
+- ✅ Client connects to `ws://<host>:8080`, live-updates owners + a round/step/turn status bar. Verified live on Pacific 1940.
+- To demo: terminal 1 `:game-web-server:runSpectator --args="...\map\games\ww2pac40.xml 8080 6 350"`; terminal 2 `npm --prefix web-client run dev`; open http://localhost:5173/.
+
 ## Immediate next action when resuming
-Finish Phase 1 polish, then Phase 2. Remaining Phase 1: (a) base map image
-(baseTiles) under the polygons; (b) pan/zoom; (c) add a `water` flag to the
-export so sea zones render blue not Neutral-tan; (d) hover/click hit-testing.
-Phase 2: `StateProjector` + `WebDisplay` + WebSocket, and run a full `ServerGame`
-from our module (the deferred Phase 0 item). Also fold `map.properties`
-scroll-wrap flags into the export when base tiles land.
+Two tracks, pick per priority:
+- **Phase 3 (playable)**: implement `WebPlayer implements Player` + full `WebDisplay implements IDisplay`, wire human seats so the browser submits purchase/move/battle/place decisions (delegates enforce rules). Pacific 1940 forces naval/scramble/kamikaze `Player` methods early.
+- **Phase 1/2 polish**: base map tiles under polygons; pan/zoom; `water` flag (sea zones blue); units-per-territory in `StateSnapshot` + unit sprites; unify HTTP+WS under one server (currently Vite dev + separate WS port).

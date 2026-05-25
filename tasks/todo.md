@@ -29,12 +29,13 @@ NOT modified. First map: World War II Pacific (Pacific 1940).
 - [ ] Refinement: add a `water` flag to the export so sea zones render blue instead of Neutral-tan; hover/click hit-testing.
 - [x] **Exit check (polygons+ownership met):** Pacific 1940 renders correctly in the browser, read-only.
 
-### Phase 2 — Live spectator over WebSocket
-- [ ] Implement `StateProjector` (GameData → JSON DTO; no full-graph serialization)
-- [ ] Implement `WebDisplay` (IDisplay → JSON push messages)
-- [ ] Add WebSocket endpoint to `game-web-server`; serve React bundle + assets over HTTP
-- [ ] Client subscribes, re-renders on each state push
-- [ ] **Exit check:** watch an AI-vs-AI Pacific 1940 game advance live in React
+### Phase 2 — Live spectator over WebSocket ✅
+- [x] `StateProjector` (GameData → `StateSnapshot`: round/step/currentPlayer/owners). No full-graph serialization.
+- [x] `WebGameHost` + `WebLaunchAction` run an AI `ServerGame` in-process (in-memory prefs, temp autosaves).
+- [x] `SpectatorWebSocketServer` (org.java_websocket) broadcasts snapshots with latest-snapshot catch-up; `WebSpectatorServer` main runs game + publishes per step. Gradle: `:game-web-server:runSpectator`.
+- [x] Client subscribes (`ws://host:8080`), feeds live owners to `MapCanvas`, status bar shows round/step/turn.
+- [x] **Exit check MET:** watched AI Pacific 1940 advance live in React (round 3→4, Japan conquering China), no console errors.
+- Deferred: full `WebDisplay` (IDisplay → push for fine-grained battle events) — built in Phase 3 where it's actually needed; Phase 2 polls state after each step. Also still serving the client via Vite dev + a separate WS port; unifying HTTP+WS under one server is a later cleanup.
 
 ### Phase 3 — Hotseat playable ⭐ (first milestone)
 - [ ] Implement `WebPlayer` (Player) with future/queue bridge for blocking decisions
