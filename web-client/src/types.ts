@@ -129,11 +129,31 @@ export interface RetreatRequest {
   defenders: string;
 }
 
+/** One bought-but-unplaced unit type in the place pool, with air/sea flags for labelling. */
+export interface PlaceUnit {
+  type: string;
+  count: number;
+  air: boolean;
+  sea: boolean;
+}
+
+/**
+ * Payload of a kind:"place" request: place units bought this turn. `toPlace` is the remaining pool.
+ * Click a territory, pick units, submit {territory, units:{type:count}} (engine validates — factory,
+ * caps, sea adjacency), or {done:true} to end (leftover units are lost).
+ */
+export interface PlaceRequest {
+  player: string;
+  bid: boolean;
+  toPlace: PlaceUnit[];
+  error: string | null;
+}
+
 /** A decision the active human seat must answer. payload shape depends on kind. */
 export interface DecisionRequest {
   requestId: string;
   kind: string;
-  payload: PurchaseRequest | MoveRequest | CasualtyRequest | RetreatRequest;
+  payload: PurchaseRequest | MoveRequest | CasualtyRequest | RetreatRequest | PlaceRequest;
 }
 
 /**

@@ -17,11 +17,14 @@ import games.strategy.engine.data.Unit;
 import games.strategy.triplea.Constants;
 import games.strategy.triplea.delegate.AbstractMoveDelegate;
 import games.strategy.triplea.delegate.DiceRoll;
+import games.strategy.triplea.delegate.GameStepPropertiesHelper;
 import games.strategy.triplea.delegate.Matches;
 import games.strategy.triplea.delegate.UndoableMove;
 import games.strategy.triplea.delegate.battle.IBattle;
 import games.strategy.triplea.delegate.data.CasualtyDetails;
 import games.strategy.triplea.delegate.data.CasualtyList;
+import games.strategy.triplea.delegate.remote.IAbstractPlaceDelegate;
+import games.strategy.triplea.delegate.remote.IAbstractPlaceDelegate.BidMode;
 import games.strategy.triplea.delegate.remote.IMoveDelegate;
 import games.strategy.triplea.delegate.remote.IPurchaseDelegate;
 import games.strategy.triplea.player.AbstractBasePlayer;
@@ -51,10 +54,10 @@ import org.triplea.util.Tuple;
  * CountDownLatch}/EDT.
  *
  * <p>Interactive so far: <b>purchase</b> (3b), <b>combat</b> and <b>non-combat move</b> (3c — land,
- * sea, air, transport load/unload, undo), and <b>battle resolution</b> (3d — {@link
- * #selectCasualties} and {@link #retreatQuery}). Remaining decision methods return a safe default
- * so a full game still runs (e.g. the place phase auto-passes — units bought but not placed are
- * lost). Next: place (3e), then Pacific naval/air queries (3f).
+ * sea, air, transport load/unload, undo), <b>battle resolution</b> (3d — {@link #selectCasualties}
+ * and {@link #retreatQuery}), and <b>place</b> (3e — {@link #handlePlace}). Remaining decision
+ * methods return a safe default so a full game still runs. Next: Pacific naval/air queries (3f —
+ * scramble, kamikaze, bombardment), then hotseat (3g).
  */
 @Slf4j
 public final class WebPlayer extends AbstractBasePlayer {
@@ -83,8 +86,10 @@ public final class WebPlayer extends AbstractBasePlayer {
       handleMove(true);
     } else if (GameStep.isNonCombatMoveStepName(stepName)) {
       handleMove(false);
+    } else if (GameStep.isPlaceStepName(stepName)) {
+      handlePlace();
     }
-    // Other steps (place, battle, tech, politics): no action yet; 3d+ add them.
+    // Other steps (battle queries, tech, politics): no action yet.
   }
 
   /** Ask the browser what to buy, submit to the purchase delegate, loop until accepted. */
@@ -357,6 +362,78 @@ public final class WebPlayer extends AbstractBasePlayer {
     return new MoveDescription(units, route);
   }
 
+  /**
+   * Place units bought this turn: loop offering the remaining pool to the browser, placing one
+   * territory's worth at a time via {@link IAbstractPlaceDelegate#placeUnits}, until the browser
+   * says done or the pool is empty. Mirrors {@code TripleAPlayer.place}. The engine validates each
+   * placement (factory presence, production caps, sea-zone adjacency) and the rejection comes back
+   * as {@code error}. Units left unplaced when the phase ends are lost (engine behavior).
+   */
+  private void handlePlace() {
+    final GamePlayer player = getGamePlayer();
+    final boolean bid = GameStepPropertiesHelper.isBid(getGameData());
+    String error = null;
+    while (!getPlayerBridge().isGameOver()) {
+      final Collection<Unit> pool = player.getUnitCollection().getUnits();
+      if (pool.isEmpty()) {
+        return; // everything placed
+      }
+      final JsonObject reply =
+          bridge.await("place", new PlaceRequest(player.getName(), bid, placePool(pool), error));
+      if (reply.has("done") && reply.get("done").getAsBoolean()) {
+        return; // browser ended the phase (any leftover units are lost)
+      }
+      error = submitPlace(player, bid, reply);
+      if (error == null) {
+        bridge.publishState(GSON.toJson(StateProjector.project(getGameData())));
+      }
+    }
+  }
+
+  /** Resolve the reply (territory + unit-type→count) and submit to the place delegate. */
+  private @Nullable String submitPlace(
+      final GamePlayer player, final boolean bid, final JsonObject reply) {
+    if (!reply.has("territory") || !reply.get("territory").isJsonPrimitive()) {
+      return "No territory selected";
+    }
+    final String name = reply.get("territory").getAsString();
+    final Territory at = getGameData().getMap().getTerritoryOrNull(name);
+    if (at == null) {
+      return "Unknown territory: " + name;
+    }
+    final Map<String, Integer> counts = new HashMap<>();
+    if (reply.has("units") && reply.get("units").isJsonObject()) {
+      for (final var entry : reply.getAsJsonObject("units").entrySet()) {
+        counts.put(entry.getKey(), entry.getValue().getAsInt());
+      }
+    }
+    final List<Unit> units = resolveByType(player.getUnitCollection().getUnits(), counts);
+    if (units.isEmpty()) {
+      return "No units selected to place";
+    }
+    final IAbstractPlaceDelegate delegate =
+        (IAbstractPlaceDelegate) getPlayerBridge().getRemoteDelegate();
+    return delegate.placeUnits(units, at, bid ? BidMode.BID : BidMode.NOT_BID).orElse(null);
+  }
+
+  /** The player's not-yet-placed pool, grouped by type with air/sea flags. */
+  private static List<PlaceUnit> placePool(final Collection<Unit> pool) {
+    final Map<String, List<Unit>> byType = new TreeMap<>();
+    for (final Unit unit : pool) {
+      byType.computeIfAbsent(unit.getType().getName(), k -> new ArrayList<>()).add(unit);
+    }
+    final List<PlaceUnit> rows = new ArrayList<>();
+    byType.forEach(
+        (type, units) ->
+            rows.add(
+                new PlaceUnit(
+                    type,
+                    units.size(),
+                    Matches.unitIsAir().test(units.get(0)),
+                    Matches.unitIsSea().test(units.get(0)))));
+    return rows;
+  }
+
   // ---- Safe-default stubs (3c+ replaces these with real browser panels). ----
 
   @Override
@@ -393,7 +470,7 @@ public final class WebPlayer extends AbstractBasePlayer {
           killedCounts.put(entry.getKey(), entry.getValue().getAsInt());
         }
       }
-      return new CasualtyDetails(resolveKilled(selectFrom, killedCounts), List.of(), false);
+      return new CasualtyDetails(resolveByType(selectFrom, killedCounts), List.of(), false);
     } catch (final RuntimeException e) {
       // Game stopped, or no browser to answer — fall back to the engine's auto-pick rather than
       // crash the battle. (The browser panel enforces the exact hit count, so a real reply is
@@ -403,20 +480,17 @@ public final class WebPlayer extends AbstractBasePlayer {
     }
   }
 
-  /**
-   * Resolve a browser {@code {type:count}} casualty pick into concrete units drawn from the pool.
-   */
-  static List<Unit> resolveKilled(
-      final Collection<Unit> selectFrom, final Map<String, Integer> killedCounts) {
-    final List<Unit> killed = new ArrayList<>();
-    killedCounts.forEach(
+  /** Resolve a {@code type -> count} selection into concrete, distinct units drawn from a pool. */
+  static List<Unit> resolveByType(final Collection<Unit> pool, final Map<String, Integer> counts) {
+    final List<Unit> chosen = new ArrayList<>();
+    counts.forEach(
         (type, n) ->
-            selectFrom.stream()
+            pool.stream()
                 .filter(u -> u.getType().getName().equals(type))
-                .filter(u -> !killed.contains(u))
+                .filter(u -> !chosen.contains(u))
                 .limit(Math.max(0, n))
-                .forEach(killed::add));
-    return killed;
+                .forEach(chosen::add));
+    return chosen;
   }
 
   /** Unit type -> count, for offering a pool to the browser. */

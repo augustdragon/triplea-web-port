@@ -5,6 +5,7 @@ import type {
   DecisionRequest,
   MapGeometry,
   MoveRequest,
+  PlaceRequest,
   PurchaseRequest,
   RetreatRequest,
   StateSnapshot,
@@ -14,6 +15,7 @@ import { PurchasePanel } from "./PurchasePanel";
 import { MovePanel } from "./MovePanel";
 import { CasualtyPanel } from "./CasualtyPanel";
 import { RetreatPanel } from "./RetreatPanel";
+import { PlacePanel } from "./PlacePanel";
 import { Sidebar } from "./Sidebar";
 
 // The game WebSocket server (see :game-web-server:runSpectator / runPlayable). Same host as the
@@ -28,6 +30,8 @@ export default function App() {
   const [wsStatus, setWsStatus] = useState("connecting…");
   const [moveRoute, setMoveRoute] = useState<string[]>([]);
   const [moveUnits, setMoveUnits] = useState<Record<string, number>>({});
+  const [placeTarget, setPlaceTarget] = useState<string | null>(null);
+  const [placeUnits, setPlaceUnits] = useState<Record<string, number>>({});
   const [battleLog, setBattleLog] = useState<BattleEvent[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -81,7 +85,14 @@ export default function App() {
   // First click must be a territory with movable units; each further click must extend to a
   // neighbor (per the adjacency graph) and ignores re-clicking the current tail.
   function onTerritoryClick(name: string | null) {
-    if (!name || request?.kind !== "move") return;
+    if (!name) return;
+    if (request?.kind === "place") {
+      // Any territory is a candidate target; the engine validates (factory, sea adjacency, …).
+      setPlaceTarget(name);
+      setPlaceUnits({});
+      return;
+    }
+    if (request?.kind !== "move") return;
     const movable = (request.payload as MoveRequest).movableUnits;
     const connections = geometry?.connections ?? {};
     setMoveRoute((prev) => {
@@ -121,6 +132,18 @@ export default function App() {
   function submitStay() {
     sendDecision({ remain: true });
   }
+  function resetPlace() {
+    setPlaceTarget(null);
+    setPlaceUnits({});
+  }
+  function submitPlace() {
+    sendDecision({ territory: placeTarget, units: placeUnits });
+    resetPlace();
+  }
+  function submitPlaceDone() {
+    sendDecision({ done: true });
+    resetPlace();
+  }
 
   if (error) {
     return (
@@ -143,7 +166,13 @@ export default function App() {
         owners={owners}
         units={units}
         onSelect={onTerritoryClick}
-        highlight={request?.kind === "move" ? moveRoute : undefined}
+        highlight={
+          request?.kind === "move"
+            ? moveRoute
+            : request?.kind === "place" && placeTarget
+              ? [placeTarget]
+              : undefined
+        }
       />
       <Sidebar
         wsStatus={wsStatus}
@@ -175,6 +204,16 @@ export default function App() {
             request={request.payload as RetreatRequest}
             onRetreat={submitRetreat}
             onStay={submitStay}
+          />
+        )}
+        {request?.kind === "place" && (
+          <PlacePanel
+            request={request.payload as PlaceRequest}
+            target={placeTarget}
+            units={placeUnits}
+            setUnits={setPlaceUnits}
+            onPlace={submitPlace}
+            onDone={submitPlaceDone}
           />
         )}
         {!request && (

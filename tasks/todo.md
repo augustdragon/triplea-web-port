@@ -108,9 +108,9 @@ The existing `game.runNextStep()` loop naturally pauses on a human turn because
 
 **3d DONE.** Battle resolution is interactive end-to-end. Deferred polish: damaging (vs killing) a 2-hit unit; trimming 0-hit log lines; sub submerge not yet exercised live (Pacific naval). Next milestone → 3e place; then 3f Pacific naval/air queries, 3g hotseat.
 
-#### 3e — Non-combat move + place
+#### 3e — Non-combat move + place ✅ verified live
 - [x] Non-combat move — dispatched via the same `handleMove` path (done in 3c+).
-- [ ] Place panel → place delegate; includes `getNumberOfFightersToMoveToNewCarrier`.
+- [x] **Place units.** `WebPlayer.handlePlace` (on `GameStep.isPlaceStepName`) loops `bridge.await("place", PlaceRequest{player, bid, toPlace=PlaceUnit[]{type,count,air,sea}, error})` over the unplaced pool (`player.getUnitCollection().getUnits()`, re-read each iteration — the delegate removes placed units) until `{done:true}` or the pool empties. Reply `{territory, units:{type:count}}` → `resolveByType` (renamed from `resolveKilled`, shared with casualties; unit-tested) → `IAbstractPlaceDelegate.placeUnits(units, at, BidMode)`; engine validates (factory, caps, sea adjacency) and the rejection relays as `error`. Client `PlacePanel` (in the sidebar): click a target territory → pick units → Place / Done; map highlights the target. `getNumberOfFightersToMoveToNewCarrier` still returns empty (safe default; interactive carrier-fighter deferred). **Verified live:** full Japan turn — bought 3 infantry, Done through combat/non-combat move, placed all 3 in Japan (pool emptied, no rejection).
 
 #### 3f — Pacific-mandatory naval/air queries
 - [ ] `scrambleUnitsQuery`, `selectKamikazeSuicideAttacks`, `selectBombardingTerritory`, `selectTerritoryForAirToLand`, `selectShoreBombard`.
