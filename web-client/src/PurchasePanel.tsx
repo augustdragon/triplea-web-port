@@ -29,25 +29,7 @@ export function PurchasePanel({
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: 60,
-        right: 16,
-        width: 340,
-        maxHeight: "85vh",
-        overflowY: "auto",
-        background: "rgba(20,28,36,0.98)",
-        border: "1px solid #67788a",
-        borderRadius: 6,
-        padding: 12,
-        color: "#e6e6e6",
-        fontFamily: "sans-serif",
-        fontSize: 13,
-        zIndex: 100,
-        boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
-      }}
-    >
+    <div style={{ padding: "10px 0" }}>
       <div style={{ fontWeight: "bold", fontSize: 15, marginBottom: 2 }}>
         {request.bid ? "Bid purchase" : "Purchase"} — {request.player}
       </div>

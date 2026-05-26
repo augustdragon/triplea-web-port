@@ -14,7 +14,7 @@ import { PurchasePanel } from "./PurchasePanel";
 import { MovePanel } from "./MovePanel";
 import { CasualtyPanel } from "./CasualtyPanel";
 import { RetreatPanel } from "./RetreatPanel";
-import { BattleLog } from "./BattleLog";
+import { Sidebar } from "./Sidebar";
 
 // The game WebSocket server (see :game-web-server:runSpectator / runPlayable). Same host as the
 // page, so it works over LAN/ZeroTier too.
@@ -137,17 +137,7 @@ export default function App() {
   const owners = snapshot?.owners ?? geometry.initialOwners ?? {};
   const units = snapshot?.units ?? {};
   return (
-    <div style={{ color: "#ccc", fontFamily: "sans-serif", padding: 8 }}>
-      <div style={{ marginBottom: 8, display: "flex", gap: 16 }}>
-        <span>
-          WS: <b style={{ color: wsStatus === "live" ? "#7c7" : "#e88" }}>{wsStatus}</b>
-        </span>
-        <span>round: {snapshot?.round ?? "—"}</span>
-        <span>step: {snapshot?.step ?? "—"}</span>
-        <span>turn: {snapshot?.currentPlayer ?? "—"}</span>
-        <span>{geometry.territories.length} territories</span>
-        <span style={{ color: "#778" }}>drag = pan · wheel = zoom · click = select</span>
-      </div>
+    <div style={{ color: "#ccc", fontFamily: "sans-serif" }}>
       <MapCanvas
         geometry={geometry}
         owners={owners}
@@ -155,33 +145,44 @@ export default function App() {
         onSelect={onTerritoryClick}
         highlight={request?.kind === "move" ? moveRoute : undefined}
       />
-      {request?.kind === "purchase" && (
-        <PurchasePanel request={request.payload as PurchaseRequest} onSubmit={submitPurchase} />
-      )}
-      {request?.kind === "move" && (
-        <MovePanel
-          request={request.payload as MoveRequest}
-          route={moveRoute}
-          units={moveUnits}
-          setUnits={setMoveUnits}
-          onMove={submitMove}
-          onClear={resetMove}
-          onDone={submitDone}
-          onUndo={submitUndo}
-          onUndoAll={submitUndoAll}
-        />
-      )}
-      {request?.kind === "selectCasualties" && (
-        <CasualtyPanel request={request.payload as CasualtyRequest} onSubmit={submitCasualties} />
-      )}
-      {request?.kind === "retreat" && (
-        <RetreatPanel
-          request={request.payload as RetreatRequest}
-          onRetreat={submitRetreat}
-          onStay={submitStay}
-        />
-      )}
-      <BattleLog events={battleLog} />
+      <Sidebar
+        wsStatus={wsStatus}
+        snapshot={snapshot}
+        territoryCount={geometry.territories.length}
+        events={battleLog}
+      >
+        {request?.kind === "purchase" && (
+          <PurchasePanel request={request.payload as PurchaseRequest} onSubmit={submitPurchase} />
+        )}
+        {request?.kind === "move" && (
+          <MovePanel
+            request={request.payload as MoveRequest}
+            route={moveRoute}
+            units={moveUnits}
+            setUnits={setMoveUnits}
+            onMove={submitMove}
+            onClear={resetMove}
+            onDone={submitDone}
+            onUndo={submitUndo}
+            onUndoAll={submitUndoAll}
+          />
+        )}
+        {request?.kind === "selectCasualties" && (
+          <CasualtyPanel request={request.payload as CasualtyRequest} onSubmit={submitCasualties} />
+        )}
+        {request?.kind === "retreat" && (
+          <RetreatPanel
+            request={request.payload as RetreatRequest}
+            onRetreat={submitRetreat}
+            onStay={submitStay}
+          />
+        )}
+        {!request && (
+          <div style={{ padding: "12px 0", color: "#8aa0b0" }}>
+            No decision pending — waiting for the next prompt…
+          </div>
+        )}
+      </Sidebar>
     </div>
   );
 }

@@ -16,24 +16,8 @@ export function RetreatPanel({
   onStay: () => void;
 }) {
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: 60,
-        right: 16,
-        width: 340,
-        background: "rgba(20,28,36,0.98)",
-        border: "1px solid #c9a24a",
-        borderRadius: 6,
-        padding: 12,
-        color: "#e6e6e6",
-        fontFamily: "sans-serif",
-        fontSize: 13,
-        zIndex: 110,
-        boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
-      }}
-    >
-      <div style={{ fontWeight: "bold", fontSize: 15, marginBottom: 2 }}>
+    <div style={{ padding: "10px 0", borderLeft: "3px solid #c9a24a", paddingLeft: 8 }}>
+      <div style={{ fontWeight: "bold", fontSize: 15, marginBottom: 2, color: "#e8c46a" }}>
         {request.submerge ? "Submerge?" : "Retreat?"} — {request.player}
       </div>
       <div style={{ color: "#9fb6c9", marginBottom: 6 }}>

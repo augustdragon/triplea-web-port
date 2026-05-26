@@ -13,32 +13,24 @@ export function BattleLog({ events }: { events: BattleEvent[] }) {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [events]);
 
-  if (events.length === 0) return null;
-
   return (
-    <div
-      style={{
-        position: "fixed",
-        bottom: 16,
-        left: 16,
-        width: 360,
-        maxHeight: "32vh",
-        overflowY: "auto",
-        background: "rgba(20,28,36,0.97)",
-        border: "1px solid #67788a",
-        borderRadius: 6,
-        padding: 10,
-        color: "#e6e6e6",
-        fontFamily: "sans-serif",
-        fontSize: 12,
-        zIndex: 90,
-        boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
-      }}
-    >
-      <div style={{ fontWeight: "bold", fontSize: 13, marginBottom: 4 }}>Battle log</div>
-      {events.map((e, i) => (
-        <BattleLine key={i} event={e} />
-      ))}
+    <div style={{ height: "100%", overflowY: "auto", padding: "8px 12px", fontSize: 12 }}>
+      <div
+        style={{
+          fontSize: 10,
+          color: "#778",
+          marginBottom: 4,
+          textTransform: "uppercase",
+          letterSpacing: 0.6,
+        }}
+      >
+        Battle log
+      </div>
+      {events.length === 0 ? (
+        <div style={{ color: "#667" }}>No battles yet this game.</div>
+      ) : (
+        events.map((e, i) => <BattleLine key={i} event={e} />)
+      )}
       <div ref={endRef} />
     </div>
   );

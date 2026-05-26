@@ -280,6 +280,13 @@ Unit tests: `resolveKilled`, `toUndoInfos`, `buildMove` (9 in `WebPlayerMoveTest
 Deferred: damaging a 2-hit unit (`allowMultipleHits`); trimming 0-hit log lines; sub
 submerge not yet exercised live.
 
+**UI consolidation (post-3d):** all controls + info now live in one fixed right
+`Sidebar` (`web-client/src/Sidebar.tsx`): status header (round/turn/WS), a
+`PhaseIndicator` (`phase.ts` maps the engine step → canonical phase, current row
+highlighted), the active decision panel (purchase/move/casualty/retreat — now plain
+blocks, not fixed-position windows), and the `BattleLog` at the bottom. Replaces the
+old scattered upper-right move panel + lower-left battle log.
+
 **Next → 3e (place units):** `IAbstractPlaceDelegate.placeUnits` + a place panel (units
 bought in purchase are currently lost). Includes `getNumberOfFightersToMoveToNewCarrier`.
 Then 3f Pacific naval/air queries (`scrambleUnitsQuery`, `selectKamikazeSuicideAttacks`,
