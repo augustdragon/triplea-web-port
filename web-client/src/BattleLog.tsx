@@ -57,6 +57,15 @@ function BattleLine({ event }: { event: BattleEvent }) {
           </span>
         </div>
       );
+    case "round":
+      return (
+        <div style={{ marginTop: 4, color: "#cdb98a", borderTop: "1px solid #3a4654", paddingTop: 3 }}>
+          ── Round {event.round} ──{" "}
+          <span style={{ color: "#e6e6e6" }}>
+            {event.attacker}: {event.attackers || "—"} · {event.defender}: {event.defenders || "—"}
+          </span>
+        </div>
+      );
     case "dice":
       return (
         <div style={{ color: "#9fb6c9", paddingLeft: 10 }}>

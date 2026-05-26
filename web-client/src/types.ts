@@ -127,8 +127,9 @@ export interface DecisionRequest {
  * casualties (player/killed/damaged), retreat (player/message), end (message).
  */
 export interface BattleEvent {
-  kind: "start" | "dice" | "casualties" | "retreat" | "end";
+  kind: "start" | "round" | "dice" | "casualties" | "retreat" | "end";
   battleId?: string;
+  round?: number;
   location?: string;
   attacker?: string;
   defender?: string;

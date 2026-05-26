@@ -2,16 +2,21 @@ package org.triplea.web.server.game;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
+import games.strategy.triplea.delegate.AbstractMoveDelegate;
 import games.strategy.triplea.delegate.DiceRoll;
+import games.strategy.triplea.delegate.battle.IBattle;
 import games.strategy.triplea.delegate.battle.IBattle.BattleType;
 import games.strategy.triplea.ui.display.HeadlessDisplay;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
+import javax.annotation.Nullable;
 
 /**
  * Forwards the engine's battle-progress events to the browser as a live battle log. Subclasses the
@@ -26,9 +31,20 @@ import java.util.function.Consumer;
 public final class WebDisplay extends HeadlessDisplay {
   private final Gson gson = new Gson();
   private final Consumer<String> sink;
+  // Set once the game exists, so we can look battles up by id for round/force status.
+  @Nullable private GameData gameData;
+  // Per-battle "[attacker, defender]" names captured at start, for labelling round status.
+  private final Map<String, String[]> sides = new HashMap<>();
+  // Highest round already announced per battle, so each new round is emitted exactly once.
+  private final Map<String, Integer> lastRound = new HashMap<>();
 
   public WebDisplay(final Consumer<String> sink) {
     this.sink = sink;
+  }
+
+  /** Wired after {@code startGame} so round/force lookups can resolve the live battle. */
+  public void setGameData(final GameData gameData) {
+    this.gameData = gameData;
   }
 
   private void emit(final JsonObject event) {
@@ -52,15 +68,49 @@ public final class WebDisplay extends HeadlessDisplay {
       final boolean isAmphibious,
       final BattleType battleType,
       final Collection<Unit> amphibiousLandAttackers) {
+    sides.put(battleId.toString(), new String[] {attacker.getName(), defender.getName()});
+    lastRound.put(battleId.toString(), 1); // round 1 is this "start" line; emit only 2+ as "round"
     final JsonObject event = new JsonObject();
     event.addProperty("kind", "start");
     event.addProperty("battleId", battleId.toString());
+    event.addProperty("round", 1);
     event.addProperty("location", location.getName());
     event.addProperty("attacker", attacker.getName());
     event.addProperty("defender", defender.getName());
     event.addProperty("attackers", WebPlayer.summarizeUnits(attackingUnits));
     event.addProperty("defenders", WebPlayer.summarizeUnits(defendingUnits));
     event.addProperty("amphibious", isAmphibious);
+    emit(event);
+  }
+
+  @Override
+  public void gotoBattleStep(final UUID battleId, final String step) {
+    // The engine steps through a battle here; when its round advances, announce the new round with
+    // the forces still standing — so the log reads round-by-round and the player can size up the
+    // battle before a retreat decision (which pauses combat between rounds).
+    if (gameData == null) {
+      return;
+    }
+    final IBattle battle =
+        AbstractMoveDelegate.getBattleTracker(gameData).getPendingBattle(battleId);
+    if (battle == null) {
+      return;
+    }
+    final String key = battleId.toString();
+    final int round = battle.getBattleRound();
+    if (round <= lastRound.getOrDefault(key, 0)) {
+      return;
+    }
+    lastRound.put(key, round);
+    final String[] who = sides.getOrDefault(key, new String[] {"Attacker", "Defender"});
+    final JsonObject event = new JsonObject();
+    event.addProperty("kind", "round");
+    event.addProperty("battleId", key);
+    event.addProperty("round", round);
+    event.addProperty("attacker", who[0]);
+    event.addProperty("defender", who[1]);
+    event.addProperty("attackers", WebPlayer.summarizeUnits(battle.getAttackingUnits()));
+    event.addProperty("defenders", WebPlayer.summarizeUnits(battle.getDefendingUnits()));
     emit(event);
   }
 
@@ -106,6 +156,8 @@ public final class WebDisplay extends HeadlessDisplay {
 
   @Override
   public void battleEnd(final UUID battleId, final String message) {
+    sides.remove(battleId.toString());
+    lastRound.remove(battleId.toString());
     final JsonObject event = new JsonObject();
     event.addProperty("kind", "end");
     event.addProperty("battleId", battleId.toString());

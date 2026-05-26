@@ -49,13 +49,10 @@ public final class WebPlayableServer {
         humanPlayer,
         port);
 
+    final WebDisplay display = new WebDisplay(server::publishBattleEvent);
     final ServerGame game =
-        WebGameHost.startGame(
-            gameXml,
-            Set.of(humanPlayer),
-            PlayerTypes.FAST_AI,
-            bridge,
-            new WebDisplay(server::publishBattleEvent));
+        WebGameHost.startGame(gameXml, Set.of(humanPlayer), PlayerTypes.FAST_AI, bridge, display);
+    display.setGameData(game.getData()); // enables battle-by-id round/force lookups
     game.setStopGameOnDelegateExecutionStop(true);
     server.publishState(GSON.toJson(StateProjector.project(game.getData())));
 
