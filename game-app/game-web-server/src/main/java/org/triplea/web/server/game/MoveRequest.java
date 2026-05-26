@@ -13,8 +13,8 @@ import javax.annotation.Nullable;
  * made this phase so the browser can offer an Undo. The browser replies with one of: {@code
  * {done:true}} (end the phase); {@code {route:[territoryNames], units:{type:count}}} (one move to
  * perform; units are drawn from the first territory in the route; a land→sea route auto-loads the
- * chosen land units onto transports in the destination sea zone); or {@code {undo:index}} (undo the
- * move at that index).
+ * chosen land units onto transports in the destination sea zone); {@code {undo:index}} (undo the
+ * move at that index); or {@code {undoAll:true}} (undo every move made this phase).
  */
 public record MoveRequest(
     String player,

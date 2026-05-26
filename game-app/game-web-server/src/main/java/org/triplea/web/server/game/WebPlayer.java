@@ -165,7 +165,9 @@ public final class WebPlayer extends AbstractBasePlayer {
       if (reply.has("done") && reply.get("done").getAsBoolean()) {
         return; // browser ended the phase
       }
-      if (reply.has("undo") && reply.get("undo").isJsonPrimitive()) {
+      if (reply.has("undoAll") && reply.get("undoAll").getAsBoolean()) {
+        error = undoAll(delegate);
+      } else if (reply.has("undo") && reply.get("undo").isJsonPrimitive()) {
         error = delegate.undoMove(reply.get("undo").getAsInt());
       } else {
         error = submitMove(player, data, reply);
@@ -176,6 +178,20 @@ public final class WebPlayer extends AbstractBasePlayer {
         bridge.publishState(GSON.toJson(StateProjector.project(data)));
       }
     }
+  }
+
+  /**
+   * Undo every move made this phase, most-recent first so each is the (always-undoable) last move
+   * when removed and dependency chains unwind cleanly. Returns the first error, or null on success.
+   */
+  private static @Nullable String undoAll(final IMoveDelegate delegate) {
+    while (!delegate.getMovesMade().isEmpty()) {
+      final String error = delegate.undoMove(delegate.getMovesMade().size() - 1);
+      if (error != null) {
+        return error; // shouldn't happen undoing last-first, but relay it rather than loop forever
+      }
+    }
+    return null;
   }
 
   /** Map the delegate's undo list to the browser payload (list position = the undo index). */

@@ -91,6 +91,10 @@ export default function App() {
     sendDecision({ undo: index });
     resetMove();
   }
+  function submitUndoAll() {
+    sendDecision({ undoAll: true });
+    resetMove();
+  }
 
   if (error) {
     return (
@@ -138,6 +142,7 @@ export default function App() {
           onClear={resetMove}
           onDone={submitDone}
           onUndo={submitUndo}
+          onUndoAll={submitUndoAll}
         />
       )}
     </div>

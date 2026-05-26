@@ -17,6 +17,7 @@ export function MovePanel({
   onClear,
   onDone,
   onUndo,
+  onUndoAll,
 }: {
   request: MoveRequest;
   route: string[];
@@ -26,6 +27,7 @@ export function MovePanel({
   onClear: () => void;
   onDone: () => void;
   onUndo: (index: number) => void;
+  onUndoAll: () => void;
 }) {
   const source = route[0];
   const movable: MovableUnit[] = source ? (request.movableUnits[source] ?? []) : [];
@@ -78,8 +80,22 @@ export function MovePanel({
 
       {request.undoableMoves.length > 0 && (
         <div style={{ marginBottom: 8 }}>
-          <div style={{ color: "#9fb6c9", fontSize: 11, marginBottom: 3 }}>
-            Moves this phase (newest last):
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 3,
+            }}
+          >
+            <span style={{ color: "#9fb6c9", fontSize: 11 }}>Moves this phase (newest last):</span>
+            <button
+              onClick={onUndoAll}
+              title="Undo every move made this phase"
+              style={{ ...secondaryBtn, flex: "none", padding: "2px 8px" }}
+            >
+              Undo all
+            </button>
           </div>
           {request.undoableMoves.map((m) => (
             <div

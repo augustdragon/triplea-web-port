@@ -253,8 +253,11 @@ bridge; verified live (16 Sea Zone showed the destroyer immediately, source 12�
 **Undo:** `MoveRequest.undoableMoves` (from `IMoveDelegate.getMovesMade()`,
 mapped by `WebPlayer.toUndoInfos`) lists this phase's moves; reply `{undo:index}`
 → `delegate.undoMove(index)` → re-broadcast. `MovePanel` shows a per-move Undo
-button (disabled when `canUndo` is false). Zero engine change; verified live (the
-destroyer move undone — 6 Sea Zone 12→11→12, 16 Sea Zone cleared). **New doc:** `docs/web-port/state-model.md` (how the engine stores &
+button (disabled when `canUndo` is false), plus an **"Undo all"** (reply
+`{undoAll:true}` → `WebPlayer.undoAll` unwinds last-first). Any move, or all, at
+any point in the phase — matching the original game; works in combat and
+non-combat. Zero engine change; verified live (2 moves, undid the older one
+individually with the newer kept, then Undo all reverted everything). **New doc:** `docs/web-port/state-model.md` (how the engine stores &
 tracks state — in-memory object graph, units as objects not region properties,
 Change command pattern, serialized saves; what the web port reads).
 
