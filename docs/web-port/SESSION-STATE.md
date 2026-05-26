@@ -262,12 +262,13 @@ tracks state — in-memory object graph, units as objects not region properties,
 Change command pattern, serialized saves; what the web port reads).
 
 **✅ 3d (battle resolution) DONE — verified live.** Interactive end-to-end.
-**Battle log:** `WebDisplay extends HeadlessDisplay` forwards `showBattle`/`notifyDice`/
-`casualtyNotification`/`notifyRetreat`/`battleEnd` as `{type:"battle"}` envelopes
-(`GameWebSocketServer.publishBattleEvent`); client `BattleLog` renders it. **Round
-markers:** `WebDisplay.gotoBattleStep` reads `BattleTracker.getPendingBattle(id).getBattleRound()`
-(GameData wired via `setGameData`) and emits a `kind:"round"` event with surviving
-`getAttackingUnits()/getDefendingUnits()` when the round advances. **`selectCasualties`:**
+**Battle log (historical, grouped):** `WebDisplay extends HeadlessDisplay` accumulates each
+battle (`showBattle` records round+attacker+defender+location; `casualtyNotification` totals
+losses per side) and emits ONE `kind:"result"` envelope at `battleEnd`
+(`GameWebSocketServer.publishBattleEvent`); client `BattleLog` groups results by game round →
+attacking nation, one line per battle with outcome + losses. (Earlier per-dice/round/forces
+streaming was replaced by this compact record; live in-battle forces for a retreat decision
+come from the `RetreatPanel` instead.) **`selectCasualties`:**
 `CasualtyRequest{player,location,message,count,options,defaultKilled,allowMultipleHits}`
 → reply `{killed:{type:count}}` → `resolveKilled` → `CasualtyDetails(killed,[],false)`;
 client `CasualtyPanel` pre-fills the engine default, submit enabled only at exactly

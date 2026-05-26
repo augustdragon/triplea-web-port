@@ -59,8 +59,8 @@ export default function App() {
       } else if (env.type === "request") {
         setRequest(env);
       } else if (env.type === "battle") {
-        // Keep a bounded rolling log so a long game doesn't grow it without limit.
-        setBattleLog((prev) => [...prev, env].slice(-80));
+        // One result per battle now, so keep a long history (still bounded for safety).
+        setBattleLog((prev) => [...prev, env].slice(-500));
       }
     };
     ws.onclose = () => setWsStatus("disconnected");

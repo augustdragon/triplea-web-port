@@ -157,24 +157,16 @@ export interface DecisionRequest {
 }
 
 /**
- * A battle-log event pushed by the server's WebDisplay ({type:"battle"}). Fields are populated per
- * `kind`: start (location/attacker/defender/attackers/defenders/amphibious), dice (step/hits),
- * casualties (player/killed/damaged), retreat (player/message), end (message).
+ * A battle-result event pushed by the server's WebDisplay ({type:"battle", kind:"result"}) — one
+ * per completed battle, for a historical record grouped by game round → attacking nation.
  */
 export interface BattleEvent {
-  kind: "start" | "round" | "dice" | "casualties" | "retreat" | "end";
-  battleId?: string;
-  round?: number;
-  location?: string;
-  attacker?: string;
-  defender?: string;
-  attackers?: string;
-  defenders?: string;
-  amphibious?: boolean;
-  step?: string;
-  hits?: number;
-  player?: string;
-  killed?: string;
-  damaged?: string;
-  message?: string;
+  kind: "result";
+  gameRound: number;
+  attacker: string;
+  defender: string;
+  location: string;
+  result: string;
+  attackerLosses: string;
+  defenderLosses: string;
 }
