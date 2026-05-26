@@ -261,8 +261,27 @@ individually with the newer kept, then Undo all reverted everything). **New doc:
 tracks state — in-memory object graph, units as objects not region properties,
 Change command pattern, serialized saves; what the web port reads).
 
-**Next → 3d (battle resolution):** real `selectCasualties` + `retreatQuery` panels +
-the void notifications, so a *defended* attack is fought interactively (so far only an
-undefended conquest + uncontested moves). Then 3e place (non-combat move already wired),
-3f Pacific naval/air queries, 3g hotseat seat-switching. Deferred from 3c+: multi-source
-single submission, air range/landing UX hints. See `tasks/todo.md` for 3d–3g.
+**✅ 3d (battle resolution) DONE — verified live.** Interactive end-to-end.
+**Battle log:** `WebDisplay extends HeadlessDisplay` forwards `showBattle`/`notifyDice`/
+`casualtyNotification`/`notifyRetreat`/`battleEnd` as `{type:"battle"}` envelopes
+(`GameWebSocketServer.publishBattleEvent`); client `BattleLog` renders it. **Round
+markers:** `WebDisplay.gotoBattleStep` reads `BattleTracker.getPendingBattle(id).getBattleRound()`
+(GameData wired via `setGameData`) and emits a `kind:"round"` event with surviving
+`getAttackingUnits()/getDefendingUnits()` when the round advances. **`selectCasualties`:**
+`CasualtyRequest{player,location,message,count,options,defaultKilled,allowMultipleHits}`
+→ reply `{killed:{type:count}}` → `resolveKilled` → `CasualtyDetails(killed,[],false)`;
+client `CasualtyPanel` pre-fills the engine default, submit enabled only at exactly
+`count`. **`retreatQuery`:** `RetreatRequest{...,attackers,defenders}` (forces shown) →
+reply `{retreatTo:name}`/`{remain:true}`; client `RetreatPanel`. Battle's `isHeadless()`
+is false in a real `ServerGame` so all this fires. Verified live (Japan, 2nd ed):
+Kwangsi→Hunan, picked casualties overriding the default (lost artillery not infantry);
+and a 2-inf attack where after round 1 (1 inf each) Japan retreated to Kwangsi.
+Unit tests: `resolveKilled`, `toUndoInfos`, `buildMove` (9 in `WebPlayerMoveTest`).
+Deferred: damaging a 2-hit unit (`allowMultipleHits`); trimming 0-hit log lines; sub
+submerge not yet exercised live.
+
+**Next → 3e (place units):** `IAbstractPlaceDelegate.placeUnits` + a place panel (units
+bought in purchase are currently lost). Includes `getNumberOfFightersToMoveToNewCarrier`.
+Then 3f Pacific naval/air queries (`scrambleUnitsQuery`, `selectKamikazeSuicideAttacks`,
+`selectTerritoryForAirToLand`, bombardment), 3g hotseat seat-switching. Deferred polish
+from 3c+/3d above. See `tasks/todo.md`.

@@ -15,9 +15,11 @@ import games.strategy.engine.data.Route;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.triplea.Constants;
+import games.strategy.triplea.delegate.AbstractMoveDelegate;
 import games.strategy.triplea.delegate.DiceRoll;
 import games.strategy.triplea.delegate.Matches;
 import games.strategy.triplea.delegate.UndoableMove;
+import games.strategy.triplea.delegate.battle.IBattle;
 import games.strategy.triplea.delegate.data.CasualtyDetails;
 import games.strategy.triplea.delegate.data.CasualtyList;
 import games.strategy.triplea.delegate.remote.IMoveDelegate;
@@ -48,10 +50,11 @@ import org.triplea.util.Tuple;
  * engine enforces the rules) but blocks on a {@link WebDecisionBridge} instead of {@code
  * CountDownLatch}/EDT.
  *
- * <p>Interactive so far: <b>purchase</b> (3b) and both <b>combat</b> and <b>non-combat move</b>
- * (3c) — land, sea, air, and transport load/unload. Every other decision method returns a safe
- * default so a full game still runs (e.g. the place phase auto-passes — units bought but not placed
- * are lost). 3d+ replaces more defaults with real browser panels (battle resolution next).
+ * <p>Interactive so far: <b>purchase</b> (3b), <b>combat</b> and <b>non-combat move</b> (3c — land,
+ * sea, air, transport load/unload, undo), and <b>battle resolution</b> (3d — {@link
+ * #selectCasualties} and {@link #retreatQuery}). Remaining decision methods return a safe default
+ * so a full game still runs (e.g. the place phase auto-passes — units bought but not placed are
+ * lost). Next: place (3e), then Pacific naval/air queries (3f).
  */
 @Slf4j
 public final class WebPlayer extends AbstractBasePlayer {
@@ -520,7 +523,37 @@ public final class WebPlayer extends AbstractBasePlayer {
       final Territory battleTerritory,
       final Collection<Territory> possibleTerritories,
       final String message) {
-    return Optional.empty(); // do not retreat
+    try {
+      String attackers = "";
+      String defenders = "";
+      final IBattle battle =
+          AbstractMoveDelegate.getBattleTracker(getGameData()).getPendingBattle(battleId);
+      if (battle != null) {
+        attackers = summarizeUnits(battle.getAttackingUnits());
+        defenders = summarizeUnits(battle.getDefendingUnits());
+      }
+      final List<String> options =
+          possibleTerritories.stream().map(Territory::getName).sorted().toList();
+      final JsonObject reply =
+          bridge.await(
+              "retreat",
+              new RetreatRequest(
+                  getGamePlayer().getName(),
+                  battleTerritory.getName(),
+                  submerge,
+                  options,
+                  message,
+                  attackers,
+                  defenders));
+      if (reply.has("retreatTo") && reply.get("retreatTo").isJsonPrimitive()) {
+        final String name = reply.get("retreatTo").getAsString();
+        return possibleTerritories.stream().filter(t -> t.getName().equals(name)).findFirst();
+      }
+      return Optional.empty(); // remain and keep fighting
+    } catch (final RuntimeException e) {
+      log.warn("Retreat query unavailable, staying in battle: {}", e.getMessage());
+      return Optional.empty();
+    }
   }
 
   @Override

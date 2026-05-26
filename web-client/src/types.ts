@@ -114,11 +114,26 @@ export interface CasualtyRequest {
   allowMultipleHits: boolean;
 }
 
+/**
+ * Payload of a kind:"retreat" request: the attacker may pull out between rounds. `options` are
+ * territory names to retreat to (just the battle site when `submerge`). `attackers`/`defenders` are
+ * the surviving forces so the choice is informed. Reply {retreatTo:"<name>"} or {remain:true}.
+ */
+export interface RetreatRequest {
+  player: string;
+  battleTerritory: string;
+  submerge: boolean;
+  options: string[];
+  message: string;
+  attackers: string;
+  defenders: string;
+}
+
 /** A decision the active human seat must answer. payload shape depends on kind. */
 export interface DecisionRequest {
   requestId: string;
   kind: string;
-  payload: PurchaseRequest | MoveRequest | CasualtyRequest;
+  payload: PurchaseRequest | MoveRequest | CasualtyRequest | RetreatRequest;
 }
 
 /**

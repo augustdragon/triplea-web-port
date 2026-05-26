@@ -6,12 +6,14 @@ import type {
   MapGeometry,
   MoveRequest,
   PurchaseRequest,
+  RetreatRequest,
   StateSnapshot,
 } from "./types";
 import { MapCanvas } from "./MapCanvas";
 import { PurchasePanel } from "./PurchasePanel";
 import { MovePanel } from "./MovePanel";
 import { CasualtyPanel } from "./CasualtyPanel";
+import { RetreatPanel } from "./RetreatPanel";
 import { BattleLog } from "./BattleLog";
 
 // The game WebSocket server (see :game-web-server:runSpectator / runPlayable). Same host as the
@@ -113,6 +115,12 @@ export default function App() {
   function submitCasualties(killed: Record<string, number>) {
     sendDecision({ killed });
   }
+  function submitRetreat(territory: string) {
+    sendDecision({ retreatTo: territory });
+  }
+  function submitStay() {
+    sendDecision({ remain: true });
+  }
 
   if (error) {
     return (
@@ -165,6 +173,13 @@ export default function App() {
       )}
       {request?.kind === "selectCasualties" && (
         <CasualtyPanel request={request.payload as CasualtyRequest} onSubmit={submitCasualties} />
+      )}
+      {request?.kind === "retreat" && (
+        <RetreatPanel
+          request={request.payload as RetreatRequest}
+          onRetreat={submitRetreat}
+          onStay={submitStay}
+        />
       )}
       <BattleLog events={battleLog} />
     </div>
