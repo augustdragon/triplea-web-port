@@ -293,8 +293,27 @@ the Vite client is up, and launches a fresh game in the foreground (Ctrl+C to st
 Params: `-Player`, `-Port`, `-MaxRounds`, `-StepDelayMs`, `-GameXml`. Restart loop:
 Ctrl+C → re-run → refresh the browser at http://localhost:5173/.
 
-**Next → 3e (place units):** `IAbstractPlaceDelegate.placeUnits` + a place panel (units
-bought in purchase are currently lost). Includes `getNumberOfFightersToMoveToNewCarrier`.
-Then 3f Pacific naval/air queries (`scrambleUnitsQuery`, `selectKamikazeSuicideAttacks`,
-`selectTerritoryForAirToLand`, bombardment), 3g hotseat seat-switching. Deferred polish
-from 3c+/3d above. See `tasks/todo.md`.
+**✅ 3e (place units) DONE — verified live.** `WebPlayer.handlePlace` loops a `kind:"place"`
+request (pool = `player.getUnitCollection().getUnits()`, re-read each loop since the engine
+removes placed units) until `{done:true}`; each `{territory,units:{type:count}}` reply →
+`IAbstractPlaceDelegate.placeUnits(units, at, BidMode)`. Client `PlacePanel`. Verified live
+over several turns including buying + placing a NEW factory one turn and producing units
+there in subsequent turns.
+
+**✅ Combat-phase bug FIXED — verified live (commit `9fc5d9ca9`).** `WebPlayer` never handled
+the battle step, so a human seat's combat moves never *fought* — attacker + defender sat
+co-located and the turn jumped to non-combat move (user reproduced this in Chinese Kiangsi,
+Round 3). The engine does NOT auto-fight; the seat must drive the combat phase. Added
+`handleBattle()` (mirrors `AbstractAi.battle`): loop `IBattleDelegate.getBattleListing()
+.getBattlesMap()`, call `fightBattle(where, type.isBombingRun(), type)` until none remain,
+ignoring `BattleDelegate.isBattleDependencyErrorMessage` (dependency-order) errors; wired to
+`GameStep.isBattleStepName`. Verified: Japan combat-moves into Chinese Hunan → Combat phase now
+fights it (retreat prompt + casualties + grouped battle-log entry) instead of skipping. See
+`tasks/lessons.md` ("engine does not auto-fight battles").
+
+**Next → 3f (Pacific combat sub-decisions):** `scrambleUnitsQuery`,
+`selectKamikazeSuicideAttacks`, `selectTerritoryForAirToLand`, shore bombardment,
+attack-lone-units; then 3g hotseat seat-switching. Deferred polish from 3c+/3d/3e above
+(2-hit unit damage in casualties; loss-attribution lumps allies with the defender; tall
+panels scroll Buy/Place below the fold; MovePanel/PlacePanel non-functional `setUnits`).
+See `tasks/todo.md`.
