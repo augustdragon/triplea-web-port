@@ -1,4 +1,5 @@
 import type { MovableUnit, MoveRequest } from "./types";
+import { displayTerritory } from "./territoryName";
 
 /**
  * The move panel (3c — combat and non-combat; land, sea, air, transport load/unload). The player
@@ -109,7 +110,7 @@ export function MovePanel({
             >
               <span style={{ flex: 1, color: "#cdd6df" }}>
                 <b>{m.units}</b>
-                <span style={{ color: "#9fb6c9" }}> · {m.label}</span>
+                <span style={{ color: "#9fb6c9" }}> · {displayTerritory(m.label)}</span>
               </span>
               <button
                 onClick={() => onUndo(m.index)}
@@ -132,7 +133,7 @@ export function MovePanel({
       ) : (
         <>
           <div style={{ marginBottom: 6, color: "#9fb6c9" }}>
-            Route: <b style={{ color: "#ff8c2a" }}>{route.join(" → ")}</b>
+            Route: <b style={{ color: "#ff8c2a" }}>{route.map(displayTerritory).join(" → ")}</b>
             <div style={{ fontSize: 11, marginTop: 2 }}>
               Click more territories to extend the path.
             </div>

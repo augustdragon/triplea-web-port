@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MapGeometry, TerritoryGeometry, UnitStack, XyPoint } from "./types";
+import { displayTerritory } from "./territoryName";
 
 // Fixed canvas viewport; the map is fit into it initially, then pan/zoom navigates within.
 const VIEW_W = 1500;
@@ -279,7 +280,7 @@ function Tooltip({
         zIndex: 10,
       }}
     >
-      <div style={{ fontWeight: "bold", marginBottom: 2 }}>{territory.name}</div>
+      <div style={{ fontWeight: "bold", marginBottom: 2 }}>{displayTerritory(territory.name)}</div>
       <div style={{ color: "#9fb6c9" }}>
         {territory.water ? "sea zone" : `land · PU ${territory.production}`}
         {territory.capitalOf ? ` · ${territory.capitalOf} capital` : ""}
