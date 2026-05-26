@@ -188,6 +188,27 @@ class WebPlayerMoveTest {
   }
 
   @Test
+  void resolveKilled_picksRequestedCountsPerTypeAsDistinctUnits() {
+    final UnitType infantry = GameDataTestUtil.infantry(data);
+    final UnitType armour = GameDataTestUtil.armour(data);
+    final List<Unit> pool = new java.util.ArrayList<>(infantry.create(3, player));
+    pool.addAll(armour.create(2, player));
+
+    final List<Unit> killed =
+        WebPlayer.resolveKilled(pool, Map.of(infantry.getName(), 2, armour.getName(), 1));
+
+    assertEquals(3, killed.size());
+    assertEquals(3, new java.util.HashSet<>(killed).size(), "all distinct units");
+    assertEquals(
+        2, killed.stream().filter(u -> u.getType().getName().equals(infantry.getName())).count());
+    assertEquals(
+        1, killed.stream().filter(u -> u.getType().getName().equals(armour.getName())).count());
+
+    // Asking for more than available is capped to the pool.
+    assertEquals(3, WebPlayer.resolveKilled(pool, Map.of(infantry.getName(), 99)).size());
+  }
+
+  @Test
   void noMatchingUnits_throws() {
     final UnitType infantry = GameDataTestUtil.infantry(data);
     // `sea` was cleared, so it holds no infantry to draw from.

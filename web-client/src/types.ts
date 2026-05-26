@@ -99,11 +99,26 @@ export interface MoveRequest {
   error: string | null;
 }
 
+/**
+ * Payload of a kind:"selectCasualties" request: the player taking hits picks which units die.
+ * `count` is exactly how many to lose; `options` is the eligible pool (type -> available); the reply
+ * is {killed:{type:count}} summing to `count`. `defaultKilled` is the engine's pre-pick.
+ */
+export interface CasualtyRequest {
+  player: string;
+  location: string | null;
+  message: string;
+  count: number;
+  options: Record<string, number>;
+  defaultKilled: Record<string, number>;
+  allowMultipleHits: boolean;
+}
+
 /** A decision the active human seat must answer. payload shape depends on kind. */
 export interface DecisionRequest {
   requestId: string;
   kind: string;
-  payload: PurchaseRequest | MoveRequest;
+  payload: PurchaseRequest | MoveRequest | CasualtyRequest;
 }
 
 /**

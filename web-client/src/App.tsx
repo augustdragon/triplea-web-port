@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type {
   BattleEvent,
+  CasualtyRequest,
   DecisionRequest,
   MapGeometry,
   MoveRequest,
@@ -10,6 +11,7 @@ import type {
 import { MapCanvas } from "./MapCanvas";
 import { PurchasePanel } from "./PurchasePanel";
 import { MovePanel } from "./MovePanel";
+import { CasualtyPanel } from "./CasualtyPanel";
 import { BattleLog } from "./BattleLog";
 
 // The game WebSocket server (see :game-web-server:runSpectator / runPlayable). Same host as the
@@ -108,6 +110,9 @@ export default function App() {
     sendDecision({ undoAll: true });
     resetMove();
   }
+  function submitCasualties(killed: Record<string, number>) {
+    sendDecision({ killed });
+  }
 
   if (error) {
     return (
@@ -157,6 +162,9 @@ export default function App() {
           onUndo={submitUndo}
           onUndoAll={submitUndoAll}
         />
+      )}
+      {request?.kind === "selectCasualties" && (
+        <CasualtyPanel request={request.payload as CasualtyRequest} onSubmit={submitCasualties} />
       )}
       <BattleLog events={battleLog} />
     </div>

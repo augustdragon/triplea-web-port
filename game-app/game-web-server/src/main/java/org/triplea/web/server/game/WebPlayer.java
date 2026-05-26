@@ -372,7 +372,57 @@ public final class WebPlayer extends AbstractBasePlayer {
       final UUID battleId,
       final Territory battlesite,
       final boolean allowMultipleHitsPerUnit) {
-    return new CasualtyDetails(defaultCasualties, true); // accept the engine's auto-selection
+    try {
+      final JsonObject reply =
+          bridge.await(
+              "selectCasualties",
+              new CasualtyRequest(
+                  hit.getName(),
+                  battlesite == null ? null : battlesite.getName(),
+                  message,
+                  count,
+                  countByType(selectFrom),
+                  countByType(defaultCasualties.getKilled()),
+                  allowMultipleHitsPerUnit));
+      final Map<String, Integer> killedCounts = new HashMap<>();
+      if (reply.has("killed") && reply.get("killed").isJsonObject()) {
+        for (final var entry : reply.getAsJsonObject("killed").entrySet()) {
+          killedCounts.put(entry.getKey(), entry.getValue().getAsInt());
+        }
+      }
+      return new CasualtyDetails(resolveKilled(selectFrom, killedCounts), List.of(), false);
+    } catch (final RuntimeException e) {
+      // Game stopped, or no browser to answer — fall back to the engine's auto-pick rather than
+      // crash the battle. (The browser panel enforces the exact hit count, so a real reply is
+      // valid.)
+      log.warn("Casualty selection unavailable, accepting engine default: {}", e.getMessage());
+      return new CasualtyDetails(defaultCasualties, true);
+    }
+  }
+
+  /**
+   * Resolve a browser {@code {type:count}} casualty pick into concrete units drawn from the pool.
+   */
+  static List<Unit> resolveKilled(
+      final Collection<Unit> selectFrom, final Map<String, Integer> killedCounts) {
+    final List<Unit> killed = new ArrayList<>();
+    killedCounts.forEach(
+        (type, n) ->
+            selectFrom.stream()
+                .filter(u -> u.getType().getName().equals(type))
+                .filter(u -> !killed.contains(u))
+                .limit(Math.max(0, n))
+                .forEach(killed::add));
+    return killed;
+  }
+
+  /** Unit type -> count, for offering a pool to the browser. */
+  private static Map<String, Integer> countByType(final Collection<Unit> units) {
+    final Map<String, Integer> byType = new TreeMap<>();
+    for (final Unit unit : units) {
+      byType.merge(unit.getType().getName(), 1, Integer::sum);
+    }
+    return byType;
   }
 
   @Override
