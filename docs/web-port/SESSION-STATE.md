@@ -287,6 +287,11 @@ highlighted), the active decision panel (purchase/move/casualty/retreat — now 
 blocks, not fixed-position windows), and the `BattleLog` at the bottom. Replaces the
 old scattered upper-right move panel + lower-left battle log.
 
+**Manual testing:** `scripts\restart-web.ps1` (PowerShell) stops the running game, ensures
+the Vite client is up, and launches a fresh game in the foreground (Ctrl+C to stop).
+Params: `-Player`, `-Port`, `-MaxRounds`, `-StepDelayMs`, `-GameXml`. Restart loop:
+Ctrl+C → re-run → refresh the browser at http://localhost:5173/.
+
 **Next → 3e (place units):** `IAbstractPlaceDelegate.placeUnits` + a place panel (units
 bought in purchase are currently lost). Includes `getNumberOfFightersToMoveToNewCarrier`.
 Then 3f Pacific naval/air queries (`scrambleUnitsQuery`, `selectKamikazeSuicideAttacks`,
