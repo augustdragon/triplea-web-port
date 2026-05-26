@@ -107,7 +107,10 @@ export function MovePanel({
                 padding: "2px 4px",
               }}
             >
-              <span style={{ flex: 1, color: "#cdd6df" }}>{m.label}</span>
+              <span style={{ flex: 1, color: "#cdd6df" }}>
+                <b>{m.units}</b>
+                <span style={{ color: "#9fb6c9" }}> · {m.label}</span>
+              </span>
               <button
                 onClick={() => onUndo(m.index)}
                 disabled={!m.canUndo}

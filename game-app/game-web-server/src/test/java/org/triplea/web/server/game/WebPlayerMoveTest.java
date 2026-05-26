@@ -165,9 +165,12 @@ class WebPlayerMoveTest {
   }
 
   @Test
-  void toUndoInfos_mapsIndexLabelAndCanUndo() {
+  void toUndoInfos_mapsIndexUnitsLabelAndCanUndo() {
     final UnitType infantry = GameDataTestUtil.infantry(data);
-    final UndoableMove first = new UndoableMove(infantry.create(1, player), new Route(land, land2));
+    final UnitType armour = GameDataTestUtil.armour(data);
+    final List<Unit> mixed = new java.util.ArrayList<>(infantry.create(2, player));
+    mixed.addAll(armour.create(1, player));
+    final UndoableMove first = new UndoableMove(mixed, new Route(land, land2));
     final UndoableMove second =
         new UndoableMove(infantry.create(1, player), new Route(land2, land));
     second.setCantUndo("a later move depends on this one");
@@ -176,9 +179,11 @@ class WebPlayerMoveTest {
 
     assertEquals(2, infos.size());
     assertEquals(0, infos.get(0).index());
+    assertEquals("1 armour, 2 infantry", infos.get(0).units(), "grouped by type, alphabetical");
     assertEquals(land.getName() + " -> " + land2.getName(), infos.get(0).label());
     assertTrue(infos.get(0).canUndo());
     assertEquals(1, infos.get(1).index());
+    assertEquals("1 infantry", infos.get(1).units());
     assertFalse(infos.get(1).canUndo(), "setCantUndo should disable undo");
   }
 

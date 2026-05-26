@@ -77,6 +77,9 @@ export interface MovableUnit {
 /** A move already made this phase that can be undone. index is what {undo:index} refers to. */
 export interface UndoableMoveInfo {
   index: number;
+  /** "2 infantry, 1 armour" — the moved units grouped by type. */
+  units: string;
+  /** "start -> end" route. */
   label: string;
   canUndo: boolean;
 }

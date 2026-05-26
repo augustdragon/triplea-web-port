@@ -199,9 +199,28 @@ public final class WebPlayer extends AbstractBasePlayer {
     final List<UndoableMoveInfo> result = new ArrayList<>();
     for (int i = 0; i < moves.size(); i++) {
       final UndoableMove move = moves.get(i);
-      result.add(new UndoableMoveInfo(i, move.getMoveLabel(), move.getCanUndo()));
+      result.add(
+          new UndoableMoveInfo(
+              i, summarizeUnits(move.getUnits()), move.getMoveLabel(), move.getCanUndo()));
     }
     return result;
+  }
+
+  /** "2 infantry, 1 armour" — the moved units grouped by type, like the Swing undo panel. */
+  static String summarizeUnits(final Collection<Unit> units) {
+    final Map<String, Integer> byType = new TreeMap<>();
+    for (final Unit unit : units) {
+      byType.merge(unit.getType().getName(), 1, Integer::sum);
+    }
+    final StringBuilder summary = new StringBuilder();
+    byType.forEach(
+        (type, count) -> {
+          if (summary.length() > 0) {
+            summary.append(", ");
+          }
+          summary.append(count).append(' ').append(type);
+        });
+    return summary.toString();
   }
 
   /**
