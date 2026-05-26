@@ -99,8 +99,11 @@ The existing `game.runNextStep()` loop naturally pauses on a human turn because
 - See `docs/web-port/state-model.md` for how the engine stores/tracks all this state.
 
 #### 3d — Battle resolution
-- [ ] Real `selectCasualties` + `retreatQuery` panels; void notifications (`reportError`, `reportMessage`, `confirmOwnCasualties`, `confirmEnemyCasualties`).
-- [ ] **Exit check:** human fights a battle to resolution, picking casualties and a retreat.
+- [x] **3d-1 — Battle log (display forwarding).** `WebDisplay extends HeadlessDisplay` forwards battle events (`showBattle`/`notifyDice`/`casualtyNotification`/`notifyRetreat`/`battleEnd`) as `{type:"battle"}` envelopes via `GameWebSocketServer.publishBattleEvent`; client `BattleLog` renders a live log. `WebPlayableServer` now passes `WebDisplay` instead of `HeadlessDisplay`. Note: the battle's `isHeadless()` is false in a real `ServerGame` (only the odds `BattleCalculator` sets it true), so these callbacks fire. **Verified live:** Kwangsi(4 units) → Hunan(2 Chinese inf); log showed start → dice/hits → "Chinese lost 2 infantry" / "Japanese lost nothing" → "Japanese win"; Hunan flipped Japanese.
+- [ ] **3d-2 — Interactive `selectCasualties`.** `bridge.await("selectCasualties", {battleId, battlesite, message, count, selectFrom, defaultKilled, allowMultipleHitsPerUnit})` → reply `{killed[],damaged[]}` → `new CasualtyDetails(killed, damaged, false)`. Only fires on a real choice (mixed stack, hits < units). Surface `reportError` for a bad count (engine re-prompts). Defender picks when attacker fires & vice-versa.
+- [ ] **3d-3 — Interactive `retreatQuery`.** `bridge.await("retreat", {battleId, submerge, battleTerritory, options[], message})` → reply territory-name or remain → `Optional`. Attacker general retreat; subs submerge (return battle site).
+- [ ] `confirmOwn/EnemyCasualties` stay non-blocking (log already shows casualties).
+- [ ] **Exit check:** human fights a *defended* battle to resolution, picking casualties and choosing whether to retreat.
 
 #### 3e — Non-combat move + place
 - [x] Non-combat move — dispatched via the same `handleMove` path (done in 3c+).

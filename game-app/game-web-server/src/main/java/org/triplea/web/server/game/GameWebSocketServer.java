@@ -48,6 +48,15 @@ public final class GameWebSocketServer extends WebSocketServer {
   }
 
   /**
+   * Broadcast a pre-built {@code {type:"battle",...}} event envelope — a transient battle-log line.
+   * Not stored for catch-up (a client joining mid-battle just misses earlier lines; the state
+   * snapshot still catches it up).
+   */
+  public void publishBattleEvent(final String envelopeJson) {
+    broadcast(envelopeJson);
+  }
+
+  /**
    * Broadcast a decision-request envelope and remember it as the outstanding request, so a client
    * connecting (or reconnecting) mid-decision is re-prompted instead of leaving the engine parked.
    */

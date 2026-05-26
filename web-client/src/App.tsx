@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import type { DecisionRequest, MapGeometry, MoveRequest, PurchaseRequest, StateSnapshot } from "./types";
+import type {
+  BattleEvent,
+  DecisionRequest,
+  MapGeometry,
+  MoveRequest,
+  PurchaseRequest,
+  StateSnapshot,
+} from "./types";
 import { MapCanvas } from "./MapCanvas";
 import { PurchasePanel } from "./PurchasePanel";
 import { MovePanel } from "./MovePanel";
+import { BattleLog } from "./BattleLog";
 
 // The game WebSocket server (see :game-web-server:runSpectator / runPlayable). Same host as the
 // page, so it works over LAN/ZeroTier too.
@@ -16,6 +24,7 @@ export default function App() {
   const [wsStatus, setWsStatus] = useState("connecting…");
   const [moveRoute, setMoveRoute] = useState<string[]>([]);
   const [moveUnits, setMoveUnits] = useState<Record<string, number>>({});
+  const [battleLog, setBattleLog] = useState<BattleEvent[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -35,11 +44,15 @@ export default function App() {
     ws.onmessage = (e) => {
       const env = JSON.parse(e.data) as
         | { type: "state"; snapshot: StateSnapshot }
-        | ({ type: "request" } & DecisionRequest);
+        | ({ type: "request" } & DecisionRequest)
+        | ({ type: "battle" } & BattleEvent);
       if (env.type === "state") {
         setSnapshot(env.snapshot);
       } else if (env.type === "request") {
         setRequest(env);
+      } else if (env.type === "battle") {
+        // Keep a bounded rolling log so a long game doesn't grow it without limit.
+        setBattleLog((prev) => [...prev, env].slice(-80));
       }
     };
     ws.onclose = () => setWsStatus("disconnected");
@@ -145,6 +158,7 @@ export default function App() {
           onUndoAll={submitUndoAll}
         />
       )}
+      <BattleLog events={battleLog} />
     </div>
   );
 }

@@ -3,7 +3,6 @@ package org.triplea.web.server.game;
 import com.google.gson.Gson;
 import games.strategy.engine.framework.ServerGame;
 import games.strategy.engine.framework.startup.ui.PlayerTypes;
-import games.strategy.triplea.ui.display.HeadlessDisplay;
 import java.nio.file.Path;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -52,7 +51,11 @@ public final class WebPlayableServer {
 
     final ServerGame game =
         WebGameHost.startGame(
-            gameXml, Set.of(humanPlayer), PlayerTypes.FAST_AI, bridge, new HeadlessDisplay());
+            gameXml,
+            Set.of(humanPlayer),
+            PlayerTypes.FAST_AI,
+            bridge,
+            new WebDisplay(server::publishBattleEvent));
     game.setStopGameOnDelegateExecutionStop(true);
     server.publishState(GSON.toJson(StateProjector.project(game.getData())));
 

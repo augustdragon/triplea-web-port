@@ -105,3 +105,25 @@ export interface DecisionRequest {
   kind: string;
   payload: PurchaseRequest | MoveRequest;
 }
+
+/**
+ * A battle-log event pushed by the server's WebDisplay ({type:"battle"}). Fields are populated per
+ * `kind`: start (location/attacker/defender/attackers/defenders/amphibious), dice (step/hits),
+ * casualties (player/killed/damaged), retreat (player/message), end (message).
+ */
+export interface BattleEvent {
+  kind: "start" | "dice" | "casualties" | "retreat" | "end";
+  battleId?: string;
+  location?: string;
+  attacker?: string;
+  defender?: string;
+  attackers?: string;
+  defenders?: string;
+  amphibious?: boolean;
+  step?: string;
+  hits?: number;
+  player?: string;
+  killed?: string;
+  damaged?: string;
+  message?: string;
+}
