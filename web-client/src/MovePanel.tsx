@@ -40,6 +40,15 @@ export function MovePanel({
     setUnits({ ...units, [type]: next });
   }
 
+  // Select every eligible unit in the source territory. `movable` is already filtered server-side to
+  // units with movement left (or transportable cargo), so this never picks a spent unit; the engine
+  // still validates the specific route on submit.
+  function selectAll() {
+    const all: Record<string, number> = {};
+    for (const mu of movable) all[mu.type] = mu.count;
+    setUnits(all);
+  }
+
   return (
     <div
       style={{
@@ -137,6 +146,23 @@ export function MovePanel({
             <div style={{ fontSize: 11, marginTop: 2 }}>
               Click more territories to extend the path.
             </div>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 4,
+            }}
+          >
+            <span style={{ color: "#9fb6c9", fontSize: 11 }}>Units to move:</span>
+            <button
+              onClick={selectAll}
+              title="Select every eligible unit here"
+              style={{ ...secondaryBtn, flex: "none", padding: "2px 8px" }}
+            >
+              Select all
+            </button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             {movable.map((mu) => {
