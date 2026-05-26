@@ -20,11 +20,13 @@ import games.strategy.triplea.delegate.DiceRoll;
 import games.strategy.triplea.delegate.GameStepPropertiesHelper;
 import games.strategy.triplea.delegate.Matches;
 import games.strategy.triplea.delegate.UndoableMove;
+import games.strategy.triplea.delegate.battle.BattleDelegate;
 import games.strategy.triplea.delegate.battle.IBattle;
 import games.strategy.triplea.delegate.data.CasualtyDetails;
 import games.strategy.triplea.delegate.data.CasualtyList;
 import games.strategy.triplea.delegate.remote.IAbstractPlaceDelegate;
 import games.strategy.triplea.delegate.remote.IAbstractPlaceDelegate.BidMode;
+import games.strategy.triplea.delegate.remote.IBattleDelegate;
 import games.strategy.triplea.delegate.remote.IMoveDelegate;
 import games.strategy.triplea.delegate.remote.IPurchaseDelegate;
 import games.strategy.triplea.player.AbstractBasePlayer;
@@ -86,10 +88,12 @@ public final class WebPlayer extends AbstractBasePlayer {
       handleMove(true);
     } else if (GameStep.isNonCombatMoveStepName(stepName)) {
       handleMove(false);
+    } else if (GameStep.isBattleStepName(stepName)) {
+      handleBattle();
     } else if (GameStep.isPlaceStepName(stepName)) {
       handlePlace();
     }
-    // Other steps (battle queries, tech, politics): no action yet.
+    // Other steps (tech, politics): no action yet.
   }
 
   /** Ask the browser what to buy, submit to the purchase delegate, loop until accepted. */
@@ -360,6 +364,44 @@ public final class WebPlayer extends AbstractBasePlayer {
       return new MoveDescription(units, route, unitsToTransports);
     }
     return new MoveDescription(units, route);
+  }
+
+  /**
+   * Fight the player's pending battles. The engine does NOT auto-fight — the seat must drive the
+   * combat phase (Swing's {@code TripleAPlayer} and the AI both do this). We mirror {@code
+   * AbstractAi.battle}: loop the battle listing, calling {@link IBattleDelegate#fightBattle} for
+   * each battle until none remain (retrying, since some battles depend on others — e.g. a sea
+   * battle before an amphibious assault). Each fight resolves synchronously, prompting the browser
+   * via {@link #selectCasualties}/{@link #retreatQuery} for this player's decisions. Without this
+   * the attacker's combat moves never resolve and opposing units sit co-located in the contested
+   * territory.
+   */
+  private void handleBattle() {
+    final IBattleDelegate delegate = (IBattleDelegate) getPlayerBridge().getRemoteDelegate();
+    while (!getPlayerBridge().isGameOver()) {
+      final var battlesByType = delegate.getBattleListing().getBattlesMap();
+      if (battlesByType.isEmpty()) {
+        return;
+      }
+      boolean foughtOne = false;
+      for (final var entry : battlesByType.entrySet()) {
+        for (final Territory where : entry.getValue()) {
+          if (getPlayerBridge().isGameOver()) {
+            return;
+          }
+          final String error =
+              delegate.fightBattle(where, entry.getKey().isBombingRun(), entry.getKey());
+          if (error == null) {
+            foughtOne = true;
+          } else if (!BattleDelegate.isBattleDependencyErrorMessage(error)) {
+            log.warn("Cannot fight battle at {}: {}", where.getName(), error);
+          }
+        }
+      }
+      if (!foughtOne) {
+        return; // only blocked/dependency battles remain — stop rather than spin
+      }
+    }
   }
 
   /**
