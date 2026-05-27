@@ -88,7 +88,8 @@ export default function App() {
     if (!name) return;
     if (request?.kind === "place") {
       // Any territory is a candidate target; the engine validates (factory, sea adjacency, …).
-      setPlaceTarget(name);
+      // Toggle: clicking the current target again deselects it (no need for a Clear button).
+      setPlaceTarget((prev) => (prev === name ? null : name));
       setPlaceUnits({});
       return;
     }
@@ -96,9 +97,12 @@ export default function App() {
     const movable = (request.payload as MoveRequest).movableUnits;
     const connections = geometry?.connections ?? {};
     setMoveRoute((prev) => {
+      // Toggle: clicking a territory already in the route deselects it — and, since a route is a
+      // path, everything after it. Clicking the only/start territory clears the route entirely.
+      const at = prev.indexOf(name);
+      if (at !== -1) return prev.slice(0, at);
       if (prev.length === 0) return movable[name] ? [name] : prev;
       const tail = prev[prev.length - 1];
-      if (name === tail) return prev; // ignore re-click of the current tail
       if (!connections[tail]?.includes(name)) return prev; // only extend to an adjacent territory
       return [...prev, name];
     });
