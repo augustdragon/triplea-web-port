@@ -6,11 +6,14 @@ import type {
   MapGeometry,
   MoveRequest,
   PlaceRequest,
+  PoliticsRequest,
   PurchaseRequest,
   RetreatRequest,
   StateSnapshot,
 } from "./types";
 import { MapCanvas } from "./MapCanvas";
+import { PoliticsPanel } from "./PoliticsPanel";
+import { RelationshipsModal } from "./RelationshipsModal";
 import { PurchasePanel } from "./PurchasePanel";
 import { MovePanel } from "./MovePanel";
 import { CasualtyPanel } from "./CasualtyPanel";
@@ -33,6 +36,7 @@ export default function App() {
   const [placeTarget, setPlaceTarget] = useState<string | null>(null);
   const [placeUnits, setPlaceUnits] = useState<Record<string, number>>({});
   const [battleLog, setBattleLog] = useState<BattleEvent[]>([]);
+  const [showRelationships, setShowRelationships] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -74,6 +78,12 @@ export default function App() {
       ws.send(JSON.stringify({ type: "decision", requestId: request.requestId, payload }));
     }
     setRequest(null);
+  }
+
+  // Politics: commit the staged set of declarations (possibly empty) and end the phase. The server
+  // applies each, skips any made redundant by another, and re-prompts only if some were skipped.
+  function submitPolitics(names: string[]) {
+    sendDecision({ commit: names });
   }
 
   // Purchase: one submission ends the phase.
@@ -178,54 +188,92 @@ export default function App() {
               : undefined
         }
       />
+      {showRelationships && snapshot && (
+        <RelationshipsModal
+          snapshot={snapshot}
+          colors={geometry.playerColors}
+          onClose={() => setShowRelationships(false)}
+        />
+      )}
       <Sidebar
         wsStatus={wsStatus}
         snapshot={snapshot}
         territoryCount={geometry.territories.length}
         events={battleLog}
-      >
-        {request?.kind === "purchase" && (
-          <PurchasePanel request={request.payload as PurchaseRequest} onSubmit={submitPurchase} />
-        )}
-        {request?.kind === "move" && (
-          <MovePanel
-            request={request.payload as MoveRequest}
-            route={moveRoute}
-            units={moveUnits}
-            setUnits={setMoveUnits}
-            onMove={submitMove}
-            onClear={resetMove}
-            onDone={submitDone}
-            onUndo={submitUndo}
-            onUndoAll={submitUndoAll}
-          />
-        )}
-        {request?.kind === "selectCasualties" && (
-          <CasualtyPanel request={request.payload as CasualtyRequest} onSubmit={submitCasualties} />
-        )}
-        {request?.kind === "retreat" && (
-          <RetreatPanel
-            request={request.payload as RetreatRequest}
-            onRetreat={submitRetreat}
-            onStay={submitStay}
-          />
-        )}
-        {request?.kind === "place" && (
-          <PlacePanel
-            request={request.payload as PlaceRequest}
-            target={placeTarget}
-            units={placeUnits}
-            setUnits={setPlaceUnits}
-            onPlace={submitPlace}
-            onDone={submitPlaceDone}
-          />
-        )}
-        {!request && (
-          <div style={{ padding: "12px 0", color: "#8aa0b0" }}>
-            No decision pending — waiting for the next prompt…
+        onShowRelationships={() => setShowRelationships(true)}
+      />
+      {/* Active decision panel: a bottom action bar spanning the width left of the sidebar. Only
+          present while a decision is pending, so the map is unobstructed otherwise. */}
+      {request && (
+        <div style={actionBar}>
+          <div style={{ maxWidth: request.kind === "politics" ? "none" : 620 }}>
+            {request.kind === "politics" && (
+              <PoliticsPanel
+                request={request.payload as PoliticsRequest}
+                onCommit={submitPolitics}
+              />
+            )}
+            {request.kind === "purchase" && (
+              <PurchasePanel
+                request={request.payload as PurchaseRequest}
+                onSubmit={submitPurchase}
+              />
+            )}
+            {request.kind === "move" && (
+              <MovePanel
+                request={request.payload as MoveRequest}
+                route={moveRoute}
+                units={moveUnits}
+                setUnits={setMoveUnits}
+                onMove={submitMove}
+                onClear={resetMove}
+                onDone={submitDone}
+                onUndo={submitUndo}
+                onUndoAll={submitUndoAll}
+              />
+            )}
+            {request.kind === "selectCasualties" && (
+              <CasualtyPanel
+                request={request.payload as CasualtyRequest}
+                onSubmit={submitCasualties}
+              />
+            )}
+            {request.kind === "retreat" && (
+              <RetreatPanel
+                request={request.payload as RetreatRequest}
+                onRetreat={submitRetreat}
+                onStay={submitStay}
+              />
+            )}
+            {request.kind === "place" && (
+              <PlacePanel
+                request={request.payload as PlaceRequest}
+                target={placeTarget}
+                units={placeUnits}
+                setUnits={setPlaceUnits}
+                onPlace={submitPlace}
+                onDone={submitPlaceDone}
+              />
+            )}
           </div>
-        )}
-      </Sidebar>
+        </div>
+      )}
     </div>
   );
 }
+
+// The bottom action bar: pinned to the bottom, spanning from the left edge to the sidebar's left
+// edge (the sidebar is a fixed 360px on the right). Scrolls internally if a panel is tall.
+const actionBar: React.CSSProperties = {
+  position: "fixed",
+  left: 0,
+  right: 360,
+  bottom: 0,
+  maxHeight: "42vh",
+  overflowY: "auto",
+  padding: "10px 16px",
+  background: "rgba(16,22,30,0.97)",
+  borderTop: "1px solid #3a4654",
+  boxShadow: "0 -4px 24px rgba(0,0,0,0.4)",
+  zIndex: 90,
+};

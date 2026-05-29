@@ -15,6 +15,7 @@ import games.strategy.engine.data.Route;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.triplea.Constants;
+import games.strategy.triplea.attachments.PoliticalActionAttachment;
 import games.strategy.triplea.delegate.AbstractMoveDelegate;
 import games.strategy.triplea.delegate.DiceRoll;
 import games.strategy.triplea.delegate.GameStepPropertiesHelper;
@@ -28,6 +29,7 @@ import games.strategy.triplea.delegate.remote.IAbstractPlaceDelegate;
 import games.strategy.triplea.delegate.remote.IAbstractPlaceDelegate.BidMode;
 import games.strategy.triplea.delegate.remote.IBattleDelegate;
 import games.strategy.triplea.delegate.remote.IMoveDelegate;
+import games.strategy.triplea.delegate.remote.IPoliticsDelegate;
 import games.strategy.triplea.delegate.remote.IPurchaseDelegate;
 import games.strategy.triplea.player.AbstractBasePlayer;
 import games.strategy.triplea.util.TransportUtils;
@@ -55,11 +57,12 @@ import org.triplea.util.Tuple;
  * engine enforces the rules) but blocks on a {@link WebDecisionBridge} instead of {@code
  * CountDownLatch}/EDT.
  *
- * <p>Interactive so far: <b>purchase</b> (3b), <b>combat</b> and <b>non-combat move</b> (3c — land,
- * sea, air, transport load/unload, undo), <b>battle resolution</b> (3d — {@link #selectCasualties}
- * and {@link #retreatQuery}), and <b>place</b> (3e — {@link #handlePlace}). Remaining decision
- * methods return a safe default so a full game still runs. Next: Pacific naval/air queries (3f —
- * scramble, kamikaze, bombardment), then hotseat (3g).
+ * <p>Interactive so far: <b>politics</b> (declarations of war — {@link #handlePolitics}),
+ * <b>purchase</b> (3b), <b>combat</b> and <b>non-combat move</b> (3c — land, sea, air, transport
+ * load/unload, undo), <b>battle resolution</b> (3d — {@link #selectCasualties} and {@link
+ * #retreatQuery}), and <b>place</b> (3e — {@link #handlePlace}). Remaining decision methods return
+ * a safe default so a full game still runs. Next: Pacific naval/air queries (3f — scramble,
+ * kamikaze, bombardment), then hotseat (3g).
  */
 @Slf4j
 public final class WebPlayer extends AbstractBasePlayer {
@@ -82,7 +85,9 @@ public final class WebPlayer extends AbstractBasePlayer {
     if (getPlayerBridge().isGameOver()) {
       return;
     }
-    if (GameStep.isPurchaseStepName(stepName) || GameStep.isBidStepName(stepName)) {
+    if (GameStep.isPoliticsStepName(stepName)) {
+      handlePolitics();
+    } else if (GameStep.isPurchaseStepName(stepName) || GameStep.isBidStepName(stepName)) {
       handlePurchase(GameStep.isBidStepName(stepName));
     } else if (GameStep.isCombatMoveStepName(stepName)) {
       handleMove(true);
@@ -93,7 +98,117 @@ public final class WebPlayer extends AbstractBasePlayer {
     } else if (GameStep.isPlaceStepName(stepName)) {
       handlePlace();
     }
-    // Other steps (tech, politics): no action yet.
+    // Other steps (tech): no action yet.
+  }
+
+  /**
+   * Politics phase (the first step of a nation's turn): offer the player's currently-legal
+   * political actions (declarations of war, treaties) and let the browser <i>stage</i> a set of
+   * them, applying none until the player ends the phase. This gives true in-phase undo — staging is
+   * reversible client-side, and nothing reaches the engine until "End Politics Phase". On commit we
+   * apply each staged action via the politics delegate, which flips relationships and so reshapes
+   * what is a legal move this turn (declaring war on the USA makes US territory attackable — the
+   * move delegate enforces that automatically).
+   *
+   * <p>Because the engine has no political undo, the staged set is the only "change your mind"
+   * window — but we can't fully predict interactions between staged actions (e.g. the combined "war
+   * on all Allies" makes a separate "war on Britain" redundant). So {@link #applyStaged} re-checks
+   * {@code getValidActions} immediately before each action and skips any that an earlier one
+   * already resolved; if any were skipped we re-prompt with the refreshed list and a note, rather
+   * than silently dropping them. An empty commit (or no legal actions — e.g. China, which has a
+   * politics step but none) ends the phase. The engine still applies automatic politics (mandatory
+   * US entry at end of round 3, the mobilization bonus) via triggers regardless of this seat.
+   */
+  private void handlePolitics() {
+    final IPoliticsDelegate delegate = (IPoliticsDelegate) getPlayerBridge().getRemoteDelegate();
+    final Resource pus = getGameData().getResourceList().getResourceOrThrow(Constants.PUS);
+    String error = null;
+    while (!getPlayerBridge().isGameOver()) {
+      final List<PoliticalActionOption> options = new ArrayList<>();
+      for (final PoliticalActionAttachment action : delegate.getValidActions()) {
+        options.add(toActionOption(action, getGamePlayer(), pus));
+      }
+      if (options.isEmpty()) {
+        return; // nothing legal (or nothing left after a prior commit) — end the phase
+      }
+      final JsonObject reply =
+          bridge.await("politics", new PoliticsRequest(getGamePlayer().getName(), options, error));
+      final List<String> staged = new ArrayList<>();
+      if (reply.has("commit") && reply.get("commit").isJsonArray()) {
+        for (final JsonElement element : reply.getAsJsonArray("commit")) {
+          staged.add(element.getAsString());
+        }
+      }
+      if (staged.isEmpty()) {
+        return; // player ended the phase with nothing (more) to declare
+      }
+      final List<String> skipped = applyStaged(delegate, staged);
+      if (skipped.isEmpty()) {
+        return; // every staged declaration applied — phase done
+      }
+      error = "Skipped (already resolved by another declaration): " + String.join(", ", skipped);
+      // loop: re-prompt with the refreshed action list so the player can adjust or finish.
+    }
+  }
+
+  /**
+   * Apply each staged action in order, re-reading {@code getValidActions} just before each so an
+   * action invalidated by an earlier one (overlapping declarations) is skipped rather than wrongly
+   * applied. Returns the names that were skipped (no longer valid at their turn to apply). Each
+   * applied action re-broadcasts state so the map/relationship grid update immediately.
+   */
+  private List<String> applyStaged(final IPoliticsDelegate delegate, final List<String> staged) {
+    final List<String> skipped = new ArrayList<>();
+    for (final String name : staged) {
+      final Map<String, PoliticalActionAttachment> validNow = new HashMap<>();
+      for (final PoliticalActionAttachment action : delegate.getValidActions()) {
+        validNow.put(action.getName(), action);
+      }
+      final PoliticalActionAttachment action = validNow.get(name);
+      if (action == null) {
+        skipped.add(name);
+        continue;
+      }
+      // attemptAction is void: it charges any cost, rolls (auto-success in Pacific), and applies
+      // the
+      // relationship changes; the engine reports the outcome text via reportMessage.
+      delegate.attemptAction(action);
+      bridge.publishState(GSON.toJson(StateProjector.project(getGameData())));
+    }
+    return skipped;
+  }
+
+  /**
+   * Render an engine political action for the browser: a concise {@code summary} headline (what the
+   * acting player does — the powers it declares war on), the full {@code changes} list (for hover
+   * detail), cost, and odds.
+   */
+  private static PoliticalActionOption toActionOption(
+      final PoliticalActionAttachment action, final GamePlayer me, final Resource pus) {
+    final List<String> changes = new ArrayList<>();
+    final List<String> warTargets = new ArrayList<>();
+    for (final PoliticalActionAttachment.RelationshipChange change :
+        action.getRelationshipChanges()) {
+      changes.add(
+          change.player1.getName()
+              + " → "
+              + change.player2.getName()
+              + ": "
+              + change.relationshipType.getName());
+      if (change.player1.equals(me)
+          && change.relationshipType.getRelationshipTypeAttachment().isWar()) {
+        warTargets.add(change.player2.getName());
+      }
+    }
+    final String summary =
+        warTargets.isEmpty()
+            ? "Political action"
+            : "Declare war on " + String.join(", ", warTargets);
+    final int hit = action.getChanceToHit();
+    final int sides = action.getChanceDiceSides();
+    final String chance = sides <= 0 || hit >= sides ? "auto" : hit + "/" + sides;
+    return new PoliticalActionOption(
+        action.getName(), summary, changes, action.getCostResources().getInt(pus), chance);
   }
 
   /** Ask the browser what to buy, submit to the purchase delegate, loop until accepted. */

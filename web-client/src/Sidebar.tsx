@@ -1,26 +1,24 @@
-import type { ReactNode } from "react";
 import type { BattleEvent, StateSnapshot } from "./types";
 import { PhaseIndicator } from "./PhaseIndicator";
 import { BattleLog } from "./BattleLog";
 
 /**
- * The single control/info pane: a fixed right sidebar that gathers everything the player needs in
- * one place — connection + turn status, the phase indicator, the active decision panel (passed as
- * `children`), and the battle log. Replaces the previously scattered move panel (upper-right) and
- * battle log (lower-left).
+ * The right info pane: a fixed sidebar holding connection + turn status, the Relationships button,
+ * the phase indicator, and the battle log. The active decision panel lives in a separate bottom
+ * action bar (see App), not here — keeping this pane to stable, glanceable info.
  */
 export function Sidebar({
   wsStatus,
   snapshot,
   territoryCount,
   events,
-  children,
+  onShowRelationships,
 }: {
   wsStatus: string;
   snapshot: StateSnapshot | null;
   territoryCount: number;
   events: BattleEvent[];
-  children: ReactNode;
+  onShowRelationships: () => void;
 }) {
   const live = wsStatus === "live";
   return (
@@ -54,14 +52,29 @@ export function Sidebar({
           Round <b style={{ color: "#e6e6e6" }}>{snapshot?.round ?? "—"}</b> · turn{" "}
           <b style={{ color: "#e6e6e6" }}>{snapshot?.currentPlayer ?? "—"}</b>
         </div>
+        <button
+          onClick={onShowRelationships}
+          disabled={!snapshot}
+          title="Show the current relationships between all powers"
+          style={{
+            width: "100%",
+            marginTop: 8,
+            background: "#2c3a4a",
+            color: "#e6eef5",
+            border: "1px solid #46505c",
+            borderRadius: 5,
+            padding: "7px 0",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: snapshot ? "pointer" : "default",
+            opacity: snapshot ? 1 : 0.5,
+          }}
+        >
+          ⚔ Relationships
+        </button>
       </div>
 
       <PhaseIndicator step={snapshot?.step} />
-
-      {/* Active decision panel (purchase / move / casualties / retreat), or an idle note. */}
-      <div style={{ flex: "0 1 auto", overflowY: "auto", maxHeight: "46vh", padding: "0 12px" }}>
-        {children}
-      </div>
 
       {/* Battle log fills the remaining height. */}
       <div

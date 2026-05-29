@@ -2,9 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { MapGeometry, TerritoryGeometry, UnitStack, XyPoint } from "./types";
 import { displayTerritory } from "./territoryName";
 
-// Fixed canvas viewport; the map is fit into it initially, then pan/zoom navigates within.
-const VIEW_W = 1500;
-const VIEW_H = 920;
 const WATER_COLOR = "#2f5d86";
 const FALLBACK_COLOR = "#8a8a7a";
 const MIN_SCALE = 0.05;
@@ -77,6 +74,14 @@ export function MapCanvas({
   const [view, setView] = useState<View>({ scale: 1, offsetX: 0, offsetY: 0 });
   const [hover, setHover] = useState<{ name: string; x: number; y: number } | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  // The canvas fills the window; track its size so the map fills all available space (no dead band
+  // below it) and stays crisp (the drawing buffer matches the CSS size, not a fixed box).
+  const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
+  useEffect(() => {
+    const onResize = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const byName = useMemo(() => {
     const m = new Map<string, TerritoryGeometry>();
@@ -84,15 +89,15 @@ export function MapCanvas({
     return m;
   }, [geometry]);
 
-  // Fit the whole map into the viewport whenever the map changes.
+  // Fit the whole map into the viewport whenever the map or window size changes.
   useEffect(() => {
-    const scale = Math.min(VIEW_W / geometry.mapWidth, VIEW_H / geometry.mapHeight);
+    const scale = Math.min(viewport.w / geometry.mapWidth, viewport.h / geometry.mapHeight);
     setView({
       scale,
-      offsetX: (VIEW_W - geometry.mapWidth * scale) / 2,
-      offsetY: (VIEW_H - geometry.mapHeight * scale) / 2,
+      offsetX: (viewport.w - geometry.mapWidth * scale) / 2,
+      offsetY: (viewport.h - geometry.mapHeight * scale) / 2,
     });
-  }, [geometry]);
+  }, [geometry, viewport]);
 
   // Redraw on any state that affects the picture.
   useEffect(() => {
@@ -223,16 +228,16 @@ export function MapCanvas({
   const hovered = hover ? byName.get(hover.name) : undefined;
 
   return (
-    <div style={{ position: "relative", width: VIEW_W, height: VIEW_H }}>
+    <div style={{ position: "fixed", inset: 0, width: viewport.w, height: viewport.h }}>
       <canvas
         ref={canvasRef}
-        width={VIEW_W}
-        height={VIEW_H}
+        width={viewport.w}
+        height={viewport.h}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onWheel={onWheel}
-        style={{ border: "1px solid #444", display: "block", cursor: dragRef.current ? "grabbing" : "grab", touchAction: "none" }}
+        style={{ display: "block", cursor: dragRef.current ? "grabbing" : "grab", touchAction: "none" }}
       />
       {hovered && hover && (
         <Tooltip
@@ -242,6 +247,7 @@ export function MapCanvas({
           colors={geometry.playerColors}
           x={hover.x}
           y={hover.y}
+          bounds={viewport}
         />
       )}
     </div>
@@ -255,6 +261,7 @@ function Tooltip({
   colors,
   x,
   y,
+  bounds,
 }: {
   territory: TerritoryGeometry;
   owner: string | undefined;
@@ -262,13 +269,14 @@ function Tooltip({
   colors: Record<string, string>;
   x: number;
   y: number;
+  bounds: { w: number; h: number };
 }) {
   return (
     <div
       style={{
         position: "absolute",
-        left: Math.min(x + 14, VIEW_W - 230),
-        top: Math.min(y + 14, VIEW_H - 160),
+        left: Math.min(x + 14, bounds.w - 230),
+        top: Math.min(y + 14, bounds.h - 160),
         width: 210,
         background: "rgba(20,28,36,0.96)",
         border: "1px solid #556",

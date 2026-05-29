@@ -9,6 +9,7 @@ export interface Phase {
 }
 
 export const PHASES: Phase[] = [
+  { key: "politics", label: "Politics" },
   { key: "purchase", label: "Purchase" },
   { key: "combatMove", label: "Combat Move" },
   { key: "battle", label: "Combat" },
@@ -24,9 +25,10 @@ export function phaseKeyOf(step?: string | null): string | null {
   // Order matters: "noncombatmove" contains "combatmove".
   if (s.includes("noncombatmove")) return "nonCombatMove";
   if (s.includes("combatmove")) return "combatMove";
+  if (s.includes("politics")) return "politics";
   if (s.includes("purchase") || s.includes("bid")) return "purchase";
   if (s.includes("battle")) return "battle";
   if (s.includes("place")) return "place";
-  if (s.includes("endturn") || s.includes("politics") || s.includes("tech")) return "endTurn";
+  if (s.includes("endturn") || s.includes("tech")) return "endTurn";
   return null;
 }

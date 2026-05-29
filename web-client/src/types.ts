@@ -34,6 +34,14 @@ export interface UnitStack {
   count: number;
 }
 
+/** How one player relates to another: the engine type name, plus a war/allied/neutral category. */
+export interface RelationshipCell {
+  /** Engine relationship type name (e.g. "War", "Neutrality", "Custodianship"). */
+  type: string;
+  /** Collapsed archetype for coloring: "war" | "allied" | "neutral". */
+  category: string;
+}
+
 export interface StateSnapshot {
   round: number;
   step: string;
@@ -41,6 +49,10 @@ export interface StateSnapshot {
   owners: Record<string, string>;
   /** Territory name -> its unit stacks. Only territories holding units appear. */
   units: Record<string, UnitStack[]>;
+  /** The powers, in turn order — the axes of the relationship grid. */
+  players: string[];
+  /** Full matrix: relationships[a][b] = how a relates to b (symmetric; self omitted). */
+  relationships: Record<string, Record<string, RelationshipCell>>;
 }
 
 // ---- Decision protocol (server <-> client over WebSocket). ----
@@ -149,11 +161,43 @@ export interface PlaceRequest {
   error: string | null;
 }
 
+/** One political action (e.g. a declaration of war) offered during the politics phase. */
+export interface PoliticalActionOption {
+  /** Engine action id, sent back in the reply. */
+  name: string;
+  /** Concise headline (e.g. "Declare war on Americans, British") — what the acting player does. */
+  summary: string;
+  /** All relationship changes, pre-rendered (e.g. "Japanese → French: War") — shown on hover only. */
+  changes: string[];
+  /** PU cost (0 = free). */
+  costPu: number;
+  /** Success odds: "auto" when it always succeeds, else "hit/sides" (e.g. "3/6"). */
+  chance: string;
+}
+
+/**
+ * Payload of a kind:"politics" request: the first phase of a turn, where the player may declare war
+ * or sign treaties. `actions` are the currently-legal actions (already condition-filtered by the
+ * engine). Reply {action:"<name>"} to attempt one (the engine applies it; the server re-prompts with
+ * the now-smaller list), or {done:true} to end the phase.
+ */
+export interface PoliticsRequest {
+  player: string;
+  actions: PoliticalActionOption[];
+  error: string | null;
+}
+
 /** A decision the active human seat must answer. payload shape depends on kind. */
 export interface DecisionRequest {
   requestId: string;
   kind: string;
-  payload: PurchaseRequest | MoveRequest | CasualtyRequest | RetreatRequest | PlaceRequest;
+  payload:
+    | PoliticsRequest
+    | PurchaseRequest
+    | MoveRequest
+    | CasualtyRequest
+    | RetreatRequest
+    | PlaceRequest;
 }
 
 /**
