@@ -22,7 +22,7 @@ export function RelationshipsModal({
 
   return (
     <div style={backdrop} onClick={onClose}>
-      <div style={dialog} onClick={(e) => e.stopPropagation()}>
+      <div style={dialog} onClick={(e) => e.stopPropagation()} data-testid="relationships-modal">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontWeight: "bold", fontSize: 16 }}>Relationships</span>
           <button onClick={onClose} style={closeBtn}>
@@ -64,7 +64,12 @@ export function RelationshipsModal({
                     const c = rel[row]?.[col];
                     const bg = c ? CATEGORY_BG[c.category] ?? "#3a4654" : "#2a323c";
                     return (
-                      <td key={col} style={{ ...cell, background: bg }} title={c?.type ?? ""}>
+                      <td
+                        key={col}
+                        style={{ ...cell, background: bg }}
+                        title={c?.type ?? ""}
+                        data-testid={`rel-${row}-${col}`}
+                      >
                         {c?.type ?? "?"}
                       </td>
                     );

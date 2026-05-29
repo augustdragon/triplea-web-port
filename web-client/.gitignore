@@ -3,5 +3,11 @@ dist
 dist-ssr
 *.local
 
+# Playwright e2e artifacts (the spec + config ARE tracked; these run outputs are not).
+test-results
+playwright-report
+blob-report
+.playwright
+
 # Generated map data — produce locally with the :game-web-server:exportGeometry Gradle task.
 public/geometry.json
