@@ -61,6 +61,7 @@ export function MapCanvas({
   units,
   onSelect,
   highlight,
+  focus,
 }: {
   geometry: MapGeometry;
   owners: Record<string, string>;
@@ -68,6 +69,11 @@ export function MapCanvas({
   onSelect?: (territoryName: string | null) => void;
   /** Territories to outline as the in-progress move route (drawn in order, distinct color). */
   highlight?: string[];
+  /**
+   * Pan the map to center this territory (e.g. from the air-can't-land warning, to find at-risk
+   * units). The nonce lets the same territory be re-focused on a repeat click.
+   */
+  focus?: { name: string; nonce: number } | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const dragRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
@@ -88,6 +94,22 @@ export function MapCanvas({
     for (const t of geometry.territories) m.set(t.name, t);
     return m;
   }, [geometry]);
+
+  // Pan to a requested territory (from the air-can't-land warning) so the player can find it.
+  // Keeps the current zoom; the nonce guard means a window resize won't re-pan, but clicking the
+  // same pill again (new nonce) will.
+  const lastFocus = useRef<number>(-1);
+  useEffect(() => {
+    if (!focus || focus.nonce === lastFocus.current) return;
+    lastFocus.current = focus.nonce;
+    const center = byName.get(focus.name)?.center;
+    if (!center) return;
+    setView((v) => ({
+      scale: v.scale,
+      offsetX: viewport.w / 2 - center.x * v.scale,
+      offsetY: viewport.h / 2 - center.y * v.scale,
+    }));
+  }, [focus, byName, viewport.w, viewport.h]);
 
   // Fit the whole map into the viewport whenever the map or window size changes.
   useEffect(() => {

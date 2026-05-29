@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type {
+  AirWarningRequest,
   BattleEvent,
   CasualtyRequest,
   DecisionRequest,
@@ -12,6 +13,7 @@ import type {
   StateSnapshot,
 } from "./types";
 import { MapCanvas } from "./MapCanvas";
+import { AirWarningPanel } from "./AirWarningPanel";
 import { PoliticsPanel } from "./PoliticsPanel";
 import { RelationshipsModal } from "./RelationshipsModal";
 import { PurchasePanel } from "./PurchasePanel";
@@ -37,6 +39,9 @@ export default function App() {
   const [placeUnits, setPlaceUnits] = useState<Record<string, number>>({});
   const [battleLog, setBattleLog] = useState<BattleEvent[]>([]);
   const [showRelationships, setShowRelationships] = useState(false);
+  // A territory to pan the map to (from the air-can't-land warning pills); nonce re-triggers on
+  // a repeat click of the same territory.
+  const [airFocus, setAirFocus] = useState<{ name: string; nonce: number } | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -137,6 +142,19 @@ export default function App() {
     sendDecision({ undoAll: true });
     resetMove();
   }
+  // Air-can't-land warning: end the phase and lose the stranded aircraft, or go back to moving.
+  function submitAirEndAnyway() {
+    setAirFocus(null);
+    sendDecision({ endAnyway: true });
+  }
+  function submitAirKeepMoving() {
+    setAirFocus(null);
+    sendDecision({ endAnyway: false });
+  }
+  // Pan the map to an at-risk territory (clicked in the air warning); bump the nonce each click.
+  function focusTerritory(name: string) {
+    setAirFocus((f) => ({ name, nonce: (f?.nonce ?? 0) + 1 }));
+  }
   function submitCasualties(killed: Record<string, number>) {
     sendDecision({ killed });
   }
@@ -185,8 +203,11 @@ export default function App() {
             ? moveRoute
             : request?.kind === "place" && placeTarget
               ? [placeTarget]
-              : undefined
+              : request?.kind === "airWarning" && airFocus
+                ? [airFocus.name]
+                : undefined
         }
+        focus={request?.kind === "airWarning" ? airFocus : null}
       />
       {showRelationships && snapshot && (
         <RelationshipsModal
@@ -253,6 +274,14 @@ export default function App() {
                 setUnits={setPlaceUnits}
                 onPlace={submitPlace}
                 onDone={submitPlaceDone}
+              />
+            )}
+            {request.kind === "airWarning" && (
+              <AirWarningPanel
+                request={request.payload as AirWarningRequest}
+                onEndAnyway={submitAirEndAnyway}
+                onKeepMoving={submitAirKeepMoving}
+                onSelect={focusTerritory}
               />
             )}
           </div>

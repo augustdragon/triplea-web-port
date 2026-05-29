@@ -187,6 +187,16 @@ export interface PoliticsRequest {
   error: string | null;
 }
 
+/**
+ * Payload of a kind:"airWarning" request: ending the move phase now would strand aircraft (they
+ * can't reach friendly territory and will be lost). `territories` lists where they are. Reply
+ * {endAnyway:true} to end and accept the loss, or {endAnyway:false} to keep moving.
+ */
+export interface AirWarningRequest {
+  player: string;
+  territories: string[];
+}
+
 /** A decision the active human seat must answer. payload shape depends on kind. */
 export interface DecisionRequest {
   requestId: string;
@@ -197,7 +207,8 @@ export interface DecisionRequest {
     | MoveRequest
     | CasualtyRequest
     | RetreatRequest
-    | PlaceRequest;
+    | PlaceRequest
+    | AirWarningRequest;
 }
 
 /**

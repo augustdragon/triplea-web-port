@@ -290,6 +290,9 @@ public final class WebPlayer extends AbstractBasePlayer {
                   toUndoInfos(delegate.getMovesMade()),
                   error));
       if (reply.has("done") && reply.get("done").getAsBoolean()) {
+        if (keepMovingToSaveAir(delegate, player, data)) {
+          continue; // player chose to keep moving rather than strand the aircraft — re-prompt
+        }
         return; // browser ended the phase
       }
       if (reply.has("undoAll") && reply.get("undoAll").getAsBoolean()) {
@@ -305,6 +308,33 @@ public final class WebPlayer extends AbstractBasePlayer {
         bridge.publishState(GSON.toJson(StateProjector.project(data)));
       }
     }
+  }
+
+  /**
+   * When ending a move phase that removes stranded aircraft, mirror the Swing client's
+   * air-can't-land warning ({@code TripleAPlayer.canAirLand}): if the player has air units that
+   * can't reach friendly territory this turn — and so would be lost — ask the browser to confirm.
+   * Returns true if the player chose to keep moving (the phase should NOT end yet); false when
+   * there is nothing stranded or the player accepted the loss. The engine's {@code MoveValidator}
+   * is what actually removes the air at the step's end; this is purely the heads-up.
+   */
+  private boolean keepMovingToSaveAir(
+      final IMoveDelegate delegate, final GamePlayer player, final GameData data) {
+    if (!GameStepPropertiesHelper.isRemoveAirThatCanNotLand(data)) {
+      return false; // this step doesn't strand air (e.g. combat move) — nothing to warn about
+    }
+    final List<String> stranded =
+        delegate.getTerritoriesWhereAirCantLand(player).stream()
+            .map(Territory::getName)
+            .sorted()
+            .toList();
+    if (stranded.isEmpty()) {
+      return false; // all air can land — safe to end
+    }
+    final JsonObject reply =
+        bridge.await("airWarning", new AirWarningRequest(player.getName(), stranded));
+    // endAnyway=true → accept the loss and end the phase; anything else → keep moving.
+    return !(reply.has("endAnyway") && reply.get("endAnyway").getAsBoolean());
   }
 
   /**
