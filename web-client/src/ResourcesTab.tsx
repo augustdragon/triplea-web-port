@@ -2,10 +2,14 @@ import type { PlayerStat, ResourceCell } from "./types";
 
 /**
  * The Resources info tab. PUs is the spendable economy, so it's the one real column (amount +
- * estimated next-turn income, with per-alliance total rows). Every other resource is a consumable
- * counter (kamikaze tokens, tech tokens) that's relevant only to whoever holds it and has no income,
- * so rather than give each its own mostly-empty column (as the base EconomyPanel does) we show it as
- * a small count-only chip on the rows that hold a nonzero amount. Data is live from the snapshot.
+ * estimated next-turn income). Every other resource is a consumable counter (kamikaze tokens, tech
+ * tokens) shown as a count-only chip on the rows that hold it (see the base game's EconomyPanel,
+ * which instead gives each its own mostly-empty column).
+ *
+ * Rows are grouped by alliance with a section header, so the sides read clearly — e.g. Japan under
+ * AXIS, the four Allied powers under ALLIES (with a group total), and the passive minors
+ * (Russians/French/Dutch), which the game models as their own single-member alliances, each under
+ * their own header rather than lumped in with the Allies. Data is live from the snapshot.
  */
 const PUS = "PUs";
 
@@ -26,25 +30,21 @@ export function ResourcesTab({
     return <div style={{ color: "#778", padding: "8px 2px" }}>Waiting for game state…</div>;
   }
 
-  // Per-alliance PUs totals (amount + income), for alliances with >1 member.
-  const allianceNames = [...new Set(stats.flatMap((s) => s.alliances))];
-  const totals = allianceNames
-    .map((name) => {
-      const members = stats.filter((s) => s.alliances.includes(name));
-      const cells = members.map(pusCell);
-      return {
-        name,
-        count: members.length,
-        amount: sum(cells, "amount"),
-        income: sum(cells, "income"),
-      };
-    })
-    .filter((t) => t.count > 1);
+  // Group players by their (primary) alliance, preserving turn order — so groups come out Axis,
+  // Allies, then the single-member minors, matching the order powers take their turns.
+  const groups: { alliance: string; members: PlayerStat[] }[] = [];
+  for (const s of stats) {
+    const alliance = s.alliances[0] ?? "Unaligned";
+    let group = groups.find((g) => g.alliance === alliance);
+    if (!group) {
+      group = { alliance, members: [] };
+      groups.push(group);
+    }
+    group.members.push(s);
+  }
 
   // Which token resources actually appear (held by someone), for the legend.
-  const tokensPresent = [
-    ...new Set(stats.flatMap((s) => tokensOf(s).map((c) => c.name))),
-  ];
+  const tokensPresent = [...new Set(stats.flatMap((s) => tokensOf(s).map((c) => c.name)))];
 
   return (
     <div>
@@ -57,34 +57,56 @@ export function ResourcesTab({
           </tr>
         </thead>
         <tbody>
-          {stats.map((s) => (
-            <tr key={s.player}>
-              <td
-                style={{
-                  padding: "2px 10px 2px 2px",
-                  color: colors[s.player] ? `#${colors[s.player]}` : "#e6e6e6",
-                  fontWeight: 600,
-                }}
-              >
-                {s.player}
-              </td>
-              <td style={{ textAlign: "right", padding: "2px 10px 2px 0" }}>{fmtPus(pusCell(s))}</td>
-              <td style={{ padding: "2px 10px 2px 0" }}>
-                {tokensOf(s).map((c) => (
-                  <Chip key={c.name} cell={c} />
-                ))}
-              </td>
-            </tr>
-          ))}
-          {totals.map((t) => (
-            <tr key={t.name} style={{ color: "#cfe0ee", fontStyle: "italic" }}>
-              <td style={{ padding: "6px 10px 2px 2px", borderTop: "1px solid #3a4654" }}>{t.name}</td>
-              <td style={{ textAlign: "right", padding: "6px 10px 2px 0", borderTop: "1px solid #3a4654" }}>
-                {fmtAmountIncome(t.amount, t.income)}
-              </td>
-              <td style={{ borderTop: "1px solid #3a4654" }} />
-            </tr>
-          ))}
+          {groups.map((group, gi) => {
+            const total = group.members.map(pusCell);
+            return [
+              // Section header: the alliance name (a separator + visual cue for the side).
+              <tr key={`h-${group.alliance}`}>
+                <td
+                  colSpan={3}
+                  style={{
+                    padding: "8px 10px 2px 2px",
+                    borderTop: gi === 0 ? "none" : "1px solid #2a323c",
+                    color: "#8aa3b5",
+                    fontSize: 11,
+                    letterSpacing: 0.6,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {group.alliance}
+                </td>
+              </tr>,
+              ...group.members.map((s) => (
+                <tr key={s.player}>
+                  <td
+                    style={{
+                      padding: "2px 10px 2px 12px",
+                      color: colors[s.player] ? `#${colors[s.player]}` : "#e6e6e6",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {s.player}
+                  </td>
+                  <td style={{ textAlign: "right", padding: "2px 10px 2px 0" }}>{fmtPus(pusCell(s))}</td>
+                  <td style={{ padding: "2px 10px 2px 0" }}>
+                    {tokensOf(s).map((c) => (
+                      <Chip key={c.name} cell={c} />
+                    ))}
+                  </td>
+                </tr>
+              )),
+              // Group total — only meaningful when the alliance has more than one member.
+              group.members.length > 1 ? (
+                <tr key={`t-${group.alliance}`} style={{ color: "#cfe0ee", fontStyle: "italic" }}>
+                  <td style={{ padding: "2px 10px 2px 12px" }}>total</td>
+                  <td style={{ textAlign: "right", padding: "2px 10px 2px 0" }}>
+                    {fmtAmountIncome(sum(total, "amount"), sum(total, "income"))}
+                  </td>
+                  <td />
+                </tr>
+              ) : null,
+            ];
+          })}
         </tbody>
       </table>
       {tokensPresent.length > 0 && (
@@ -109,7 +131,7 @@ function Chip({ cell }: { cell: ResourceCell }) {
       title={cell.name}
       style={{
         display: "inline-block",
-        marginRight: 6,
+        marginLeft: 4,
         padding: "1px 7px",
         borderRadius: 9,
         background: "#2c3a4a",
