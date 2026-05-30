@@ -263,6 +263,8 @@ export default function App() {
         collapsed={dockCollapsed}
         onToggleCollapsed={() => setDockCollapsed((c) => !c)}
         hasRequest={!!request}
+        snapshot={snapshot}
+        colors={geometry.playerColors}
         sidebarWidth={SIDEBAR_WIDTH}
         actionsContent={
           request ? (

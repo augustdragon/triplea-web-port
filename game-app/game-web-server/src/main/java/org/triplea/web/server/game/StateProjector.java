@@ -34,7 +34,8 @@ public final class StateProjector {
         GameStateReader.ownersByTerritory(data),
         unitsByTerritory(data),
         players.stream().map(GamePlayer::getName).toList(),
-        relationships(data, players));
+        relationships(data, players),
+        PlayerStatsProjector.project(data));
   }
 
   /**

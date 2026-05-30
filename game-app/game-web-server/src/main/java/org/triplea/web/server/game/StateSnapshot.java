@@ -11,7 +11,8 @@ import javax.annotation.Nullable;
  * name to its stacks (owner + unit type + count); only territories holding units appear, to keep
  * the snapshot small. {@code players} lists the powers (in turn order) and {@code relationships} is
  * the full matrix (relationships[a][b] = how a relates to b; symmetric; self omitted) — together
- * they drive the relationship grid the client shows during politics.
+ * they drive the relationship grid the client shows during politics. {@code playerStats} carries
+ * the per-player summary (PUs, production, units, TUV, victory cities, income) for the info tabs.
  */
 public record StateSnapshot(
     int round,
@@ -20,4 +21,5 @@ public record StateSnapshot(
     Map<String, String> owners,
     Map<String, List<UnitStack>> units,
     List<String> players,
-    Map<String, Map<String, RelationshipCell>> relationships) {}
+    Map<String, Map<String, RelationshipCell>> relationships,
+    List<PlayerStat> playerStats) {}

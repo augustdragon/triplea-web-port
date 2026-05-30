@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import type { StateSnapshot } from "./types";
+import { PlayersTab } from "./PlayersTab";
 
 /** The dock's tabs, mirroring the base game's right-hand tabbed pane (TripleAFrame). */
 export const DOCK_TABS = [
@@ -24,6 +26,8 @@ export function BottomDock({
   onToggleCollapsed,
   hasRequest,
   actionsContent,
+  snapshot,
+  colors,
   sidebarWidth,
 }: {
   activeTab: DockTab;
@@ -34,6 +38,10 @@ export function BottomDock({
   hasRequest: boolean;
   /** The active decision panel (or an idle message) shown under the Actions tab. */
   actionsContent: ReactNode;
+  /** Live game state feeding the information tabs. */
+  snapshot: StateSnapshot | null;
+  /** Faction colors (hex, no '#') for tinting player names. */
+  colors: Record<string, string>;
   sidebarWidth: number;
 }) {
   return (
@@ -109,6 +117,8 @@ export function BottomDock({
         <div style={{ maxHeight: "42vh", overflowY: "auto", padding: "10px 16px" }}>
           {activeTab === "Actions" ? (
             actionsContent
+          ) : activeTab === "Players" ? (
+            <PlayersTab stats={snapshot?.playerStats ?? []} colors={colors} />
           ) : (
             <Placeholder tab={activeTab} />
           )}
@@ -121,7 +131,6 @@ export function BottomDock({
 /** Stub shown for information tabs not yet wired to data (Phase 3h steps 2–5). */
 function Placeholder({ tab }: { tab: DockTab }) {
   const note: Record<string, string> = {
-    Players: "Per-player stats (PUs, production, units, TUV, victory cities) — coming next.",
     Resources: "Per-player resources with estimated income — coming next.",
     Objectives: "National objectives and their status — deferred (later pass).",
     Notes: "This game's notes — coming next.",

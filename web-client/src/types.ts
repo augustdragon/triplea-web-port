@@ -42,6 +42,20 @@ export interface RelationshipCell {
   category: string;
 }
 
+/** Per-player summary stats (mirrors StatPanel/EconomyPanel columns); drives the info tabs. */
+export interface PlayerStat {
+  player: string;
+  /** Alliances this power belongs to — used to render alliance total rows. */
+  alliances: string[];
+  pus: number;
+  production: number;
+  units: number;
+  tuv: number;
+  victoryCities: number;
+  /** Estimated PU income next end-of-turn (the Resources tab's +N delta). */
+  income: number;
+}
+
 export interface StateSnapshot {
   round: number;
   step: string;
@@ -53,6 +67,8 @@ export interface StateSnapshot {
   players: string[];
   /** Full matrix: relationships[a][b] = how a relates to b (symmetric; self omitted). */
   relationships: Record<string, Record<string, RelationshipCell>>;
+  /** Per-player summary stats, in turn order. */
+  playerStats: PlayerStat[];
 }
 
 // ---- Decision protocol (server <-> client over WebSocket). ----

@@ -161,10 +161,15 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
   `<BottomDock>`. `tsc --noEmit` clean. Verified in Chrome against a live Japanese game: dock renders,
   Actions held the Purchase panel, tab-switch → Players placeholder, collapse/expand works, tooltips intact.
   (Map still fills the window under the overlays; reserving map area is deferred.)
-- [ ] **Step 2 — Players tab.** New server `PlayerStatsProjector` → `StateSnapshot.playerStats`
-  (`{player, pus, production, units, tuv, vc, income}`; reimplemented stat formulas, no `MapData`).
-  Client table: Player / PUs / Production / Units / TUV / VC (+ alliance totals). Restart server after the
-  snapshot-shape change.
+- [x] **Step 2 — Players tab ✅ verified live (exact match to base StatPanel).** `PlayerStatsProjector`
+  computes `PlayerStat{player, alliances, pus, production, units, tuv, victoryCities, income}` per power and
+  `StateProjector` adds `playerStats` to `StateSnapshot` (live — recomputed every snapshot, incl. mid-phase).
+  Formulas reimplemented without `MapData` (TUV via `TuvCostsCalculator`; counts ALL units vs base's
+  `shouldDrawUnit` filter — immaterial on Pacific, which draws all types). Client `PlayersTab.tsx` renders the
+  table (Player/PUs/Production/Units/TUV/VC, faction-tinted names) + an italic per-alliance total row (>1
+  member). `PlayerStatsProjectorTest` (6 tests) cross-checks each field vs an independent read. Verified live
+  vs the reference screenshot: every value matched (Japan 26/26/94/667/2; Allies 55/55/105/835/6). NOTE: the
+  passive trio (French/Dutch/Russians) correctly shows Production but 0 PUs/0 units — see [[pacific-passive-factions]].
 - [ ] **Step 3 — Resources tab.** Reuse step-2 projection; per-player resource amount + estimated income
   (`AbstractEndTurnDelegate.findEstimatedIncome`, rendered `amount (+income)`).
 - [ ] **Step 4 — Territory tab (client-only).** Selected-territory detail from existing `units` snapshot +
