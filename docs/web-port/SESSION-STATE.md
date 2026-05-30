@@ -311,9 +311,42 @@ ignoring `BattleDelegate.isBattleDependencyErrorMessage` (dependency-order) erro
 fights it (retreat prompt + casualties + grouped battle-log entry) instead of skipping. See
 `tasks/lessons.md` ("engine does not auto-fight battles").
 
+**✅ 3e++ (politics + relationships + air warning + layout + e2e) DONE — verified live.**
+- **Politics phase** (first step of each turn): `WebPlayer.handlePolitics` offers `IPoliticsDelegate
+  .getValidActions()` (declarations of war). **Staged-commit model** = true in-phase undo: the browser
+  queues declarations (each removable) and nothing hits the engine until "End phase"; `applyStaged`
+  re-checks validity before each `attemptAction` and reports any superseded. The engine has **no
+  political undo** (`IPoliticsDelegate` = only `getValidActions`/`attemptAction`). DTOs
+  `PoliticsRequest`/`PoliticalActionOption`; client `PoliticsPanel`. **The whole political system
+  (relationship types incl. `Unprovoked`, DoW actions, US mandatory entry, mobilization bonus, China
+  province liberation via `originalOwner`, DoW→movement gating in `MoveValidator`) is already in the
+  unchanged engine + Pacific XML, and the AI seats already drive their own politics** — this was UI
+  plumbing for the human seat only.
+- **Relationships grid:** `StateProjector` adds `players` + `relationships[a][b]=RelationshipCell
+  {type,category}` (category via `RelationshipTracker.isAtWar/isAllied`) to `StateSnapshot`; client
+  `RelationshipsModal` renders the N×N matrix (war/allied/neutral colors). ⚠ Changing the snapshot
+  shape needs a **server restart**, not just client HMR.
+- **Air-can't-land warning** (non-combat move): `WebPlayer.keepMovingToSaveAir` mirrors
+  `TripleAPlayer.canAirLand` — on phase-end, if `isRemoveAirThatCanNotLand` and
+  `IMoveDelegate.getTerritoriesWhereAirCantLand(player)` non-empty, send an `airWarning` request.
+  Client `AirWarningPanel` lists the territories as **clickable pills that pan the map** (new
+  `MapCanvas` `focus` prop) + Keep-moving / End-anyway.
+- **Layout:** decision panels → a **bottom action bar**; sidebar keeps status → ⚔ Relationships →
+  PhaseIndicator → BattleLog; `MapCanvas` now fills the window responsively (was a fixed 1500×920 box
+  that left a dead band). `phase.ts` adds **Politics** as the first phase.
+- **Playwright e2e** (`web-client/e2e/`): 5 tests (load+connect, four declarations, opening matrix,
+  staging-reversible, commit→War→purchase) — **5 passed**. DOM-only (canvas phases out of scope).
+- Commits: `0fb2f91df`, `1d68777d4`, `88ddeeba3`.
+- ⚠ **Testing constraint:** ONE shared game + one human seat; `GameWebSocketServer` broadcasts every
+  decision to *all* connected clients (whoever replies drives), and the client has no WS auto-reconnect.
+  So an isolated e2e/manual run needs a fresh server with no other browser tab connected. (`restart-web.ps1`
+  kills the prior `runPlayable` → its background task shows exit 1 + a monitor "FAILURE": that's the kill,
+  not a real build failure.)
+
 **Next → 3f (Pacific combat sub-decisions):** `scrambleUnitsQuery`,
 `selectKamikazeSuicideAttacks`, `selectTerritoryForAirToLand`, shore bombardment,
-attack-lone-units; then 3g hotseat seat-switching. Deferred polish from 3c+/3d/3e above
-(2-hit unit damage in casualties; loss-attribution lumps allies with the defender; tall
-panels scroll Buy/Place below the fold; MovePanel/PlacePanel non-functional `setUnits`).
-See `tasks/todo.md`.
+attack-lone-units; then 3g hotseat seat-switching (per-seat request routing — the bridge is already
+`requestId`-keyed). Deferred polish: 2-hit unit damage in casualties; loss-attribution lumps allies
+with the defender; optional "already at war with: …" note in the politics panel; tracing the exact
+US-entry/mobilization triggers; `acceptAction` still returns `false` (Pacific DoW actions don't use
+`actionAccept`). See `tasks/todo.md`.
