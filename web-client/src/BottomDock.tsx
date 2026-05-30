@@ -3,6 +3,7 @@ import type { MapGeometry, StateSnapshot, UnitStack } from "./types";
 import { PlayersTab } from "./PlayersTab";
 import { ResourcesTab } from "./ResourcesTab";
 import { TerritoryTab } from "./TerritoryTab";
+import { NotesTab } from "./NotesTab";
 
 /** The dock's tabs, mirroring the base game's right-hand tabbed pane (TripleAFrame). */
 export const DOCK_TABS = [
@@ -34,6 +35,7 @@ export function BottomDock({
   units,
   colors,
   selectedTerritory,
+  notesHtml,
   sidebarWidth,
 }: {
   activeTab: DockTab;
@@ -56,6 +58,8 @@ export function BottomDock({
   colors: Record<string, string>;
   /** The territory last clicked on the map, shown in the Territory tab. */
   selectedTerritory: string | null;
+  /** The game's notes HTML (from the map), shown in the Notes tab. */
+  notesHtml: string;
   sidebarWidth: number;
 }) {
   return (
@@ -143,6 +147,8 @@ export function BottomDock({
               colors={colors}
               selected={selectedTerritory}
             />
+          ) : activeTab === "Notes" ? (
+            <NotesTab html={notesHtml} />
           ) : (
             <Placeholder tab={activeTab} />
           )}
@@ -152,11 +158,10 @@ export function BottomDock({
   );
 }
 
-/** Stub shown for information tabs not yet wired to data (Phase 3h steps 2–5). */
+/** Stub shown for the one remaining unbuilt info tab (Objectives — deferred). */
 function Placeholder({ tab }: { tab: DockTab }) {
   const note: Record<string, string> = {
     Objectives: "National objectives and their status — deferred (later pass).",
-    Notes: "This game's notes — coming next.",
   };
   return <div style={{ color: "#778", padding: "8px 2px" }}>{note[tab] ?? ""}</div>;
 }

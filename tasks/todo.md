@@ -201,8 +201,15 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
   `capitalOf` field the hover tooltip renders ("Japanese capital"). Battle Calculator / Add Attackers / Add
   Defenders / Find buttons = deferred. `tsc` clean. Observed: a new decision request auto-switches the dock
   back to the Actions tab (the focus-on-request effect) — fine, but interrupts info-tab browsing (see deferred).
-- [ ] **Step 5 — Notes tab.** Read `ww2pac40_2nd_edition.notes.html` once at server start
-  (`GameNotes.loadGameNotes`), push as a one-time static payload; client renders the HTML.
+- [x] **Step 5 — Notes tab ✅ verified live (exact match to base).** Notes for this map live in the game XML
+  as `<property name="notes">` (no standalone `.notes.html`), and the parser stores non-editable properties,
+  so `GameData.getProperties().get("notes", "")` returns the HTML directly — **no `:map-data` dep and no
+  file-write side effect** (avoided `GameNotes.loadGameNotes`, which would migrate-write a file). `GameController`
+  reads it once at `start()` and broadcasts a `{type:"notes",html}` envelope; `GameWebSocketServer` caches it
+  (`notesEnvelope`) and re-sends on connect (survives `newGame`). Client: `App` stores `notesHtml`; `NotesTab.tsx`
+  renders the HTML via `dangerouslySetInnerHTML` (trusted local map content — noted; sanitize if remote maps
+  ever load). Verified live: full notes render (Credits/Note/Disclaimer/Rules…), scrollable, matching the base
+  game's Notes tab. `:game-web-server:check` + `tsc` clean.
 - [ ] **Deferred (later pass):** Objectives tab (needs `objective.properties` + `AbstractConditionsAttachment
   .testAllConditionsRecursive` + a dummy delegate bridge — the one genuine risk); Technology sub-table
   (`TechTracker`); Battle Calculator (large standalone feature).

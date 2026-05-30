@@ -44,6 +44,8 @@ export default function App() {
   const [selectedTerritory, setSelectedTerritory] = useState<string | null>(null);
   const [placeUnits, setPlaceUnits] = useState<Record<string, number>>({});
   const [battleLog, setBattleLog] = useState<BattleEvent[]>([]);
+  // The game's notes (HTML from the map's <notes> property), pushed once and cached by the server.
+  const [notesHtml, setNotesHtml] = useState<string>("");
   const [showRelationships, setShowRelationships] = useState(false);
   const [activeTab, setActiveTab] = useState<DockTab>("Actions");
   const [dockCollapsed, setDockCollapsed] = useState(false);
@@ -70,7 +72,8 @@ export default function App() {
       const env = JSON.parse(e.data) as
         | { type: "state"; snapshot: StateSnapshot }
         | ({ type: "request" } & DecisionRequest)
-        | ({ type: "battle" } & BattleEvent);
+        | ({ type: "battle" } & BattleEvent)
+        | { type: "notes"; html: string };
       if (env.type === "state") {
         setSnapshot(env.snapshot);
       } else if (env.type === "request") {
@@ -78,6 +81,8 @@ export default function App() {
       } else if (env.type === "battle") {
         // One result per battle now, so keep a long history (still bounded for safety).
         setBattleLog((prev) => [...prev, env].slice(-500));
+      } else if (env.type === "notes") {
+        setNotesHtml(env.html);
       }
     };
     ws.onclose = () => setWsStatus("disconnected");
@@ -273,6 +278,7 @@ export default function App() {
         units={units}
         colors={geometry.playerColors}
         selectedTerritory={selectedTerritory}
+        notesHtml={notesHtml}
         sidebarWidth={SIDEBAR_WIDTH}
         actionsContent={
           request ? (

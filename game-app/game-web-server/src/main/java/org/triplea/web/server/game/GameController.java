@@ -65,6 +65,20 @@ public final class GameController {
   public void start() {
     server.setInboundHandler(this::onClientMessage);
     startSession();
+    publishNotes();
+  }
+
+  /**
+   * Read this game's notes (the {@code <property name="notes">} HTML in the game XML, parsed into
+   * game properties) and broadcast them once. The socket caches and re-sends them on connect; they
+   * don't change across {@code newGame} resets, so this runs only at startup.
+   */
+  private void publishNotes() {
+    final String notes = current.game.getData().getProperties().get("notes", "");
+    final JsonObject envelope = new JsonObject();
+    envelope.addProperty("type", "notes");
+    envelope.addProperty("html", notes);
+    server.publishNotes(GSON.toJson(envelope));
   }
 
   /**
