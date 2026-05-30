@@ -1,8 +1,10 @@
 import type { PlayerStat } from "./types";
+import { groupByAlliance } from "./playerGroups";
 
 /**
  * The Players info tab: the base game's StatPanel as a table — one row per power with PUs,
- * Production, Units, TUV (total unit value) and VC (victory cities), plus a total row for each
+ * Production, Units, TUV (total unit value) and VC (victory cities). Rows are grouped by alliance
+ * with a muted section header (Axis / Allies / the passive minors), with a group total for any
  * alliance that has more than one member. Player names are tinted by faction color. Data comes from
  * the live StateSnapshot, so it updates as the game advances.
  */
@@ -25,22 +27,8 @@ export function PlayersTab({
     return <div style={{ color: "#778", padding: "8px 2px" }}>Waiting for game state…</div>;
   }
 
-  // One total row per alliance with >1 member (e.g. the Allies); singletons add no information.
-  const allianceNames = [...new Set(stats.flatMap((s) => s.alliances))];
-  const totals = allianceNames
-    .map((name) => {
-      const members = stats.filter((s) => s.alliances.includes(name));
-      return {
-        name,
-        count: members.length,
-        pus: sum(members, "pus"),
-        production: sum(members, "production"),
-        units: sum(members, "units"),
-        tuv: sum(members, "tuv"),
-        victoryCities: sum(members, "victoryCities"),
-      };
-    })
-    .filter((t) => t.count > 1);
+  const groups = groupByAlliance(stats);
+  const span = COLUMNS.length + 1;
 
   return (
     <table style={{ borderCollapse: "collapse", width: "100%", maxWidth: 640, fontSize: 13 }}>
@@ -55,37 +43,54 @@ export function PlayersTab({
         </tr>
       </thead>
       <tbody>
-        {stats.map((s) => (
-          <tr key={s.player} style={{ textAlign: "right" }}>
+        {groups.map((group, gi) => [
+          // Section header: the alliance name — a separator and a cue for the side.
+          <tr key={`h-${group.alliance}`}>
             <td
+              colSpan={span}
               style={{
-                textAlign: "left",
-                padding: "2px 10px 2px 2px",
-                color: colors[s.player] ? `#${colors[s.player]}` : "#e6e6e6",
-                fontWeight: 600,
+                padding: "8px 10px 2px 2px",
+                borderTop: gi === 0 ? "none" : "1px solid #2a323c",
+                color: "#8aa3b5",
+                fontSize: 11,
+                letterSpacing: 0.6,
+                textTransform: "uppercase",
               }}
             >
-              {s.player}
+              {group.alliance}
             </td>
-            {COLUMNS.map((c) => (
-              <td key={c.key} style={{ padding: "2px 10px 2px 0" }}>
-                {s[c.key] as number}
+          </tr>,
+          ...group.members.map((s) => (
+            <tr key={s.player} style={{ textAlign: "right" }}>
+              <td
+                style={{
+                  textAlign: "left",
+                  padding: "2px 10px 2px 12px",
+                  color: colors[s.player] ? `#${colors[s.player]}` : "#e6e6e6",
+                  fontWeight: 600,
+                }}
+              >
+                {s.player}
               </td>
-            ))}
-          </tr>
-        ))}
-        {totals.map((t) => (
-          <tr key={t.name} style={{ textAlign: "right", color: "#cfe0ee", fontStyle: "italic" }}>
-            <td style={{ textAlign: "left", padding: "6px 10px 2px 2px", borderTop: "1px solid #3a4654" }}>
-              {t.name}
-            </td>
-            {COLUMNS.map((c) => (
-              <td key={c.key} style={{ padding: "6px 10px 2px 0", borderTop: "1px solid #3a4654" }}>
-                {t[c.key as keyof typeof t] as number}
-              </td>
-            ))}
-          </tr>
-        ))}
+              {COLUMNS.map((c) => (
+                <td key={c.key} style={{ padding: "2px 10px 2px 0" }}>
+                  {s[c.key] as number}
+                </td>
+              ))}
+            </tr>
+          )),
+          // Group total — only meaningful when the alliance has more than one member.
+          group.members.length > 1 ? (
+            <tr key={`t-${group.alliance}`} style={{ textAlign: "right", color: "#cfe0ee", fontStyle: "italic" }}>
+              <td style={{ textAlign: "left", padding: "2px 10px 2px 12px" }}>total</td>
+              {COLUMNS.map((c) => (
+                <td key={c.key} style={{ padding: "2px 10px 2px 0" }}>
+                  {sum(group.members, c.key)}
+                </td>
+              ))}
+            </tr>
+          ) : null,
+        ])}
       </tbody>
     </table>
   );

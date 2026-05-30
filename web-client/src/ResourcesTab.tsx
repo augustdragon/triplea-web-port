@@ -1,4 +1,5 @@
 import type { PlayerStat, ResourceCell } from "./types";
+import { groupByAlliance } from "./playerGroups";
 
 /**
  * The Resources info tab. PUs is the spendable economy, so it's the one real column (amount +
@@ -30,18 +31,8 @@ export function ResourcesTab({
     return <div style={{ color: "#778", padding: "8px 2px" }}>Waiting for game state…</div>;
   }
 
-  // Group players by their (primary) alliance, preserving turn order — so groups come out Axis,
-  // Allies, then the single-member minors, matching the order powers take their turns.
-  const groups: { alliance: string; members: PlayerStat[] }[] = [];
-  for (const s of stats) {
-    const alliance = s.alliances[0] ?? "Unaligned";
-    let group = groups.find((g) => g.alliance === alliance);
-    if (!group) {
-      group = { alliance, members: [] };
-      groups.push(group);
-    }
-    group.members.push(s);
-  }
+  // Group players by alliance (Axis, Allies, then the single-member minors — see playerGroups).
+  const groups = groupByAlliance(stats);
 
   // Which token resources actually appear (held by someone), for the legend.
   const tokensPresent = [...new Set(stats.flatMap((s) => tokensOf(s).map((c) => c.name)))];
