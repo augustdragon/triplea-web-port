@@ -233,8 +233,11 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
 - [ ] **Deferred — info-tab focus stealing.** A new decision request auto-switches the dock to the Actions
   tab (intended, to surface the decision), but it interrupts browsing the Players/Resources/Territory tabs.
   Consider only auto-switching if the user hasn't manually selected an info tab, or a subtler cue.
-- [ ] **Exit check:** Players/Resources/Territory/Notes render live and correct against `runPlayable`,
-  tabs switch, map gains horizontal space, `:game-web-server:check` + `tsc --noEmit` clean.
+- [x] **Exit check MET (+ exceeded).** All seven tabs (Actions / Players / Resources / Relationships /
+  Objectives / Notes / Territory) render live and correct against `runPlayable`; stats + objectives
+  exact-matched the base game; tabs switch under a static-height dock; map fills the window; `New game`
+  reset + minimap + purchase columns added. `:game-web-server:check` + `tsc --noEmit` clean throughout.
+  Deferred: Technology sub-table, interactive minimap, Battle Calculator, info-tab focus-stealing fix.
 
 #### 3h tooling — in-browser "New game" reset ✅ verified live
 - [x] **Server-side game lifecycle + in-process reset.** Extracted the game loop out of `WebPlayableServer.main`

@@ -350,3 +350,35 @@ attack-lone-units; then 3g hotseat seat-switching (per-seat request routing — 
 with the defender; optional "already at war with: …" note in the politics panel; tracing the exact
 US-entry/mobilization triggers; `acceptAction` still returns `false` (Pacific DoW actions don't use
 `actionAccept`). See `tasks/todo.md`.
+
+## ✅ 3h (information panels — bottom tab dock) DONE — verified live
+Reorganized the UI to mirror the base game's right-hand `JTabbedPane`, but laid the tabs along a
+**full-width bottom dock** (`web-client/src/BottomDock.tsx`) with a static `40vh` height. The sidebar
+keeps a (static, owner-tinted) **minimap** + status + `PhaseIndicator` + `BattleLog`. All seven tabs
+work: **Actions** (the decision panels; auto-focused when a request arrives), **Players**
+(`PlayerStatsProjector` → `StateSnapshot.playerStats`; PUs/Production/Units/TUV/VC, alliance-grouped),
+**Resources** (per-resource amount + income; non-PU tokens shown as chips), **Relationships** (the N×N
+grid, moved from a modal to an inline tab), **Objectives** (national objectives + live satisfied state),
+**Notes** (map `<notes>` HTML, dark-themed), **Territory** (selected-territory detail). Players/Resources
+use a shared `playerGroups.groupByAlliance`. Purchase list grouped into Land/Air/Naval/Buildings columns.
+- **Stats** (`PlayerStatsProjector`): the engine's own `IStat` classes need a `MapData` we lack headless,
+  so the ~5 formulas are reimplemented (count all units; TUV via `TuvCostsCalculator`). Exact-matched the
+  base StatPanel/EconomyPanel live.
+- **Objectives** (`ObjectivesProjector`): reads the map's `objectives.properties` (map root, from the game
+  XML path — extract it from the zip like the 2nd-ed XML), parses `TABLEGROUP` sections + objective text
+  exactly as `ObjectivePanel`, resolves each to an `ICondition` (`AbstractPlayerRulesAttachment.getCondition`),
+  evaluates **read-only** via `AbstractConditionsAttachment.testAllConditionsRecursive` +
+  `ObjectiveDummyDelegateBridge` (discards changes, random→0). Published per step.
+- **Notes**: the map embeds notes as `<property name="notes">`, so `GameData.getProperties().get("notes","")`
+  returns the HTML directly — no `:map-data` dep, no file-write (avoided `GameNotes.loadGameNotes`).
+- **`GameController`** now owns the game lifecycle behind one long-lived `GameWebSocketServer` and supports an
+  in-browser **New game** reset (no JVM bounce): stop the session (`bridge.close()` unparks the engine), start
+  a fresh one. New envelopes `{type:notes}` / `{type:objectives}` are cached + re-sent on connect.
+- **Known UX wart (deferred):** a new decision request auto-switches the dock back to **Actions** — repeatedly
+  fought this while testing info tabs. Worth gating (only auto-switch if the user hasn't picked an info tab).
+- **Deferred:** Technology sub-table; interactive minimap (viewport rect + click-to-pan); Battle Calculator.
+- **e2e:** `politics.spec.ts` updated for the Relationships tab (button+modal → tab + `relationships-grid`),
+  but **not re-run this session** — needs a fresh exclusive server (one shared game, broadcast to all tabs).
+
+**Next options:** 3f (Pacific naval/air queries), 3g (hotseat), the deferred 3h polish (focus-stealing,
+Technology, minimap), or re-run/extend the Playwright suite.
