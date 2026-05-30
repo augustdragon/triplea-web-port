@@ -88,6 +88,21 @@ class PlayerStatsProjectorTest {
   }
 
   @Test
+  void resourcesExcludeVpsAndPusCellMatchesPusField() {
+    for (final PlayerStat s : stats) {
+      assertTrue(
+          s.resources().stream().noneMatch(c -> c.name().equals(Constants.VPS)),
+          "VPs must not be a resource column for " + s.player());
+      s.resources().stream()
+          .filter(c -> c.name().equals(Constants.PUS))
+          .findFirst()
+          .ifPresent(
+              pus ->
+                  assertEquals(s.pus(), pus.amount(), "PUs cell vs pus field for " + s.player()));
+    }
+  }
+
+  @Test
   void allianceTotalsAreInternallyConsistent() {
     // For each alliance, the per-member fields sum to a stable total (what the client renders).
     final var alliances = data.getAllianceTracker().getAlliances();

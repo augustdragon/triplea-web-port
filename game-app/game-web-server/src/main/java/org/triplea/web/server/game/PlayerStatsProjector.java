@@ -33,6 +33,13 @@ public final class PlayerStatsProjector {
     final int puMultiplier = Properties.getPuMultiplier(data.getProperties());
     final TuvCostsCalculator tuvCalculator = new TuvCostsCalculator();
 
+    // The resource columns the Resources tab shows: every resource except VPs (matches
+    // EconomyPanel).
+    final List<Resource> resourceColumns =
+        data.getResourceList().getResources().stream()
+            .filter(r -> !r.getName().equals(Constants.VPS))
+            .toList();
+
     final List<PlayerStat> stats = new ArrayList<>();
     for (final GamePlayer player : data.getPlayerList().getPlayers()) {
       stats.add(
@@ -44,9 +51,24 @@ public final class PlayerStatsProjector {
               unitCount(data, player),
               tuv(data, player, tuvCalculator),
               victoryCities(data, player),
-              income(data, player, pus)));
+              resources(data, player, resourceColumns)));
     }
     return stats;
+  }
+
+  /** Each resource's amount on hand + estimated next-turn income (one findEstimatedIncome call). */
+  private static List<ResourceCell> resources(
+      final GameData data, final GamePlayer player, final List<Resource> columns) {
+    final IntegerMap<Resource> income = AbstractEndTurnDelegate.findEstimatedIncome(player, data);
+    final List<ResourceCell> cells = new ArrayList<>();
+    for (final Resource resource : columns) {
+      cells.add(
+          new ResourceCell(
+              resource.getName(),
+              player.getResources().getQuantity(resource),
+              income.getInt(resource)));
+    }
+    return cells;
   }
 
   /** Raw production of income-collecting owned territories × the PU multiplier (StatPanel). */
@@ -89,9 +111,5 @@ public final class PlayerStatsProjector {
         .map(Optional::get)
         .mapToInt(TerritoryAttachment::getVictoryCity)
         .sum();
-  }
-
-  private static int income(final GameData data, final GamePlayer player, final Resource pus) {
-    return pus == null ? 0 : AbstractEndTurnDelegate.findEstimatedIncome(player, data).getInt(pus);
   }
 }

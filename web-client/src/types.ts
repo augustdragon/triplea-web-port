@@ -42,6 +42,13 @@ export interface RelationshipCell {
   category: string;
 }
 
+/** One resource's amount on hand + estimated next-turn income (Resources tab cell). */
+export interface ResourceCell {
+  name: string;
+  amount: number;
+  income: number;
+}
+
 /** Per-player summary stats (mirrors StatPanel/EconomyPanel columns); drives the info tabs. */
 export interface PlayerStat {
   player: string;
@@ -52,8 +59,8 @@ export interface PlayerStat {
   units: number;
   tuv: number;
   victoryCities: number;
-  /** Estimated PU income next end-of-turn (the Resources tab's +N delta). */
-  income: number;
+  /** Every (non-VP) resource's amount + income, in the engine's order (Resources tab). */
+  resources: ResourceCell[];
 }
 
 export interface StateSnapshot {

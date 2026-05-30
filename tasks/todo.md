@@ -170,8 +170,14 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
   member). `PlayerStatsProjectorTest` (6 tests) cross-checks each field vs an independent read. Verified live
   vs the reference screenshot: every value matched (Japan 26/26/94/667/2; Allies 55/55/105/835/6). NOTE: the
   passive trio (French/Dutch/Russians) correctly shows Production but 0 PUs/0 units — see [[pacific-passive-factions]].
-- [ ] **Step 3 — Resources tab.** Reuse step-2 projection; per-player resource amount + estimated income
-  (`AbstractEndTurnDelegate.findEstimatedIncome`, rendered `amount (+income)`).
+- [x] **Step 3 — Resources tab ✅ verified live (exact match to base EconomyPanel).** Extended `PlayerStat`
+  with `resources: List<ResourceCell{name, amount, income}>` (every resource except VPs, in engine order;
+  replaced the old scalar `income`). `PlayerStatsProjector` builds it from `player.getResources()` +
+  ONE `findEstimatedIncome` call per player. Client `ResourcesTab.tsx` renders a column per resource as
+  `amount (+income)` + per-alliance total rows. Pacific shows `techTokens | PUs | SuicideAttackTokens`.
+  Verified live vs the reference screenshot: Japan PUs `26 (+36)` (income > production = national-objective
+  bonuses, exactly as base), Japan kamikaze tokens `6`, Allies PUs `55 (+61)`. Test gained a guard that
+  resources exclude VPs and the PUs cell == the `pus` field. `:game-web-server:check` (7 tests) + `tsc` clean.
 - [ ] **Step 4 — Territory tab (client-only).** Selected-territory detail from existing `units` snapshot +
   geometry (`production`/`water`/`capitalOf`) + unit list. (Battle Calculator / Add Attackers / Add
   Defenders / Find buttons = deferred, see below.)

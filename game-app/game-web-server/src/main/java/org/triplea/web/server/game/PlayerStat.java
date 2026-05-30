@@ -15,7 +15,9 @@ import java.util.List;
  *     headless).
  * @param tuv total unit value of those units (TuvCostsCalculator costs).
  * @param victoryCities victory cities in owned territories.
- * @param income estimated PU income next end-of-turn (drives the Resources tab's {@code +N} delta).
+ * @param resources every (non-VP) resource's amount + estimated income, for the Resources tab. PUs
+ *     also appears here; {@link #pus} is the same value kept as a typed field for the Players
+ *     table.
  */
 public record PlayerStat(
     String player,
@@ -25,4 +27,4 @@ public record PlayerStat(
     int units,
     int tuv,
     int victoryCities,
-    int income) {}
+    List<ResourceCell> resources) {}

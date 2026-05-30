@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { StateSnapshot } from "./types";
 import { PlayersTab } from "./PlayersTab";
+import { ResourcesTab } from "./ResourcesTab";
 
 /** The dock's tabs, mirroring the base game's right-hand tabbed pane (TripleAFrame). */
 export const DOCK_TABS = [
@@ -119,6 +120,8 @@ export function BottomDock({
             actionsContent
           ) : activeTab === "Players" ? (
             <PlayersTab stats={snapshot?.playerStats ?? []} colors={colors} />
+          ) : activeTab === "Resources" ? (
+            <ResourcesTab stats={snapshot?.playerStats ?? []} colors={colors} />
           ) : (
             <Placeholder tab={activeTab} />
           )}
@@ -131,7 +134,6 @@ export function BottomDock({
 /** Stub shown for information tabs not yet wired to data (Phase 3h steps 2–5). */
 function Placeholder({ tab }: { tab: DockTab }) {
   const note: Record<string, string> = {
-    Resources: "Per-player resources with estimated income — coming next.",
     Objectives: "National objectives and their status — deferred (later pass).",
     Notes: "This game's notes — coming next.",
     Territory: "Selected-territory detail — coming next.",
