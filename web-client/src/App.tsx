@@ -40,6 +40,8 @@ export default function App() {
   const [moveRoute, setMoveRoute] = useState<string[]>([]);
   const [moveUnits, setMoveUnits] = useState<Record<string, number>>({});
   const [placeTarget, setPlaceTarget] = useState<string | null>(null);
+  // The territory last clicked on the map, shown in the Territory info tab (independent of move/place).
+  const [selectedTerritory, setSelectedTerritory] = useState<string | null>(null);
   const [placeUnits, setPlaceUnits] = useState<Record<string, number>>({});
   const [battleLog, setBattleLog] = useState<BattleEvent[]>([]);
   const [showRelationships, setShowRelationships] = useState(false);
@@ -129,6 +131,8 @@ export default function App() {
   // First click must be a territory with movable units; each further click must extend to a
   // neighbor (per the adjacency graph) and ignores re-clicking the current tail.
   function onTerritoryClick(name: string | null) {
+    // Track the click for the Territory info tab regardless of phase (null clears it).
+    setSelectedTerritory(name);
     if (!name) return;
     if (request?.kind === "place") {
       // Any territory is a candidate target; the engine validates (factory, sea adjacency, …).
@@ -264,7 +268,11 @@ export default function App() {
         onToggleCollapsed={() => setDockCollapsed((c) => !c)}
         hasRequest={!!request}
         snapshot={snapshot}
+        geometry={geometry}
+        owners={owners}
+        units={units}
         colors={geometry.playerColors}
+        selectedTerritory={selectedTerritory}
         sidebarWidth={SIDEBAR_WIDTH}
         actionsContent={
           request ? (

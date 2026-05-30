@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import type { StateSnapshot } from "./types";
+import type { MapGeometry, StateSnapshot, UnitStack } from "./types";
 import { PlayersTab } from "./PlayersTab";
 import { ResourcesTab } from "./ResourcesTab";
+import { TerritoryTab } from "./TerritoryTab";
 
 /** The dock's tabs, mirroring the base game's right-hand tabbed pane (TripleAFrame). */
 export const DOCK_TABS = [
@@ -28,7 +29,11 @@ export function BottomDock({
   hasRequest,
   actionsContent,
   snapshot,
+  geometry,
+  owners,
+  units,
   colors,
+  selectedTerritory,
   sidebarWidth,
 }: {
   activeTab: DockTab;
@@ -41,8 +46,16 @@ export function BottomDock({
   actionsContent: ReactNode;
   /** Live game state feeding the information tabs. */
   snapshot: StateSnapshot | null;
+  /** Map geometry (territory type/production/capital), for the Territory tab. */
+  geometry: MapGeometry;
+  /** Current ownership (live or initial), for the Territory tab. */
+  owners: Record<string, string>;
+  /** Units by territory (live), for the Territory tab. */
+  units: Record<string, UnitStack[]>;
   /** Faction colors (hex, no '#') for tinting player names. */
   colors: Record<string, string>;
+  /** The territory last clicked on the map, shown in the Territory tab. */
+  selectedTerritory: string | null;
   sidebarWidth: number;
 }) {
   return (
@@ -122,6 +135,14 @@ export function BottomDock({
             <PlayersTab stats={snapshot?.playerStats ?? []} colors={colors} />
           ) : activeTab === "Resources" ? (
             <ResourcesTab stats={snapshot?.playerStats ?? []} colors={colors} />
+          ) : activeTab === "Territory" ? (
+            <TerritoryTab
+              geometry={geometry}
+              owners={owners}
+              units={units}
+              colors={colors}
+              selected={selectedTerritory}
+            />
           ) : (
             <Placeholder tab={activeTab} />
           )}
@@ -136,7 +157,6 @@ function Placeholder({ tab }: { tab: DockTab }) {
   const note: Record<string, string> = {
     Objectives: "National objectives and their status — deferred (later pass).",
     Notes: "This game's notes — coming next.",
-    Territory: "Selected-territory detail — coming next.",
   };
   return <div style={{ color: "#778", padding: "8px 2px" }}>{note[tab] ?? ""}</div>;
 }

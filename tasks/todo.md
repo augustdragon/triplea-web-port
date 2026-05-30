@@ -192,15 +192,28 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
   Pacific's mobile `aaGun` via the AA check; else sea→naval, air→air, else land); client `PurchasePanel`
   renders a column per non-empty category (unknown categories fall into an "Other" column as a safety net).
   Purchase panel widened to full width in `App`. Verified live: 4 columns correct, aaGun under Buildings.
-- [ ] **Step 4 — Territory tab (client-only).** Selected-territory detail from existing `units` snapshot +
-  geometry (`production`/`water`/`capitalOf`) + unit list. (Battle Calculator / Add Attackers / Add
-  Defenders / Find buttons = deferred, see below.)
+- [x] **Step 4 — Territory tab (client-only) ✅ verified live.** `TerritoryTab.tsx` pins to the last-clicked
+  territory (lifted into `App` as `selectedTerritory`, set on every map click regardless of phase; passed
+  through `BottomDock`). Shows name (Sea-Zone-N convention), sea/land + production, capital, owner (faction-
+  tinted), and units grouped by owner — all from the existing `units` snapshot + geometry. Verified live:
+  Sea Zone 20 (16-unit Japanese fleet incl. transported cargo + air), Sea Zone 19 (0 units → "no units"),
+  Anhwe (land · production 1 · owner Japanese · artillery ×1 + infantry ×3). Capital line uses the same
+  `capitalOf` field the hover tooltip renders ("Japanese capital"). Battle Calculator / Add Attackers / Add
+  Defenders / Find buttons = deferred. `tsc` clean. Observed: a new decision request auto-switches the dock
+  back to the Actions tab (the focus-on-request effect) — fine, but interrupts info-tab browsing (see deferred).
 - [ ] **Step 5 — Notes tab.** Read `ww2pac40_2nd_edition.notes.html` once at server start
   (`GameNotes.loadGameNotes`), push as a one-time static payload; client renders the HTML.
 - [ ] **Deferred (later pass):** Objectives tab (needs `objective.properties` + `AbstractConditionsAttachment
   .testAllConditionsRecursive` + a dummy delegate bridge — the one genuine risk); Technology sub-table
-  (`TechTracker`); Battle Calculator (large standalone feature); interactive minimap viewport rectangle +
-  click-to-pan sync.
+  (`TechTracker`); Battle Calculator (large standalone feature).
+- [ ] **Deferred — interactive minimap.** Today `Minimap.tsx` is a *live* owner-tinted overview (redraws as
+  ownership changes) but has NO interactivity. Add: (a) a viewport rectangle showing `MapCanvas`'s current
+  pan/zoom, and (b) click/drag-to-recenter the main map. Needs lifting `MapCanvas`'s `view {scale,offsetX,
+  offsetY}` up (or sharing it) and a minimap→map-space click translation; `MapCanvas` already has a `focus`
+  prop for recentering. (User confirmed 2026-05-30: fine to defer as long as it's tracked.)
+- [ ] **Deferred — info-tab focus stealing.** A new decision request auto-switches the dock to the Actions
+  tab (intended, to surface the decision), but it interrupts browsing the Players/Resources/Territory tabs.
+  Consider only auto-switching if the user hasn't manually selected an info tab, or a subtler cue.
 - [ ] **Exit check:** Players/Resources/Territory/Notes render live and correct against `runPlayable`,
   tabs switch, map gains horizontal space, `:game-web-server:check` + `tsc --noEmit` clean.
 
