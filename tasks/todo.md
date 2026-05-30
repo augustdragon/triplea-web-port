@@ -178,6 +178,12 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
   Verified live vs the reference screenshot: Japan PUs `26 (+36)` (income > production = national-objective
   bonuses, exactly as base), Japan kamikaze tokens `6`, Allies PUs `55 (+61)`. Test gained a guard that
   resources exclude VPs and the PUs cell == the `pus` field. `:game-web-server:check` (7 tests) + `tsc` clean.
+  - **Refinement (client-only):** the base EconomyPanel gives every resource its own column, but PUs is the
+    only spendable economy; `techTokens`/`SuicideAttackTokens` are consumable counters (Japan-only, never
+    increase, no income → a meaningless `(+0)`). So the tab now shows **PUs as the one column** (amount +
+    income, with alliance totals) and renders any other held resource as a **count-only chip** on the owning
+    row (e.g. Japan `⚡ 6`), with a glyph legend. All-zero resources (techTokens at start) show nothing. No
+    server/snapshot change — the projection still sends all resources; the client chooses column vs chip.
 - [ ] **Step 4 — Territory tab (client-only).** Selected-territory detail from existing `units` snapshot +
   geometry (`production`/`water`/`capitalOf`) + unit list. (Battle Calculator / Add Attackers / Add
   Defenders / Find buttons = deferred, see below.)
