@@ -22,10 +22,14 @@ import { CasualtyPanel } from "./CasualtyPanel";
 import { RetreatPanel } from "./RetreatPanel";
 import { PlacePanel } from "./PlacePanel";
 import { Sidebar } from "./Sidebar";
+import { BottomDock, type DockTab } from "./BottomDock";
 
 // The game WebSocket server (see :game-web-server:runSpectator / runPlayable). Same host as the
 // page, so it works over LAN/ZeroTier too.
 const WS_URL = `ws://${location.hostname}:8080`;
+
+// Width of the fixed right sidebar; the bottom dock spans from the left edge to here.
+const SIDEBAR_WIDTH = 300;
 
 export default function App() {
   const [geometry, setGeometry] = useState<MapGeometry | null>(null);
@@ -39,6 +43,8 @@ export default function App() {
   const [placeUnits, setPlaceUnits] = useState<Record<string, number>>({});
   const [battleLog, setBattleLog] = useState<BattleEvent[]>([]);
   const [showRelationships, setShowRelationships] = useState(false);
+  const [activeTab, setActiveTab] = useState<DockTab>("Actions");
+  const [dockCollapsed, setDockCollapsed] = useState(false);
   // A territory to pan the map to (from the air-can't-land warning pills); nonce re-triggers on
   // a repeat click of the same territory.
   const [airFocus, setAirFocus] = useState<{ name: string; nonce: number } | null>(null);
@@ -76,6 +82,14 @@ export default function App() {
     ws.onerror = () => setWsStatus("error — is a :game-web-server run task running?");
     return () => ws.close();
   }, []);
+
+  // When a decision arrives, surface it: jump to the Actions tab and expand the dock if collapsed.
+  useEffect(() => {
+    if (request) {
+      setActiveTab("Actions");
+      setDockCollapsed(false);
+    }
+  }, [request]);
 
   function sendDecision(payload: object) {
     const ws = wsRef.current;
@@ -219,90 +233,86 @@ export default function App() {
       <Sidebar
         wsStatus={wsStatus}
         snapshot={snapshot}
+        geometry={geometry}
+        owners={owners}
         territoryCount={geometry.territories.length}
         events={battleLog}
+        width={SIDEBAR_WIDTH}
         onShowRelationships={() => setShowRelationships(true)}
       />
-      {/* Active decision panel: a bottom action bar spanning the width left of the sidebar. Only
-          present while a decision is pending, so the map is unobstructed otherwise. */}
-      {request && (
-        <div style={actionBar}>
-          <div style={{ maxWidth: request.kind === "politics" ? "none" : 620 }}>
-            {request.kind === "politics" && (
-              <PoliticsPanel
-                request={request.payload as PoliticsRequest}
-                onCommit={submitPolitics}
-              />
-            )}
-            {request.kind === "purchase" && (
-              <PurchasePanel
-                request={request.payload as PurchaseRequest}
-                onSubmit={submitPurchase}
-              />
-            )}
-            {request.kind === "move" && (
-              <MovePanel
-                request={request.payload as MoveRequest}
-                route={moveRoute}
-                units={moveUnits}
-                setUnits={setMoveUnits}
-                onMove={submitMove}
-                onClear={resetMove}
-                onDone={submitDone}
-                onUndo={submitUndo}
-                onUndoAll={submitUndoAll}
-              />
-            )}
-            {request.kind === "selectCasualties" && (
-              <CasualtyPanel
-                request={request.payload as CasualtyRequest}
-                onSubmit={submitCasualties}
-              />
-            )}
-            {request.kind === "retreat" && (
-              <RetreatPanel
-                request={request.payload as RetreatRequest}
-                onRetreat={submitRetreat}
-                onStay={submitStay}
-              />
-            )}
-            {request.kind === "place" && (
-              <PlacePanel
-                request={request.payload as PlaceRequest}
-                target={placeTarget}
-                units={placeUnits}
-                setUnits={setPlaceUnits}
-                onPlace={submitPlace}
-                onDone={submitPlaceDone}
-              />
-            )}
-            {request.kind === "airWarning" && (
-              <AirWarningPanel
-                request={request.payload as AirWarningRequest}
-                onEndAnyway={submitAirEndAnyway}
-                onKeepMoving={submitAirKeepMoving}
-                onSelect={focusTerritory}
-              />
-            )}
-          </div>
-        </div>
-      )}
+      {/* The bottom tab dock: information panels + the active decision panel under "Actions". */}
+      <BottomDock
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        collapsed={dockCollapsed}
+        onToggleCollapsed={() => setDockCollapsed((c) => !c)}
+        hasRequest={!!request}
+        sidebarWidth={SIDEBAR_WIDTH}
+        actionsContent={
+          request ? (
+            <div style={{ maxWidth: request.kind === "politics" ? "none" : 620 }}>
+              {request.kind === "politics" && (
+                <PoliticsPanel
+                  request={request.payload as PoliticsRequest}
+                  onCommit={submitPolitics}
+                />
+              )}
+              {request.kind === "purchase" && (
+                <PurchasePanel
+                  request={request.payload as PurchaseRequest}
+                  onSubmit={submitPurchase}
+                />
+              )}
+              {request.kind === "move" && (
+                <MovePanel
+                  request={request.payload as MoveRequest}
+                  route={moveRoute}
+                  units={moveUnits}
+                  setUnits={setMoveUnits}
+                  onMove={submitMove}
+                  onClear={resetMove}
+                  onDone={submitDone}
+                  onUndo={submitUndo}
+                  onUndoAll={submitUndoAll}
+                />
+              )}
+              {request.kind === "selectCasualties" && (
+                <CasualtyPanel
+                  request={request.payload as CasualtyRequest}
+                  onSubmit={submitCasualties}
+                />
+              )}
+              {request.kind === "retreat" && (
+                <RetreatPanel
+                  request={request.payload as RetreatRequest}
+                  onRetreat={submitRetreat}
+                  onStay={submitStay}
+                />
+              )}
+              {request.kind === "place" && (
+                <PlacePanel
+                  request={request.payload as PlaceRequest}
+                  target={placeTarget}
+                  units={placeUnits}
+                  setUnits={setPlaceUnits}
+                  onPlace={submitPlace}
+                  onDone={submitPlaceDone}
+                />
+              )}
+              {request.kind === "airWarning" && (
+                <AirWarningPanel
+                  request={request.payload as AirWarningRequest}
+                  onEndAnyway={submitAirEndAnyway}
+                  onKeepMoving={submitAirKeepMoving}
+                  onSelect={focusTerritory}
+                />
+              )}
+            </div>
+          ) : (
+            <div style={{ color: "#778", padding: "8px 2px" }}>No action required right now.</div>
+          )
+        }
+      />
     </div>
   );
 }
-
-// The bottom action bar: pinned to the bottom, spanning from the left edge to the sidebar's left
-// edge (the sidebar is a fixed 360px on the right). Scrolls internally if a panel is tall.
-const actionBar: React.CSSProperties = {
-  position: "fixed",
-  left: 0,
-  right: 360,
-  bottom: 0,
-  maxHeight: "42vh",
-  overflowY: "auto",
-  padding: "10px 16px",
-  background: "rgba(16,22,30,0.97)",
-  borderTop: "1px solid #3a4654",
-  boxShadow: "0 -4px 24px rgba(0,0,0,0.4)",
-  zIndex: 90,
-};

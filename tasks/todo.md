@@ -139,6 +139,46 @@ The existing `game.runNextStep()` loop naturally pauses on a human turn because
 - [ ] Tech panel if the map uses it.
 - [ ] **Exit check:** a complete Pacific 1940 game, playable start to finish, hotseat on one machine.
 
+#### 3h — Information panels (bottom tab dock + minimap)  ⟵ NEXT (planned 2026-05-30)
+Mirror the base game's right-hand `JTabbedPane` (`TripleAFrame.rightHandSidePanel`), but
+move the tabs to a **full-width bottom dock** for horizontal room (user request). Base-code map:
+Players=`StatPanel`, Resources=`EconomyPanel`, Objectives=`ObjectivePanel`, Territory=
+`TerritoryDetailPanel`, Notes=`GameNotes.loadGameNotes` (`<game>.notes.html` sibling of the XML),
+Actions=`ActionButtonsPanel` (= our existing decision panels). Stat formulas live in
+`game-core/.../engine/stats/` (`PuStat`/`ProductionStat`/`UnitsStat`/`TuvStat`/`VictoryCityStat`).
+**Decisions (2026-05-30):** sidebar keeps minimap+status+phase+battle log, Relationships stays a
+modal; six tabs go in the bottom dock. First pass = layout shell + Players/Resources/Territory/Notes.
+**Feasibility note:** `TuvStat`/`UnitsStat` call `mapData.shouldDrawUnit(...)` and we run headless with
+no `MapData` → reimplement the ~5 stat formulas server-side (TUV via `TuvCostsCalculator.getCostsForTuv`,
+needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a **server restart** (not HMR).
+
+- [x] **Step 1 — Layout shell (client-only) ✅ verified live.** `BottomDock.tsx` (tabs `Actions | Players |
+  Resources | Objectives | Notes | Territory`, collapsible via ▼/▲); **Actions** renders the active decision
+  panel (an idle message otherwise) and a `useEffect` auto-selects Actions + expands the dock when a request
+  arrives, badged with ●. Info tabs show placeholders for now. `Minimap.tsx` (static, owner-tinted whole-map
+  overview; reuses `fillColor` exported from `MapCanvas`) sits atop a narrowed (300px) `Sidebar`, which keeps
+  status / Relationships / `PhaseIndicator` / `BattleLog`. `App.tsx` swapped the inline bottom action bar for
+  `<BottomDock>`. `tsc --noEmit` clean. Verified in Chrome against a live Japanese game: dock renders,
+  Actions held the Purchase panel, tab-switch → Players placeholder, collapse/expand works, tooltips intact.
+  (Map still fills the window under the overlays; reserving map area is deferred.)
+- [ ] **Step 2 — Players tab.** New server `PlayerStatsProjector` → `StateSnapshot.playerStats`
+  (`{player, pus, production, units, tuv, vc, income}`; reimplemented stat formulas, no `MapData`).
+  Client table: Player / PUs / Production / Units / TUV / VC (+ alliance totals). Restart server after the
+  snapshot-shape change.
+- [ ] **Step 3 — Resources tab.** Reuse step-2 projection; per-player resource amount + estimated income
+  (`AbstractEndTurnDelegate.findEstimatedIncome`, rendered `amount (+income)`).
+- [ ] **Step 4 — Territory tab (client-only).** Selected-territory detail from existing `units` snapshot +
+  geometry (`production`/`water`/`capitalOf`) + unit list. (Battle Calculator / Add Attackers / Add
+  Defenders / Find buttons = deferred, see below.)
+- [ ] **Step 5 — Notes tab.** Read `ww2pac40_2nd_edition.notes.html` once at server start
+  (`GameNotes.loadGameNotes`), push as a one-time static payload; client renders the HTML.
+- [ ] **Deferred (later pass):** Objectives tab (needs `objective.properties` + `AbstractConditionsAttachment
+  .testAllConditionsRecursive` + a dummy delegate bridge — the one genuine risk); Technology sub-table
+  (`TechTracker`); Battle Calculator (large standalone feature); interactive minimap viewport rectangle +
+  click-to-pan sync.
+- [ ] **Exit check:** Players/Resources/Territory/Notes render live and correct against `runPlayable`,
+  tabs switch, map gains horizontal space, `:game-web-server:check` + `tsc --noEmit` clean.
+
 ### Phase 4 — LAN / ZeroTier multiplayer
 - [ ] Seat-claiming / session management (multiple browsers, one server)
 - [ ] Route each seat's queries to the owning client; spectators get state only

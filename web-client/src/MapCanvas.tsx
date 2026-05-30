@@ -14,7 +14,7 @@ interface View {
 }
 
 /** Fill color for a territory: blue for sea zones, owner's color for land, fallback otherwise. */
-function fillColor(
+export function fillColor(
   geometry: MapGeometry,
   owners: Record<string, string>,
   territory: TerritoryGeometry,

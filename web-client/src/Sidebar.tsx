@@ -1,23 +1,31 @@
-import type { BattleEvent, StateSnapshot } from "./types";
+import type { BattleEvent, MapGeometry, StateSnapshot } from "./types";
 import { PhaseIndicator } from "./PhaseIndicator";
 import { BattleLog } from "./BattleLog";
+import { Minimap } from "./Minimap";
 
 /**
- * The right info pane: a fixed sidebar holding connection + turn status, the Relationships button,
- * the phase indicator, and the battle log. The active decision panel lives in a separate bottom
- * action bar (see App), not here — keeping this pane to stable, glanceable info.
+ * The right info pane: a fixed sidebar holding a minimap, connection + turn status, the
+ * Relationships button, the phase indicator, and the battle log. The information tabs and the
+ * active decision panel live in the bottom dock (see App), not here — this pane keeps the stable,
+ * glanceable, always-visible info.
  */
 export function Sidebar({
   wsStatus,
   snapshot,
+  geometry,
+  owners,
   territoryCount,
   events,
+  width,
   onShowRelationships,
 }: {
   wsStatus: string;
   snapshot: StateSnapshot | null;
+  geometry: MapGeometry;
+  owners: Record<string, string>;
   territoryCount: number;
   events: BattleEvent[];
+  width: number;
   onShowRelationships: () => void;
 }) {
   const live = wsStatus === "live";
@@ -27,7 +35,7 @@ export function Sidebar({
         position: "fixed",
         top: 0,
         right: 0,
-        width: 360,
+        width,
         height: "100vh",
         display: "flex",
         flexDirection: "column",
@@ -40,6 +48,11 @@ export function Sidebar({
         boxShadow: "-4px 0 24px rgba(0,0,0,0.4)",
       }}
     >
+      {/* Minimap — whole-map overview, tinted by current ownership. */}
+      <div style={{ padding: 8, borderBottom: "1px solid #3a4654", background: "rgba(0,0,0,0.2)" }}>
+        <Minimap geometry={geometry} owners={owners} width={width - 16} />
+      </div>
+
       {/* Status header */}
       <div style={{ padding: "10px 12px", borderBottom: "1px solid #3a4654" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
