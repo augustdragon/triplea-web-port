@@ -15,7 +15,6 @@ import type {
 import { MapCanvas } from "./MapCanvas";
 import { AirWarningPanel } from "./AirWarningPanel";
 import { PoliticsPanel } from "./PoliticsPanel";
-import { RelationshipsModal } from "./RelationshipsModal";
 import { PurchasePanel } from "./PurchasePanel";
 import { MovePanel } from "./MovePanel";
 import { CasualtyPanel } from "./CasualtyPanel";
@@ -46,7 +45,6 @@ export default function App() {
   const [battleLog, setBattleLog] = useState<BattleEvent[]>([]);
   // The game's notes (HTML from the map's <notes> property), pushed once and cached by the server.
   const [notesHtml, setNotesHtml] = useState<string>("");
-  const [showRelationships, setShowRelationships] = useState(false);
   const [activeTab, setActiveTab] = useState<DockTab>("Actions");
   const [dockCollapsed, setDockCollapsed] = useState(false);
   // A territory to pan the map to (from the air-can't-land warning pills); nonce re-triggers on
@@ -118,7 +116,6 @@ export default function App() {
     setBattleLog([]);
     resetMove();
     resetPlace();
-    setShowRelationships(false);
   }
 
   // Politics: commit the staged set of declarations (possibly empty) and end the phase. The server
@@ -247,13 +244,6 @@ export default function App() {
         }
         focus={request?.kind === "airWarning" ? airFocus : null}
       />
-      {showRelationships && snapshot && (
-        <RelationshipsModal
-          snapshot={snapshot}
-          colors={geometry.playerColors}
-          onClose={() => setShowRelationships(false)}
-        />
-      )}
       <Sidebar
         wsStatus={wsStatus}
         snapshot={snapshot}
@@ -262,7 +252,6 @@ export default function App() {
         territoryCount={geometry.territories.length}
         events={battleLog}
         width={SIDEBAR_WIDTH}
-        onShowRelationships={() => setShowRelationships(true)}
         onNewGame={newGame}
       />
       {/* The bottom tab dock: information panels + the active decision panel under "Actions". */}

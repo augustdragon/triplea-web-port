@@ -39,8 +39,8 @@ test.describe.serial("web-port politics flow", () => {
     await expect(page.locator("canvas")).toBeVisible();
     await expect(page.getByText("Pacific 1940")).toBeVisible();
     await expect(page.getByText("Japanese").first()).toBeVisible();
-    // The Relationships button enables once a state snapshot has arrived.
-    await expect(page.getByRole("button", { name: /Relationships/ })).toBeEnabled();
+    // Relationships is now a dock tab (was a sidebar button + modal).
+    await expect(page.getByRole("button", { name: "Relationships" })).toBeVisible();
   });
 
   test("offers the four Pacific declarations of war and an end-phase button", async ({ page }) => {
@@ -51,20 +51,17 @@ test.describe.serial("web-port politics flow", () => {
   });
 
   test("relationships grid shows the correct opening matrix", async ({ page }) => {
-    await page.getByRole("button", { name: /Relationships/ }).click();
-    const modal = page.getByTestId("relationships-modal");
-    await expect(modal).toBeVisible();
+    await page.getByRole("button", { name: "Relationships" }).click();
+    const grid = page.getByTestId("relationships-grid");
+    await expect(grid).toBeVisible();
 
     // Opening state: only Japan–China at war; the Western Allies cooperate; everyone else neutral.
-    await expect(modal.getByTestId("rel-Japanese-Chinese")).toHaveText("War");
-    await expect(modal.getByTestId("rel-Japanese-Americans")).toHaveText("Neutrality");
-    await expect(modal.getByTestId("rel-British-ANZAC")).toHaveText("Allied");
-    await expect(modal.getByTestId("rel-British-Dutch")).toHaveText("Custodianship");
+    await expect(grid.getByTestId("rel-Japanese-Chinese")).toHaveText("War");
+    await expect(grid.getByTestId("rel-Japanese-Americans")).toHaveText("Neutrality");
+    await expect(grid.getByTestId("rel-British-ANZAC")).toHaveText("Allied");
+    await expect(grid.getByTestId("rel-British-Dutch")).toHaveText("Custodianship");
     // Symmetric: reading the mirror cell gives the same relationship.
-    await expect(modal.getByTestId("rel-Chinese-Japanese")).toHaveText("War");
-
-    await modal.getByRole("button", { name: "✕" }).click();
-    await expect(modal).toBeHidden();
+    await expect(grid.getByTestId("rel-Chinese-Japanese")).toHaveText("War");
   });
 
   test("staging a declaration is reversible before committing", async ({ page }) => {
@@ -101,7 +98,7 @@ test.describe.serial("web-port politics flow", () => {
     await expect(page.getByText("Purchase — Japanese")).toBeVisible({ timeout: 15_000 });
 
     // The relationship is now War (the declaration took effect in the engine).
-    await page.getByRole("button", { name: /Relationships/ }).click();
+    await page.getByRole("button", { name: "Relationships" }).click();
     await expect(page.getByTestId("rel-Japanese-French")).toHaveText("War");
   });
 });

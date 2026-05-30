@@ -17,7 +17,6 @@ export function Sidebar({
   territoryCount,
   events,
   width,
-  onShowRelationships,
   onNewGame,
 }: {
   wsStatus: string;
@@ -27,7 +26,6 @@ export function Sidebar({
   territoryCount: number;
   events: BattleEvent[];
   width: number;
-  onShowRelationships: () => void;
   onNewGame: () => void;
 }) {
   const live = wsStatus === "live";
@@ -67,26 +65,6 @@ export function Sidebar({
           Round <b style={{ color: "#e6e6e6" }}>{snapshot?.round ?? "—"}</b> · turn{" "}
           <b style={{ color: "#e6e6e6" }}>{snapshot?.currentPlayer ?? "—"}</b>
         </div>
-        <button
-          onClick={onShowRelationships}
-          disabled={!snapshot}
-          title="Show the current relationships between all powers"
-          style={{
-            width: "100%",
-            marginTop: 8,
-            background: "#2c3a4a",
-            color: "#e6eef5",
-            border: "1px solid #46505c",
-            borderRadius: 5,
-            padding: "7px 0",
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: snapshot ? "pointer" : "default",
-            opacity: snapshot ? 1 : 0.5,
-          }}
-        >
-          ⚔ Relationships
-        </button>
         <button
           onClick={onNewGame}
           title="Reset the game on the server and start a fresh one (testing convenience)"

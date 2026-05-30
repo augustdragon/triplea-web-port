@@ -4,12 +4,14 @@ import { PlayersTab } from "./PlayersTab";
 import { ResourcesTab } from "./ResourcesTab";
 import { TerritoryTab } from "./TerritoryTab";
 import { NotesTab } from "./NotesTab";
+import { RelationshipsTab } from "./RelationshipsTab";
 
 /** The dock's tabs, mirroring the base game's right-hand tabbed pane (TripleAFrame). */
 export const DOCK_TABS = [
   "Actions",
   "Players",
   "Resources",
+  "Relationships",
   "Objectives",
   "Notes",
   "Territory",
@@ -139,6 +141,8 @@ export function BottomDock({
             <PlayersTab stats={snapshot?.playerStats ?? []} colors={colors} />
           ) : activeTab === "Resources" ? (
             <ResourcesTab stats={snapshot?.playerStats ?? []} colors={colors} />
+          ) : activeTab === "Relationships" ? (
+            <RelationshipsTab snapshot={snapshot} colors={colors} />
           ) : activeTab === "Territory" ? (
             <TerritoryTab
               geometry={geometry}
