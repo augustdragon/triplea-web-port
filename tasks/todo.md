@@ -210,9 +210,21 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
   renders the HTML via `dangerouslySetInnerHTML` (trusted local map content — noted; sanitize if remote maps
   ever load). Verified live: full notes render (Credits/Note/Disclaimer/Rules…), scrollable, matching the base
   game's Notes tab. `:game-web-server:check` + `tsc` clean.
-- [ ] **Deferred (later pass):** Objectives tab (needs `objective.properties` + `AbstractConditionsAttachment
-  .testAllConditionsRecursive` + a dummy delegate bridge — the one genuine risk); Technology sub-table
-  (`TechTracker`); Battle Calculator (large standalone feature).
+- [x] **Relationships → dock tab ✅ (commit `e152ea291`).** Was a sidebar button + modal; now an inline
+  dock tab (`RelationshipsTab`) rendering the N×N grid from the snapshot. Modal + button removed; e2e updated.
+- [x] **Objectives tab ✅ verified live (exact match to base ObjectivePanel).** `objectives.properties` lives
+  in the map root (extracted from the zip; keyed by normalized game name `World_War_II_Pacific_1940_2nd_Edition.`).
+  `ObjectivesProjector` replicates `ObjectivePanel.setObjectiveStats`: parse `TABLEGROUP` sections (ordered) +
+  `<player>;<attachment>` objective text, resolve each to an `ICondition` via `AbstractPlayerRulesAttachment
+  .getCondition`, evaluate read-only with `AbstractConditionsAttachment.testAllConditionsRecursive` +
+  `ObjectiveDummyDelegateBridge` (discards changes, random→0, so no game mutation). `GameController` loads the
+  props once (`gameXml.parent.parent/objectives.properties`) and publishes a `{type:objectives,items}` envelope
+  at each step boundary; `GameWebSocketServer` caches + re-sends on connect. Client `ObjectivesTab` groups by
+  faction-tinted section with ✓/○ markers + HTML text (dark-themed). Verified live: Japan diplomatic objective ✓,
+  Chinese Burma Road ✓, all others ○ — matches the reference screenshot; server log clean (no eval errors).
+- [ ] **Deferred (later pass):** Technology sub-table (`TechTracker`); Battle Calculator (large standalone
+  feature). No `ObjectivesProjector` unit test (would need a map fixture with objectives.properties; verified
+  live against the base game's exact output instead).
 - [ ] **Deferred — interactive minimap.** Today `Minimap.tsx` is a *live* owner-tinted overview (redraws as
   ownership changes) but has NO interactivity. Add: (a) a viewport rectangle showing `MapCanvas`'s current
   pan/zoom, and (b) click/drag-to-recenter the main map. Needs lifting `MapCanvas`'s `view {scale,offsetX,

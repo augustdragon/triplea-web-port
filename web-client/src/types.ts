@@ -49,6 +49,13 @@ export interface ResourceCell {
   income: number;
 }
 
+/** One national objective (Objectives tab): its section, HTML description, and satisfied state. */
+export interface ObjectiveItem {
+  section: string;
+  text: string;
+  satisfied: boolean;
+}
+
 /** Per-player summary stats (mirrors StatPanel/EconomyPanel columns); drives the info tabs. */
 export interface PlayerStat {
   player: string;

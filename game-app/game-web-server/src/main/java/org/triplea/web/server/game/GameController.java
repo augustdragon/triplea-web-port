@@ -2,9 +2,14 @@ package org.triplea.web.server.game;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import games.strategy.engine.data.GameData;
 import games.strategy.engine.framework.ServerGame;
 import games.strategy.engine.framework.startup.ui.PlayerTypes;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -36,6 +41,8 @@ public final class GameController {
   private final int maxRounds;
   private final long stepDelayMs;
   private final GameWebSocketServer server;
+  // The map's objectives.properties (static per map); empty if the map has none.
+  private final Properties objectivesProps;
 
   // Resets run on a single thread so they're serialized and never block the WebSocket thread.
   private final ExecutorService restartExecutor =
@@ -59,6 +66,23 @@ public final class GameController {
     this.maxRounds = maxRounds;
     this.stepDelayMs = stepDelayMs;
     this.server = server;
+    this.objectivesProps = loadObjectivesProperties(gameXml);
+  }
+
+  /**
+   * Load the map's {@code objectives.properties} (sibling-of-the-games-folder); empty if absent.
+   */
+  private static Properties loadObjectivesProperties(final Path gameXml) {
+    final Properties props = new Properties();
+    final Path file = gameXml.getParent().getParent().resolve("objectives.properties");
+    if (Files.exists(file)) {
+      try (InputStream in = Files.newInputStream(file)) {
+        props.load(in);
+      } catch (final IOException e) {
+        log.warn("Could not read objectives.properties at {}", file, e);
+      }
+    }
+    return props;
   }
 
   /** Wire inbound routing and launch the first game. Call once, after {@code server.start()}. */
@@ -79,6 +103,18 @@ public final class GameController {
     envelope.addProperty("type", "notes");
     envelope.addProperty("html", notes);
     server.publishNotes(GSON.toJson(envelope));
+  }
+
+  /**
+   * Evaluate the national objectives against the given game state and broadcast them. Published at
+   * each step boundary (objectives change as territories/relationships change), and cached +
+   * re-sent on connect. Read-only (see {@link ObjectivesProjector}).
+   */
+  private void publishObjectives(final GameData data) {
+    final JsonObject envelope = new JsonObject();
+    envelope.addProperty("type", "objectives");
+    envelope.add("items", GSON.toJsonTree(ObjectivesProjector.project(data, objectivesProps)));
+    server.publishObjectives(GSON.toJson(envelope));
   }
 
   /**
@@ -150,6 +186,7 @@ public final class GameController {
     private void run() {
       try {
         server.publishState(GSON.toJson(StateProjector.project(game.getData())));
+        publishObjectives(game.getData());
         int steps = 0;
         while (alive
             && !game.isGameOver()
@@ -160,6 +197,7 @@ public final class GameController {
             break;
           }
           server.publishState(GSON.toJson(StateProjector.project(game.getData())));
+          publishObjectives(game.getData());
           steps++;
           Thread.sleep(stepDelayMs);
         }

@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
-import type { MapGeometry, StateSnapshot, UnitStack } from "./types";
+import type { MapGeometry, ObjectiveItem, StateSnapshot, UnitStack } from "./types";
 import { PlayersTab } from "./PlayersTab";
 import { ResourcesTab } from "./ResourcesTab";
 import { TerritoryTab } from "./TerritoryTab";
 import { NotesTab } from "./NotesTab";
 import { RelationshipsTab } from "./RelationshipsTab";
+import { ObjectivesTab } from "./ObjectivesTab";
 
 /** The dock's tabs, mirroring the base game's right-hand tabbed pane (TripleAFrame). */
 export const DOCK_TABS = [
@@ -38,6 +39,7 @@ export function BottomDock({
   colors,
   selectedTerritory,
   notesHtml,
+  objectives,
   sidebarWidth,
 }: {
   activeTab: DockTab;
@@ -62,6 +64,8 @@ export function BottomDock({
   selectedTerritory: string | null;
   /** The game's notes HTML (from the map), shown in the Notes tab. */
   notesHtml: string;
+  /** National objectives + statuses (from the server), shown in the Objectives tab. */
+  objectives: ObjectiveItem[];
   sidebarWidth: number;
 }) {
   return (
@@ -143,6 +147,8 @@ export function BottomDock({
             <ResourcesTab stats={snapshot?.playerStats ?? []} colors={colors} />
           ) : activeTab === "Relationships" ? (
             <RelationshipsTab snapshot={snapshot} colors={colors} />
+          ) : activeTab === "Objectives" ? (
+            <ObjectivesTab items={objectives} colors={colors} />
           ) : activeTab === "Territory" ? (
             <TerritoryTab
               geometry={geometry}
@@ -153,19 +159,9 @@ export function BottomDock({
             />
           ) : activeTab === "Notes" ? (
             <NotesTab html={notesHtml} />
-          ) : (
-            <Placeholder tab={activeTab} />
-          )}
+          ) : null}
         </div>
       )}
     </div>
   );
-}
-
-/** Stub shown for the one remaining unbuilt info tab (Objectives — deferred). */
-function Placeholder({ tab }: { tab: DockTab }) {
-  const note: Record<string, string> = {
-    Objectives: "National objectives and their status — deferred (later pass).",
-  };
-  return <div style={{ color: "#778", padding: "8px 2px" }}>{note[tab] ?? ""}</div>;
 }

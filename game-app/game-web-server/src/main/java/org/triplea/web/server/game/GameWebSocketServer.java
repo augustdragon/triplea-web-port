@@ -29,6 +29,7 @@ public final class GameWebSocketServer extends WebSocketServer {
   private volatile @Nullable String latestState;
   private volatile @Nullable String pendingRequest;
   private volatile @Nullable String notesEnvelope;
+  private volatile @Nullable String objectivesEnvelope;
   private volatile @Nullable Consumer<String> inboundHandler;
 
   public GameWebSocketServer(final int port) {
@@ -69,6 +70,15 @@ public final class GameWebSocketServer extends WebSocketServer {
   }
 
   /**
+   * Broadcast (and cache) the national-objectives envelope. Re-evaluated and re-published each
+   * step, and re-sent to clients on connect so a late joiner sees the current objective statuses.
+   */
+  public void publishObjectives(final String envelopeJson) {
+    objectivesEnvelope = envelopeJson;
+    broadcast(envelopeJson);
+  }
+
+  /**
    * Broadcast a pre-built {@code {type:"battle",...}} event envelope — a transient battle-log line.
    * Not stored for catch-up (a client joining mid-battle just misses earlier lines; the state
    * snapshot still catches it up).
@@ -100,6 +110,10 @@ public final class GameWebSocketServer extends WebSocketServer {
     final String notes = notesEnvelope;
     if (notes != null) {
       conn.send(notes); // static game notes for the Notes tab
+    }
+    final String objectives = objectivesEnvelope;
+    if (objectives != null) {
+      conn.send(objectives); // current national objectives for the Objectives tab
     }
   }
 

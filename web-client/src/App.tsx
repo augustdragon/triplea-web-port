@@ -6,6 +6,7 @@ import type {
   DecisionRequest,
   MapGeometry,
   MoveRequest,
+  ObjectiveItem,
   PlaceRequest,
   PoliticsRequest,
   PurchaseRequest,
@@ -45,6 +46,8 @@ export default function App() {
   const [battleLog, setBattleLog] = useState<BattleEvent[]>([]);
   // The game's notes (HTML from the map's <notes> property), pushed once and cached by the server.
   const [notesHtml, setNotesHtml] = useState<string>("");
+  // National objectives + their satisfied state, re-pushed by the server each step.
+  const [objectives, setObjectives] = useState<ObjectiveItem[]>([]);
   const [activeTab, setActiveTab] = useState<DockTab>("Actions");
   const [dockCollapsed, setDockCollapsed] = useState(false);
   // A territory to pan the map to (from the air-can't-land warning pills); nonce re-triggers on
@@ -71,7 +74,8 @@ export default function App() {
         | { type: "state"; snapshot: StateSnapshot }
         | ({ type: "request" } & DecisionRequest)
         | ({ type: "battle" } & BattleEvent)
-        | { type: "notes"; html: string };
+        | { type: "notes"; html: string }
+        | { type: "objectives"; items: ObjectiveItem[] };
       if (env.type === "state") {
         setSnapshot(env.snapshot);
       } else if (env.type === "request") {
@@ -81,6 +85,8 @@ export default function App() {
         setBattleLog((prev) => [...prev, env].slice(-500));
       } else if (env.type === "notes") {
         setNotesHtml(env.html);
+      } else if (env.type === "objectives") {
+        setObjectives(env.items);
       }
     };
     ws.onclose = () => setWsStatus("disconnected");
@@ -268,6 +274,7 @@ export default function App() {
         colors={geometry.playerColors}
         selectedTerritory={selectedTerritory}
         notesHtml={notesHtml}
+        objectives={objectives}
         sidebarWidth={SIDEBAR_WIDTH}
         actionsContent={
           request ? (
