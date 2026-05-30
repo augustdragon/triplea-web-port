@@ -99,6 +99,21 @@ export default function App() {
     setRequest(null);
   }
 
+  // Reset the game on the server (a testing convenience — see GameController) and clear local UI
+  // state. The server tears down the current game and starts a fresh one on the same socket, then
+  // pushes new state + the opening decision; no page reload or server restart needed.
+  function newGame() {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "control", action: "newGame" }));
+    }
+    setRequest(null);
+    setBattleLog([]);
+    resetMove();
+    resetPlace();
+    setShowRelationships(false);
+  }
+
   // Politics: commit the staged set of declarations (possibly empty) and end the phase. The server
   // applies each, skips any made redundant by another, and re-prompts only if some were skipped.
   function submitPolitics(names: string[]) {
@@ -239,6 +254,7 @@ export default function App() {
         events={battleLog}
         width={SIDEBAR_WIDTH}
         onShowRelationships={() => setShowRelationships(true)}
+        onNewGame={newGame}
       />
       {/* The bottom tab dock: information panels + the active decision panel under "Actions". */}
       <BottomDock

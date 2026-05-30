@@ -18,6 +18,7 @@ export function Sidebar({
   events,
   width,
   onShowRelationships,
+  onNewGame,
 }: {
   wsStatus: string;
   snapshot: StateSnapshot | null;
@@ -27,6 +28,7 @@ export function Sidebar({
   events: BattleEvent[];
   width: number;
   onShowRelationships: () => void;
+  onNewGame: () => void;
 }) {
   const live = wsStatus === "live";
   return (
@@ -84,6 +86,23 @@ export function Sidebar({
           }}
         >
           ⚔ Relationships
+        </button>
+        <button
+          onClick={onNewGame}
+          title="Reset the game on the server and start a fresh one (testing convenience)"
+          style={{
+            width: "100%",
+            marginTop: 6,
+            background: "#3a2730",
+            color: "#e8c9c9",
+            border: "1px solid #5c4650",
+            borderRadius: 5,
+            padding: "5px 0",
+            fontSize: 12,
+            cursor: "pointer",
+          }}
+        >
+          ⟳ New game
         </button>
       </div>
 

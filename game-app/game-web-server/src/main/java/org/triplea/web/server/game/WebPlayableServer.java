@@ -1,29 +1,25 @@
 package org.triplea.web.server.game;
 
-import com.google.gson.Gson;
-import games.strategy.engine.framework.ServerGame;
-import games.strategy.engine.framework.startup.ui.PlayerTypes;
 import java.nio.file.Path;
-import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import lombok.extern.slf4j.Slf4j;
 
 /**
  * Phase 3 playable runner: runs a game in-process where one seat ({@code humanPlayer}) is driven
  * from the browser via a {@link WebDecisionBridge}, and the rest are AI. State is pushed over
- * WebSocket after each step, exactly as the spectator does; additionally the human seat's blocking
- * decisions (3b: purchase) are sent as {@code request} envelopes and answered by the client.
+ * WebSocket after each step, exactly as the spectator does; the human seat's blocking decisions are
+ * sent as {@code request} envelopes and answered by the client.
  *
- * <p>The game-loop thread parks inside {@code runNextStep()} whenever the human seat must decide
- * (its {@code start()} blocks on the bridge); the WebSocket server runs on its own thread and
- * delivers the reply, waking the loop. Single-browser hotseat for now.
+ * <p>Lifecycle lives in {@link GameController}: each game runs on its own daemon game-loop thread,
+ * parking inside {@code runNextStep()} whenever the human seat must decide; the WebSocket server
+ * runs on its own thread and delivers the reply, waking the loop. The controller also handles the
+ * browser's "new game" reset, so a tester can restart without bouncing the JVM. Single-browser
+ * hotseat for now.
  *
  * <p>Usage: {@code WebPlayableServer <gameXml> <humanPlayer> [port] [maxRounds] [stepDelayMs]}.
  */
 @Slf4j
 public final class WebPlayableServer {
-  private static final Gson GSON = new Gson();
-  private static final int STEP_SAFETY_LIMIT = 10_000;
-
   private WebPlayableServer() {}
 
   public static void main(final String[] args) throws Exception {
@@ -41,38 +37,15 @@ public final class WebPlayableServer {
 
     final GameWebSocketServer server = new GameWebSocketServer(port);
     server.start();
-    final WebDecisionBridge bridge = new WebDecisionBridge(server::send, server::publishState);
-    server.setInboundHandler(bridge::onClientMessage);
+    new GameController(gameXml, humanPlayer, maxRounds, stepDelayMs, server).start();
     log.info(
         "Playable {} as '{}' — connect a client to ws://<host>:{}",
         gameXml.getFileName(),
         humanPlayer,
         port);
 
-    final WebDisplay display = new WebDisplay(server::publishBattleEvent);
-    final ServerGame game =
-        WebGameHost.startGame(gameXml, Set.of(humanPlayer), PlayerTypes.FAST_AI, bridge, display);
-    display.setGameData(game.getData()); // enables battle-by-id round/force lookups
-    game.setStopGameOnDelegateExecutionStop(true);
-    server.publishState(GSON.toJson(StateProjector.project(game.getData())));
-
-    int steps = 0;
-    try {
-      while (!game.isGameOver()
-          && game.getData().getSequence().getRound() <= maxRounds
-          && steps < STEP_SAFETY_LIMIT) {
-        game.runNextStep();
-        server.publishState(GSON.toJson(StateProjector.project(game.getData())));
-        steps++;
-        Thread.sleep(stepDelayMs);
-      }
-    } finally {
-      bridge.close();
-    }
-
-    log.info(
-        "Game finished: gameOver={} round={}. WebSocket server stays up to serve final state.",
-        game.isGameOver(),
-        game.getData().getSequence().getRound());
+    // The game runs on the controller's loop thread and the WebSocket server on its own; keep the
+    // process alive here so the socket stays up across games (and after one ends) to serve state.
+    new CountDownLatch(1).await();
   }
 }

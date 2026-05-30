@@ -40,6 +40,16 @@ public final class GameWebSocketServer extends WebSocketServer {
     this.inboundHandler = handler;
   }
 
+  /**
+   * Drop the cached catch-up state and any outstanding request — called when a new game is starting
+   * so a (re)connecting client isn't caught up to the finished/abandoned game. The new game
+   * publishes fresh state immediately after.
+   */
+  public void resetForNewGame() {
+    latestState = null;
+    pendingRequest = null;
+  }
+
   /** Wrap a state snapshot in a {@code state} envelope, store it for catch-up, and broadcast it. */
   public void publishState(final String snapshotJson) {
     final String envelope = "{\"type\":\"state\",\"snapshot\":" + snapshotJson + "}";

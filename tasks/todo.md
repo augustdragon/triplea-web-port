@@ -179,6 +179,21 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
 - [ ] **Exit check:** Players/Resources/Territory/Notes render live and correct against `runPlayable`,
   tabs switch, map gains horizontal space, `:game-web-server:check` + `tsc --noEmit` clean.
 
+#### 3h tooling — in-browser "New game" reset ✅ verified live
+- [x] **Server-side game lifecycle + in-process reset.** Extracted the game loop out of `WebPlayableServer.main`
+  into a new `GameController` that runs each game on its own daemon game-loop thread behind one long-lived
+  `GameWebSocketServer`. A client `{type:"control",action:"newGame"}` message stops the current session
+  (`alive=false` + `WebDecisionBridge.close()` to unpark the engine thread parked in `await`, then `join`) and
+  starts a fresh game on the same socket — no JVM bounce, no page reload. Deliberately does **not** call
+  `ServerGame.stopGame()` (it can `ExitStatus.exit()` the JVM if it can't block delegate execution); abandons
+  the old `ServerGame` to GC instead (resets are occasional, so the small retained state is fine). `main` now
+  just builds the controller and parks on a `CountDownLatch`. Added `GameWebSocketServer.resetForNewGame()`
+  (drops cached catch-up state + outstanding request). Client: `App.newGame()` sends the control message and
+  clears local UI state (request/battle-log/move/place); a `⟳ New game` button in the sidebar.
+  **Verified live:** committed a French DoW (→ Purchase, France at war), hit New game → clean Round 1 Politics
+  with "Declare war on French" available again; reset-while-parked-on-a-decision works and is repeatable; server
+  stays live (no JVM exit). `:game-web-server:check` + `tsc` clean.
+
 ### Phase 4 — LAN / ZeroTier multiplayer
 - [ ] Seat-claiming / session management (multiple browsers, one server)
 - [ ] Route each seat's queries to the owning client; spectators get state only
