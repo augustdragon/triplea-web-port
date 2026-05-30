@@ -113,9 +113,9 @@ export function BottomDock({
         </button>
       </div>
 
-      {/* Content */}
+      {/* Content — a fixed height so the pane doesn't jump as you switch tabs; scrolls if taller. */}
       {!collapsed && (
-        <div style={{ maxHeight: "42vh", overflowY: "auto", padding: "10px 16px" }}>
+        <div style={{ height: "40vh", overflowY: "auto", padding: "10px 16px" }}>
           {activeTab === "Actions" ? (
             actionsContent
           ) : activeTab === "Players" ? (

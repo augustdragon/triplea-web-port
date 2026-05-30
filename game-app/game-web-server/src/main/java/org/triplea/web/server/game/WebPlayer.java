@@ -14,6 +14,7 @@ import games.strategy.engine.data.Resource;
 import games.strategy.engine.data.Route;
 import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
+import games.strategy.engine.data.UnitType;
 import games.strategy.triplea.Constants;
 import games.strategy.triplea.attachments.PoliticalActionAttachment;
 import games.strategy.triplea.delegate.AbstractMoveDelegate;
@@ -212,6 +213,31 @@ public final class WebPlayer extends AbstractBasePlayer {
   }
 
   /** Ask the browser what to buy, submit to the purchase delegate, loop until accepted. */
+  /**
+   * Groups a produced unit into the client's purchase columns: factories, AA guns, and other
+   * infrastructure/construction are {@code "building"}; otherwise {@code "naval"}/{@code "air"}/
+   * {@code "land"} by domain. (AA guns are caught by the AA check even when, as on Pacific 1940,
+   * they're mobile combat units rather than {@code isInfrastructure}.)
+   */
+  private static String categoryOf(final NamedAttachable produced) {
+    if (!(produced instanceof final UnitType type)) {
+      return "land";
+    }
+    if (Matches.unitTypeIsAaForAnything().test(type)
+        || Matches.unitTypeCanProduceUnits().test(type)
+        || Matches.unitTypeIsInfrastructure().test(type)
+        || Matches.unitTypeIsConstruction().test(type)) {
+      return "building";
+    }
+    if (Matches.unitTypeIsSea().test(type)) {
+      return "naval";
+    }
+    if (Matches.unitTypeIsAir().test(type)) {
+      return "air";
+    }
+    return "land";
+  }
+
   private void handlePurchase(final boolean bid) {
     final GamePlayer player = getGamePlayer();
     final GameData data = getGameData();
@@ -231,12 +257,14 @@ public final class WebPlayer extends AbstractBasePlayer {
       final int cost = rule.getCosts().getInt(pus);
       String produces = "";
       int quantity = 0;
+      String category = "land";
       for (final NamedAttachable result : rule.getResults().keySet()) {
         produces = result.getName();
         quantity = rule.getResults().getInt(result);
+        category = categoryOf(result);
         break; // summarize the primary produced unit
       }
-      options.add(new PurchaseOption(rule.getName(), cost, produces, quantity));
+      options.add(new PurchaseOption(rule.getName(), cost, produces, quantity, category));
       rulesByName.put(rule.getName(), rule);
     }
 

@@ -268,7 +268,12 @@ export default function App() {
         sidebarWidth={SIDEBAR_WIDTH}
         actionsContent={
           request ? (
-            <div style={{ maxWidth: request.kind === "politics" ? "none" : 620 }}>
+            <div
+              style={{
+                maxWidth:
+                  request.kind === "politics" || request.kind === "purchase" ? "none" : 620,
+              }}
+            >
               {request.kind === "politics" && (
                 <PoliticsPanel
                   request={request.payload as PoliticsRequest}

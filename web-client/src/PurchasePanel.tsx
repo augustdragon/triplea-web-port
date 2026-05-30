@@ -1,11 +1,20 @@
 import { useMemo, useState } from "react";
-import type { PurchaseRequest } from "./types";
+import type { PurchaseOption, PurchaseRequest } from "./types";
+
+// Purchase columns, in display order. Options are grouped by their server-assigned category.
+const COLUMNS: { key: string; label: string }[] = [
+  { key: "land", label: "Land" },
+  { key: "air", label: "Air" },
+  { key: "naval", label: "Naval" },
+  { key: "building", label: "Buildings" },
+];
 
 /**
  * The purchase decision panel. Lets the human pick how many of each production rule to buy, shows
  * the running cost against the PU budget, and submits the choice (rule name -> count) back to the
- * server. The engine's purchase delegate validates it; if rejected, the request comes back with an
- * `error` and the panel re-renders so the player can adjust.
+ * server. Options are laid out in columns by category (land / air / naval / buildings). The engine's
+ * purchase delegate validates the choice; if rejected, the request comes back with an `error` and
+ * the panel re-renders so the player can adjust.
  */
 export function PurchasePanel({
   request,
@@ -26,6 +35,46 @@ export function PurchasePanel({
 
   function bump(name: string, delta: number) {
     setCounts((c) => ({ ...c, [name]: Math.max(0, (c[name] ?? 0) + delta) }));
+  }
+
+  // Group options into the display columns; drop any column with no options (e.g. a map with no air).
+  const columns = COLUMNS.map((col) => ({
+    ...col,
+    options: request.options.filter((o) => (o.category || "land") === col.key),
+  })).filter((col) => col.options.length > 0);
+  // Safety net: if the server sent an unknown category, surface those options rather than hide them.
+  const shown = new Set(columns.flatMap((c) => c.options.map((o) => o.name)));
+  const leftover = request.options.filter((o) => !shown.has(o.name));
+  if (leftover.length > 0) columns.push({ key: "other", label: "Other", options: leftover });
+
+  function optionRow(o: PurchaseOption) {
+    const n = counts[o.name] ?? 0;
+    return (
+      <div
+        key={o.name}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "2px 4px",
+          background: n > 0 ? "rgba(120,150,90,0.18)" : "transparent",
+          borderRadius: 3,
+        }}
+      >
+        <span style={{ flex: 1 }}>
+          {o.produces || o.name}
+          {o.quantity > 1 ? ` ×${o.quantity}` : ""}{" "}
+          <span style={{ color: "#9fb6c9" }}>({o.cost})</span>
+        </span>
+        <button onClick={() => bump(o.name, -1)} style={btn} disabled={n === 0}>
+          −
+        </button>
+        <span style={{ width: 24, textAlign: "center" }}>{n}</span>
+        <button onClick={() => bump(o.name, +1)} style={btn}>
+          +
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -52,36 +101,25 @@ export function PurchasePanel({
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-        {request.options.map((o) => {
-          const n = counts[o.name] ?? 0;
-          return (
+      <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
+        {columns.map((col) => (
+          <div key={col.key} style={{ flex: "1 1 200px", minWidth: 190, maxWidth: 280 }}>
             <div
-              key={o.name}
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "2px 4px",
-                background: n > 0 ? "rgba(120,150,90,0.18)" : "transparent",
-                borderRadius: 3,
+                fontWeight: 600,
+                color: "#9fb6c9",
+                borderBottom: "1px solid #3a4654",
+                paddingBottom: 3,
+                marginBottom: 4,
               }}
             >
-              <span style={{ flex: 1 }}>
-                {o.produces || o.name}
-                {o.quantity > 1 ? ` ×${o.quantity}` : ""}{" "}
-                <span style={{ color: "#9fb6c9" }}>({o.cost})</span>
-              </span>
-              <button onClick={() => bump(o.name, -1)} style={btn} disabled={n === 0}>
-                −
-              </button>
-              <span style={{ width: 24, textAlign: "center" }}>{n}</span>
-              <button onClick={() => bump(o.name, +1)} style={btn}>
-                +
-              </button>
+              {col.label}
             </div>
-          );
-        })}
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              {col.options.map(optionRow)}
+            </div>
+          </div>
+        ))}
       </div>
 
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>

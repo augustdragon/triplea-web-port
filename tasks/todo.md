@@ -184,6 +184,14 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
     income, with alliance totals) and renders any other held resource as a **count-only chip** on the owning
     row (e.g. Japan `⚡ 6`), with a glyph legend. All-zero resources (techTokens at start) show nothing. No
     server/snapshot change — the projection still sends all resources; the client chooses column vs chip.
+- [x] **Dock polish (user-requested):** (1) **Static dock height** — the content area is a fixed `40vh`
+  (`BottomDock`) instead of `maxHeight`, so the tab bar no longer jumps as you switch tabs (short tabs
+  leave empty space, tall ones scroll). (2) **Purchase columns** — the purchase list is grouped into
+  **Land | Air | Naval | Buildings** columns. Server `PurchaseOption` gained a `category` computed in
+  `WebPlayer.categoryOf` (AA / canProduceUnits / infrastructure / construction → building — catches
+  Pacific's mobile `aaGun` via the AA check; else sea→naval, air→air, else land); client `PurchasePanel`
+  renders a column per non-empty category (unknown categories fall into an "Other" column as a safety net).
+  Purchase panel widened to full width in `App`. Verified live: 4 columns correct, aaGun under Buildings.
 - [ ] **Step 4 — Territory tab (client-only).** Selected-territory detail from existing `units` snapshot +
   geometry (`production`/`water`/`capitalOf`) + unit list. (Battle Calculator / Add Attackers / Add
   Defenders / Find buttons = deferred, see below.)

@@ -86,6 +86,8 @@ export interface PurchaseOption {
   cost: number;
   produces: string;
   quantity: number;
+  /** Purchase column: "land" | "air" | "naval" | "building". */
+  category: string;
 }
 
 /** Payload of a kind:"purchase" request: who's buying, budget, options, and any prior error. */
