@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -74,27 +75,39 @@ public final class MapGeometryConverter {
     final Map<String, Point> centersByTerritory =
         Files.exists(centersFile) ? PointFileReaderWriter.readOneToOne(centersFile) : Map.of();
 
-    // Polygons the game data doesn't recognize as territories — non-territory extras to drop (below).
+    // Polygons in polygons.txt that the game data doesn't recognize as territories are handled two
+    // ways (below): a mislabeled duplicate that shares a real territory's center ("Suiyuyan" over the
+    // Chinese-owned "Suiyuan") is dropped, while standalone decoration (the corner "Box1".."Box3")
+    // is folded into the nearest land territory as one filler rectangle so it reads as part of that
+    // territory rather than leaving a hole. The geometry-only path (no game data) keeps everything.
     final Set<String> realNames = realTerritoryNames(polygonsByTerritory.keySet(), gameData);
-    final Set<String> extraNames =
+    final Set<String> landNames = landTerritoryNames(realNames, gameData);
+    final Map<String, int[]> cornerFill =
         gameData == null
-            ? Set.of()
-            : nonTerritoryPolygonNames(polygonsByTerritory.keySet(), realNames);
+            ? Map.of()
+            : cornerFillBounds(
+                polygonsByTerritory.keySet(),
+                polygonsByTerritory,
+                centersByTerritory,
+                realNames,
+                landNames);
 
     final List<TerritoryGeometry> territories = new ArrayList<>();
     for (final var entry : polygonsByTerritory.entrySet()) {
       final String name = entry.getKey();
-      // Drop polygons the game data doesn't know as territories — non-territory extras in
-      // polygons.txt: a mislabeled duplicate (WW2 Pacific's "Suiyuyan", an identical-shape copy of
-      // the Chinese-owned "Suiyuan", which would mask the real territory beneath it) and the
-      // decorative corner boxes ("Box1".."Box3"). Both render as stray ownerless neutrals otherwise.
-      // The geometry-only path (no game data) can't judge, so extraNames is empty and all are kept.
-      if (extraNames.contains(name)) {
+      // Skip non-territory polygons as standalone regions: their shapes are either dropped or merged
+      // into a neighbor as corner fill (see above). Keep everything when there's no game data.
+      if (gameData != null && !realNames.contains(name)) {
         continue;
       }
       final List<List<XyPoint>> polygons = new ArrayList<>();
       for (final Polygon polygon : entry.getValue()) {
         polygons.add(toPoints(polygon));
+      }
+      // Fold any decoration nearest this territory into it as a single filler rectangle.
+      final int[] fill = cornerFill.get(name);
+      if (fill != null) {
+        polygons.add(rectangle(fill));
       }
       final Point center = centersByTerritory.get(name);
       // Semantic attributes come from the game data when available; geometry-only polygons default.
@@ -135,21 +148,106 @@ public final class MapGeometryConverter {
     return names;
   }
 
-  /**
-   * Polygon names the game data doesn't recognize as territories — non-territory extras in
-   * polygons.txt (mislabeled duplicates like "Suiyuyan", and decorative corner boxes "Box1".."Box3")
-   * that shouldn't render as map regions. Pure function of its inputs, so it's unit-tested without a
-   * full game-data fixture.
-   */
-  static Set<String> nonTerritoryPolygonNames(
-      final Set<String> polygonNames, final Set<String> realNames) {
-    final Set<String> extras = new HashSet<>();
-    for (final String name : polygonNames) {
-      if (!realNames.contains(name)) {
-        extras.add(name);
+  /** Real, non-water territory names — the candidate targets for folding in stray decoration. */
+  private static Set<String> landTerritoryNames(
+      final Set<String> realNames, @Nullable final GameData gameData) {
+    if (gameData == null) {
+      return Set.of();
+    }
+    final Set<String> land = new HashSet<>();
+    for (final String name : realNames) {
+      final Territory territory = gameData.getMap().getTerritoryOrNull(name);
+      if (territory != null && !territory.isWater()) {
+        land.add(name);
       }
     }
-    return extras;
+    return land;
+  }
+
+  /**
+   * For each land territory that some stray decoration polygon is nearest to, the bounding box
+   * {@code [minX, minY, maxX, maxY]} of all such polygons — a single filler rectangle to fold into
+   * that territory so the decoration reads as part of it instead of leaving a hole. A polygon that
+   * merely duplicates a real territory (sharing its center, e.g. "Suiyuyan" over "Suiyuan") is
+   * excluded: it's dropped, not filled. Pure function of its inputs, so it's unit-tested without a
+   * full game-data fixture.
+   */
+  static Map<String, int[]> cornerFillBounds(
+      final Set<String> polygonNames,
+      final Map<String, List<Polygon>> polygonsByName,
+      final Map<String, Point> centersByName,
+      final Set<String> realNames,
+      final Set<String> landNames) {
+    final Set<Point> realCenters = new HashSet<>();
+    for (final String name : realNames) {
+      final Point center = centersByName.get(name);
+      if (center != null) {
+        realCenters.add(center);
+      }
+    }
+    final Map<String, Point> landCenters = new HashMap<>();
+    for (final String name : landNames) {
+      final Point center = centersByName.get(name);
+      if (center != null) {
+        landCenters.put(name, center);
+      }
+    }
+
+    final Map<String, int[]> bounds = new HashMap<>();
+    for (final String name : polygonNames) {
+      if (realNames.contains(name)) {
+        continue; // a real territory, kept as itself
+      }
+      final Point center = centersByName.get(name);
+      if (center == null || realCenters.contains(center)) {
+        continue; // a duplicate overlay (or unplaceable) — dropped, not filled
+      }
+      final String target = nearestByCenter(center, landCenters);
+      if (target == null) {
+        continue; // nowhere to attach — dropped
+      }
+      final int[] box =
+          bounds.computeIfAbsent(
+              target,
+              k ->
+                  new int[] {
+                    Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE
+                  });
+      for (final Polygon polygon : polygonsByName.getOrDefault(name, List.of())) {
+        for (int i = 0; i < polygon.npoints; i++) {
+          box[0] = Math.min(box[0], polygon.xpoints[i]);
+          box[1] = Math.min(box[1], polygon.ypoints[i]);
+          box[2] = Math.max(box[2], polygon.xpoints[i]);
+          box[3] = Math.max(box[3], polygon.ypoints[i]);
+        }
+      }
+    }
+    return bounds;
+  }
+
+  /** Name of the entry in {@code centers} whose point is nearest {@code from}, or null if none. */
+  private static String nearestByCenter(final Point from, final Map<String, Point> centers) {
+    String best = null;
+    long bestDistanceSq = Long.MAX_VALUE;
+    for (final var entry : centers.entrySet()) {
+      final long dx = (long) from.x - entry.getValue().x;
+      final long dy = (long) from.y - entry.getValue().y;
+      final long distanceSq = dx * dx + dy * dy;
+      if (distanceSq < bestDistanceSq) {
+        bestDistanceSq = distanceSq;
+        best = entry.getKey();
+      }
+    }
+    return best;
+  }
+
+  /** An axis-aligned rectangle ring from bounds {@code [minX, minY, maxX, maxY]}. */
+  private static List<XyPoint> rectangle(final int[] bounds) {
+    return List.of(
+        new XyPoint(bounds[0], bounds[1]),
+        new XyPoint(bounds[2], bounds[1]),
+        new XyPoint(bounds[2], bounds[3]),
+        new XyPoint(bounds[0], bounds[3]));
   }
 
   /** Serializes a {@link MapGeometry} to JSON for delivery to the web client. */
