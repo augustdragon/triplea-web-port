@@ -37,7 +37,9 @@ export default function App() {
   const [snapshot, setSnapshot] = useState<StateSnapshot | null>(null);
   const [request, setRequest] = useState<DecisionRequest | null>(null);
   const [wsStatus, setWsStatus] = useState("connecting…");
-  const [moveRoute, setMoveRoute] = useState<string[]>([]);
+  // A move is a source territory + a destination; the server finds the legal route between them.
+  const [moveFrom, setMoveFrom] = useState<string | null>(null);
+  const [moveTo, setMoveTo] = useState<string | null>(null);
   const [moveUnits, setMoveUnits] = useState<Record<string, number>>({});
   const [placeTarget, setPlaceTarget] = useState<string | null>(null);
   // The territory last clicked on the map, shown in the Territory info tab (independent of move/place).
@@ -135,9 +137,8 @@ export default function App() {
     sendDecision({ choices });
   }
 
-  // Move: click territories to build a route; submit one move (server loops for the next), or Done.
-  // First click must be a territory with movable units; each further click must extend to a
-  // neighbor (per the adjacency graph) and ignores re-clicking the current tail.
+  // Move: click a territory with your units (the source), pick how many, then click any destination —
+  // the server finds the best legal route and previews it. Clicking the source again clears.
   function onTerritoryClick(name: string | null) {
     // Track the click for the Territory info tab regardless of phase (null clears it).
     setSelectedTerritory(name);
@@ -151,25 +152,53 @@ export default function App() {
     }
     if (request?.kind !== "move") return;
     const movable = (request.payload as MoveRequest).movableUnits;
-    const connections = geometry?.connections ?? {};
-    setMoveRoute((prev) => {
-      // Toggle: clicking a territory already in the route deselects it — and, since a route is a
-      // path, everything after it. Clicking the only/start territory clears the route entirely.
-      const at = prev.indexOf(name);
-      if (at !== -1) return prev.slice(0, at);
-      if (prev.length === 0) return movable[name] ? [name] : prev;
-      const tail = prev[prev.length - 1];
-      if (!connections[tail]?.includes(name)) return prev; // only extend to an adjacent territory
-      return [...prev, name];
-    });
+    if (!moveFrom) {
+      // First pick: a territory with movable units becomes the source.
+      if (movable[name]) {
+        setMoveFrom(name);
+        setMoveTo(null);
+        setMoveUnits({});
+      }
+      return;
+    }
+    if (name === moveFrom) {
+      resetMove(); // click the source again to start over
+      return;
+    }
+    // Any other territory is the destination — ask the server to preview the route there.
+    setMoveTo(name);
+    requestPreview(moveFrom, name, moveUnits);
+  }
+  // Ask the server to compute (not execute) the best legal route, which comes back as the next move
+  // request's `preview`. Does NOT clear the pending request — the server re-prompts the move.
+  function requestPreview(from: string, to: string, unitChoice: Record<string, number>) {
+    const ws = wsRef.current;
+    if (ws && request) {
+      ws.send(
+        JSON.stringify({
+          type: "decision",
+          requestId: request.requestId,
+          payload: { previewRoute: { from, to, units: unitChoice } },
+        }),
+      );
+    }
+  }
+  // Unit picks changed: keep them, and refresh the route preview if a destination is set (the legal
+  // route can depend on which units move — land vs sea route, movement range).
+  function changeMoveUnits(unitChoice: Record<string, number>) {
+    setMoveUnits(unitChoice);
+    if (moveFrom && moveTo) requestPreview(moveFrom, moveTo, unitChoice);
   }
   function resetMove() {
-    setMoveRoute([]);
+    setMoveFrom(null);
+    setMoveTo(null);
     setMoveUnits({});
   }
   function submitMove() {
-    sendDecision({ route: moveRoute, units: moveUnits });
-    resetMove();
+    if (moveFrom && moveTo) {
+      sendDecision({ from: moveFrom, to: moveTo, units: moveUnits });
+      resetMove();
+    }
   }
   function submitDone() {
     sendDecision({ done: true });
@@ -232,6 +261,16 @@ export default function App() {
   // Live owners/units from the server when connected; otherwise the static initial ownership.
   const owners = snapshot?.owners ?? geometry.initialOwners ?? {};
   const units = snapshot?.units ?? {};
+  // The territories to outline during a move: the server's previewed route (when it matches the
+  // current source/destination), else just the chosen source.
+  const movePreview =
+    request?.kind === "move" ? (request.payload as MoveRequest).preview : null;
+  const movePath =
+    movePreview?.route && movePreview.from === moveFrom && movePreview.to === moveTo
+      ? movePreview.route
+      : moveFrom
+        ? [moveFrom]
+        : [];
   return (
     <div style={{ color: "#ccc", fontFamily: "sans-serif" }}>
       <MapCanvas
@@ -241,7 +280,7 @@ export default function App() {
         onSelect={onTerritoryClick}
         highlight={
           request?.kind === "move"
-            ? moveRoute
+            ? movePath
             : request?.kind === "place" && placeTarget
               ? [placeTarget]
               : request?.kind === "airWarning" && airFocus
@@ -299,9 +338,10 @@ export default function App() {
               {request.kind === "move" && (
                 <MovePanel
                   request={request.payload as MoveRequest}
-                  route={moveRoute}
+                  from={moveFrom}
+                  to={moveTo}
                   units={moveUnits}
-                  setUnits={setMoveUnits}
+                  setUnits={changeMoveUnits}
                   onMove={submitMove}
                   onClear={resetMove}
                   onDone={submitDone}

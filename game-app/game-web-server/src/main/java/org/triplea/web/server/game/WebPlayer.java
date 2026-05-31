@@ -26,6 +26,7 @@ import games.strategy.triplea.delegate.battle.BattleDelegate;
 import games.strategy.triplea.delegate.battle.IBattle;
 import games.strategy.triplea.delegate.data.CasualtyDetails;
 import games.strategy.triplea.delegate.data.CasualtyList;
+import games.strategy.triplea.delegate.move.validation.MoveValidator;
 import games.strategy.triplea.delegate.remote.IAbstractPlaceDelegate;
 import games.strategy.triplea.delegate.remote.IAbstractPlaceDelegate.BidMode;
 import games.strategy.triplea.delegate.remote.IBattleDelegate;
@@ -306,6 +307,7 @@ public final class WebPlayer extends AbstractBasePlayer {
     final GamePlayer player = getGamePlayer();
     final GameData data = getGameData();
     String error = null;
+    MovePreview preview = null;
     while (!getPlayerBridge().isGameOver()) {
       final IMoveDelegate delegate = (IMoveDelegate) getPlayerBridge().getRemoteDelegate();
       final var reply =
@@ -316,12 +318,21 @@ public final class WebPlayer extends AbstractBasePlayer {
                   combat,
                   movableUnits(player, data),
                   toUndoInfos(delegate.getMovesMade()),
-                  error));
+                  error,
+                  preview));
+      error = null; // both are one-shot: only set again by this iteration's action, for the re-prompt
+      preview = null;
       if (reply.has("done") && reply.get("done").getAsBoolean()) {
         if (keepMovingToSaveAir(delegate, player, data)) {
           continue; // player chose to keep moving rather than strand the aircraft — re-prompt
         }
         return; // browser ended the phase
+      }
+      if (reply.has("previewRoute") && reply.get("previewRoute").isJsonObject()) {
+        // Compute (don't execute) the best legal route, then re-prompt with it for the browser to
+        // highlight. Nothing changed on the board, so skip the state publish below.
+        preview = previewMove(player, data, reply.getAsJsonObject("previewRoute"));
+        continue;
       }
       if (reply.has("undoAll") && reply.get("undoAll").getAsBoolean()) {
         error = undoAll(delegate);
@@ -336,6 +347,53 @@ public final class WebPlayer extends AbstractBasePlayer {
         bridge.publishState(GSON.toJson(StateProjector.project(data)));
       }
     }
+  }
+
+  /**
+   * Compute — without executing — the engine's best legal route for a source/destination/units the
+   * browser asked to preview, via {@link MoveValidator#getBestRoute} (the same routing the Swing
+   * client uses). Returns a {@link MovePreview} the browser highlights before committing; the actual
+   * move is still fully validated by the move delegate on submit.
+   */
+  private MovePreview previewMove(
+      final GamePlayer player, final GameData data, final JsonObject previewRoute) {
+    final String from = previewRoute.has("from") ? previewRoute.get("from").getAsString() : null;
+    final String to = previewRoute.has("to") ? previewRoute.get("to").getAsString() : null;
+    final Territory start = from == null ? null : data.getMap().getTerritoryOrNull(from);
+    final Territory end = to == null ? null : data.getMap().getTerritoryOrNull(to);
+    if (start == null || end == null) {
+      return new MovePreview(from, to, null, 0, List.of(), "Pick a source and a destination");
+    }
+    final List<Unit> units = selectUnits(start, player, readUnitCounts(previewRoute));
+    if (units.isEmpty()) {
+      return new MovePreview(from, to, null, 0, List.of(), "Select units to move");
+    }
+    final Optional<Route> route =
+        MoveValidator.getBestRoute(
+            start, end, data, player, units, !GameStepPropertiesHelper.isAirborneMove(data));
+    if (route.isEmpty()) {
+      return new MovePreview(from, to, null, 0, List.of(), "No legal route for these units");
+    }
+    final Route best = route.get();
+    final List<String> names = best.getAllTerritories().stream().map(Territory::getName).toList();
+    // Movement cost is per-unit (terrain-weighted). Flag any chosen type where no unit has the
+    // movement left to make the whole trip; the engine does the exact per-unit check on submit.
+    final Map<String, List<Unit>> byType = new TreeMap<>();
+    for (final Unit unit : units) {
+      byType.computeIfAbsent(unit.getType().getName(), k -> new ArrayList<>()).add(unit);
+    }
+    final List<String> blocked = new ArrayList<>();
+    double maxCost = 0;
+    for (final var entry : byType.entrySet()) {
+      final BigDecimal cost = best.getMovementCost(entry.getValue().get(0));
+      maxCost = Math.max(maxCost, cost.doubleValue());
+      final boolean anyCanReach =
+          entry.getValue().stream().anyMatch(u -> u.getMovementLeft().compareTo(cost) >= 0);
+      if (!anyCanReach) {
+        blocked.add(entry.getKey());
+      }
+    }
+    return new MovePreview(from, to, names, maxCost, blocked, null);
   }
 
   /**
@@ -464,16 +522,31 @@ public final class WebPlayer extends AbstractBasePlayer {
    */
   private @Nullable String submitMove(
       final GamePlayer player, final GameData data, final JsonObject reply) {
+    final Map<String, Integer> unitCounts = readUnitCounts(reply);
     final List<String> routeNames = new ArrayList<>();
-    if (reply.has("route") && reply.get("route").isJsonArray()) {
+    if (reply.has("from") && reply.has("to")) {
+      // Endpoint move: let the engine find the best legal route from source to destination for the
+      // chosen units (the click-destination flow), then move along it.
+      final Territory start = data.getMap().getTerritoryOrNull(reply.get("from").getAsString());
+      final Territory end = data.getMap().getTerritoryOrNull(reply.get("to").getAsString());
+      if (start == null || end == null) {
+        return "Unknown source or destination territory";
+      }
+      final List<Unit> units = selectUnits(start, player, unitCounts);
+      if (units.isEmpty()) {
+        return "No matching movable units in " + start.getName();
+      }
+      final Optional<Route> route =
+          MoveValidator.getBestRoute(
+              start, end, data, player, units, !GameStepPropertiesHelper.isAirborneMove(data));
+      if (route.isEmpty()) {
+        return "No legal route from " + start.getName() + " to " + end.getName();
+      }
+      route.get().getAllTerritories().forEach(t -> routeNames.add(t.getName()));
+    } else if (reply.has("route") && reply.get("route").isJsonArray()) {
+      // Explicit full route (kept for completeness; the browser uses the endpoint form above).
       for (final JsonElement element : reply.getAsJsonArray("route")) {
         routeNames.add(element.getAsString());
-      }
-    }
-    final Map<String, Integer> unitCounts = new HashMap<>();
-    if (reply.has("units") && reply.get("units").isJsonObject()) {
-      for (final var entry : reply.getAsJsonObject("units").entrySet()) {
-        unitCounts.put(entry.getKey(), entry.getValue().getAsInt());
       }
     }
 
@@ -486,6 +559,25 @@ public final class WebPlayer extends AbstractBasePlayer {
 
     final IMoveDelegate delegate = (IMoveDelegate) getPlayerBridge().getRemoteDelegate();
     return delegate.performMove(move).orElse(null);
+  }
+
+  /** Parse a {@code {units:{type:count}}} object from a reply (empty if absent). */
+  private static Map<String, Integer> readUnitCounts(final JsonObject obj) {
+    final Map<String, Integer> counts = new HashMap<>();
+    if (obj.has("units") && obj.get("units").isJsonObject()) {
+      for (final var entry : obj.getAsJsonObject("units").entrySet()) {
+        counts.put(entry.getKey(), entry.getValue().getAsInt());
+      }
+    }
+    return counts;
+  }
+
+  /** The requested {@code type -> count} drawn from the player's movable units in {@code source}. */
+  private static List<Unit> selectUnits(
+      final Territory source, final GamePlayer player, final Map<String, Integer> unitCounts) {
+    final List<Unit> movablePool =
+        source.getUnitCollection().getUnits().stream().filter(movableMatch(player)).toList();
+    return resolveByType(movablePool, unitCounts);
   }
 
   /**
@@ -517,14 +609,7 @@ public final class WebPlayer extends AbstractBasePlayer {
     final Route route = new Route(path);
     final Territory source = path.get(0);
 
-    final List<Unit> units = new ArrayList<>();
-    unitCounts.forEach(
-        (type, count) ->
-            source.getUnitCollection().getUnits().stream()
-                .filter(u -> u.isOwnedBy(player) && u.getType().getName().equals(type))
-                .filter(movableMatch(player))
-                .limit(Math.max(0, count))
-                .forEach(units::add));
+    final List<Unit> units = selectUnits(source, player, unitCounts);
     if (units.isEmpty()) {
       throw new IllegalArgumentException("No matching movable units in " + source.getName());
     }

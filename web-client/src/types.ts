@@ -134,11 +134,29 @@ export interface UndoableMoveInfo {
 }
 
 /**
+ * A move the server previewed (computed but did not execute) from a source/destination/units the
+ * client asked about — echoed back so the client can highlight the path before committing. `route`
+ * is the engine's best legal path (territory names, source first) or null when there's none. `cost`
+ * is that route's movement cost; `blockedTypes` are chosen unit types that can't make the distance;
+ * `message` explains a null route.
+ */
+export interface MovePreview {
+  from: string;
+  to: string;
+  route: string[] | null;
+  cost: number;
+  blockedTypes: string[];
+  message: string | null;
+}
+
+/**
  * Payload of a kind:"move" request: who's moving, combat vs non-combat, the units that can still act
  * (territory -> MovableUnit[]) so the client offers only valid picks and can label them, the moves
- * already made this phase (undoableMoves), plus any prior rejection error. Reply is {done:true},
- * {route:[territoryNames], units:{type:count}} (a land→sea route auto-loads onto transports in the
- * destination sea zone), or {undo:index}.
+ * already made this phase (undoableMoves), any prior rejection error, and `preview` (the route the
+ * server computed for a previously-requested preview, if any). The client picks a source + units +
+ * destination; replies are {previewRoute:{from,to,units}} (compute & echo a preview, no move),
+ * {from, to, units:{type:count}} (perform the move — server finds the best legal route; a land→sea
+ * route auto-loads onto transports in the destination sea zone), {done:true}, or {undo:index}.
  */
 export interface MoveRequest {
   player: string;
@@ -146,6 +164,7 @@ export interface MoveRequest {
   movableUnits: Record<string, MovableUnit[]>;
   undoableMoves: UndoableMoveInfo[];
   error: string | null;
+  preview: MovePreview | null;
 }
 
 /**

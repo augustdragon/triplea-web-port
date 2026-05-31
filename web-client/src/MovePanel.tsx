@@ -2,16 +2,18 @@ import type { MovableUnit, MoveRequest } from "./types";
 import { displayTerritory } from "./territoryName";
 
 /**
- * The move panel (3c — combat and non-combat; land, sea, air, transport load/unload). The player
- * clicks a source territory on the map (one with movable units), then clicks further territories to
- * extend the route; this panel picks how many of each movable unit type to send, and submits one
- * move at a time. A land→sea route auto-loads the chosen land units onto transports in the
- * destination sea zone. The engine's move delegate validates each move; a rejection comes back as
- * `error`. "Done" ends the move phase.
+ * The move panel (combat and non-combat; land, sea, air, transport load/unload). The player clicks a
+ * source territory on the map (one with movable units), picks how many of each unit type to send,
+ * then clicks any destination — the server finds the best legal route there (the same routing the
+ * desktop client uses) and sends it back as a `preview`, which this panel summarises and the map
+ * highlights. "Move" commits it; the engine validates and a rejection comes back as `error`. A
+ * land→sea route auto-loads the chosen land units onto transports in the destination sea zone.
+ * "Done" ends the move phase.
  */
 export function MovePanel({
   request,
-  route,
+  from,
+  to,
   units,
   setUnits,
   onMove,
@@ -21,7 +23,8 @@ export function MovePanel({
   onUndoAll,
 }: {
   request: MoveRequest;
-  route: string[];
+  from: string | null;
+  to: string | null;
   units: Record<string, number>;
   setUnits: (u: Record<string, number>) => void;
   onMove: () => void;
@@ -30,10 +33,14 @@ export function MovePanel({
   onUndo: (index: number) => void;
   onUndoAll: () => void;
 }) {
-  const source = route[0];
-  const movable: MovableUnit[] = source ? (request.movableUnits[source] ?? []) : [];
+  const movable: MovableUnit[] = from ? (request.movableUnits[from] ?? []) : [];
   const totalChosen = Object.values(units).reduce((a, b) => a + b, 0);
-  const canMove = route.length >= 2 && totalChosen > 0;
+  // The preview is authoritative only when it's the one we asked for (this source + destination).
+  const preview =
+    request.preview && request.preview.from === from && request.preview.to === to
+      ? request.preview
+      : null;
+  const canMove = !!from && !!to && totalChosen > 0 && preview?.route != null;
 
   function bump(type: string, delta: number, max: number) {
     const next = Math.min(max, Math.max(0, (units[type] ?? 0) + delta));
@@ -41,8 +48,7 @@ export function MovePanel({
   }
 
   // Select every eligible unit in the source territory. `movable` is already filtered server-side to
-  // units with movement left (or transportable cargo), so this never picks a spent unit; the engine
-  // still validates the specific route on submit.
+  // units with movement left (or transportable cargo), so this never picks a spent unit.
   function selectAll() {
     const all: Record<string, number> = {};
     for (const mu of movable) all[mu.type] = mu.count;
@@ -116,7 +122,7 @@ export function MovePanel({
         </div>
       )}
 
-      {!source ? (
+      {!from ? (
         <div style={{ color: "#9fb6c9" }}>
           Click a territory with your units to start a move. Territories with movable units:{" "}
           <b>{Object.keys(request.movableUnits).length}</b>.
@@ -124,10 +130,12 @@ export function MovePanel({
       ) : (
         <>
           <div style={{ marginBottom: 6, color: "#9fb6c9" }}>
-            Route: <b style={{ color: "#ff8c2a" }}>{route.map(displayTerritory).join(" → ")}</b>
-            <div style={{ fontSize: 11, marginTop: 2 }}>
-              Click more territories to extend the path.
-            </div>
+            From: <b style={{ color: "#ff8c2a" }}>{displayTerritory(from)}</b>
+            {to ? (
+              <RouteSummary to={to} preview={preview} hasUnits={totalChosen > 0} />
+            ) : (
+              <div style={{ fontSize: 11, marginTop: 2 }}>Now click a destination territory.</div>
+            )}
           </div>
           <div
             style={{
@@ -152,6 +160,7 @@ export function MovePanel({
               const max = mu.count;
               const kind = mu.air ? "✈" : mu.sea ? "⚓" : "▮";
               const kindColor = mu.air ? "#7ec8ff" : mu.sea ? "#9fd0ff" : "#cdb98a";
+              const blocked = preview?.blockedTypes.includes(mu.type) && n > 0;
               return (
                 <div
                   key={mu.type}
@@ -171,6 +180,10 @@ export function MovePanel({
                     {mu.type} <span style={{ color: "#9fb6c9" }}>({max})</span>
                     {mu.movementLeft > 0 && (
                       <span style={{ color: "#7a8a78", fontSize: 11 }}> · move {mu.movementLeft}</span>
+                    )}
+                    {blocked && (
+                      <span title="Not enough movement to reach the destination this turn"
+                        style={{ color: "#e7a23c", fontSize: 11 }}> · can’t reach</span>
                     )}
                   </span>
                   <button onClick={() => bump(mu.type, -1, max)} style={btn} disabled={n === 0}>
@@ -195,13 +208,48 @@ export function MovePanel({
         >
           Move
         </button>
-        <button onClick={onClear} disabled={!source} style={secondaryBtn}>
+        <button onClick={onClear} disabled={!from} style={secondaryBtn}>
           Clear
         </button>
         <button onClick={onDone} style={secondaryBtn}>
           Done
         </button>
       </div>
+    </div>
+  );
+}
+
+/** The route line under "From": the previewed path + cost, a "no route" reason, or a pending hint. */
+function RouteSummary({
+  to,
+  preview,
+  hasUnits,
+}: {
+  to: string;
+  preview: MoveRequest["preview"];
+  hasUnits: boolean;
+}) {
+  if (!preview) {
+    // Destination chosen but the server hasn't echoed a route yet (or no units picked).
+    return (
+      <div style={{ fontSize: 11, marginTop: 2 }}>
+        To <b style={{ color: "#cdd6df" }}>{displayTerritory(to)}</b> —{" "}
+        {hasUnits ? "finding route…" : "pick units to preview the route."}
+      </div>
+    );
+  }
+  if (!preview.route) {
+    return (
+      <div style={{ fontSize: 11, marginTop: 2, color: "#e7a23c" }}>
+        {preview.message ?? "No legal route."}
+      </div>
+    );
+  }
+  return (
+    <div style={{ fontSize: 11, marginTop: 2 }}>
+      Route:{" "}
+      <b style={{ color: "#ff8c2a" }}>{preview.route.map(displayTerritory).join(" → ")}</b>
+      <span style={{ color: "#9fb6c9" }}> · cost {preview.cost}</span>
     </div>
   );
 }
