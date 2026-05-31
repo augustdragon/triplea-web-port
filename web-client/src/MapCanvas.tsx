@@ -173,7 +173,8 @@ export function MapCanvas({
         ctx.stroke();
       }
       const stacks = units[t.name];
-      if (stacks && stacks.length > 0) {
+      const hasUnits = stacks && stacks.length > 0;
+      if (hasUnits) {
         const total = stacks.reduce((sum, s) => sum + s.count, 0);
         const label = String(total);
         ctx.font = "bold 11px sans-serif";
@@ -184,6 +185,27 @@ export function MapCanvas({
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(label, cx, cy);
+      }
+
+      // IPC value roundel: the territory's production, in a circle per the physical board's
+      // value-in-a-circle convention. Land only (sea zones and valueless land are 0). Fixed slightly
+      // below center — a stable map element like the printed board, so only the units (centered)
+      // move; the unit badge overlaps it only on the busiest stacks.
+      if (!t.water && t.production > 0) {
+        const iy = cy + 15;
+        const r = t.production >= 10 ? 9 : 8;
+        ctx.beginPath();
+        ctx.arc(cx, iy, r, 0, Math.PI * 2);
+        ctx.fillStyle = "#e6d6a8";
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "#5c4a22";
+        ctx.stroke();
+        ctx.fillStyle = "#2a2413";
+        ctx.font = "bold 9px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(t.production), cx, iy + 0.5);
       }
     }
   }, [geometry, owners, units, view, selected, hover, highlight]);

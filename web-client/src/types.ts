@@ -12,7 +12,7 @@ export interface TerritoryGeometry {
   center: XyPoint | null;
   /** True for sea zones (rendered blue). */
   water: boolean;
-  /** Production (PU) value; 0 for sea zones and valueless land. */
+  /** Production / IPC value; 0 for sea zones and valueless land. */
   production: number;
   /** The player whose capital this is, or null. */
   capitalOf: string | null;
