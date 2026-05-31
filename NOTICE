@@ -1,0 +1,28 @@
+NOTICE
+======
+
+This repository is a MODIFIED version of TripleA, the open-source strategy
+game engine originally developed by the TripleA project and its contributors
+(https://github.com/triplea-game/triplea).
+
+The original TripleA work is licensed under the GNU General Public License,
+version 3 (GPL v3). See the accompanying LICENSE file for the full license
+text. All original copyright and author notices have been preserved.
+
+Modifications
+-------------
+
+The following modifications have been made to the original TripleA source by
+the maintainer of this repository:
+
+- "Web port" initiative: a browser-hosted React client communicating with a
+  reused, unmodified TripleA headless Java engine over WebSocket + JSON.
+  Work is carried out on the `web-port` branch.
+
+Modified by: Nathan H (August Professional Solutions)
+First modified: 2026
+
+In accordance with GPL v3 section 5, these modifications carry prominent
+notices stating that the work has been changed, along with the date of change.
+This combined work, including the modifications above, is distributed under the
+terms of the GNU General Public License, version 3.
