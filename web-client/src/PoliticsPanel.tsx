@@ -101,7 +101,7 @@ export function PoliticsPanel({
               >
                 <span style={{ color: "#ffd27a", fontSize: 14, fontWeight: 600 }}>{a.summary}</span>
                 {a.costPu > 0 && (
-                  <span style={{ color: "#9fb6c9", fontSize: 11, marginTop: 3 }}>{a.costPu} PUs</span>
+                  <span style={{ color: "#9fb6c9", fontSize: 11, marginTop: 3 }}>{a.costPu} IPCs</span>
                 )}
               </button>
             ))}

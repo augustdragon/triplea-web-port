@@ -42,7 +42,7 @@ export interface RelationshipCell {
   category: string;
 }
 
-/** One resource's amount on hand + estimated next-turn income (Resources tab cell). */
+/** One resource's amount on hand + estimated next-turn income (a Players-tab PU/token cell). */
 export interface ResourceCell {
   name: string;
   amount: number;
@@ -61,12 +61,17 @@ export interface PlayerStat {
   player: string;
   /** Alliances this power belongs to — used to render alliance total rows. */
   alliances: string[];
+  /**
+   * The engine's "optional" player flag — the passive minor powers (Pacific's Russians/French/Dutch)
+   * that never produce/move/fight. The Players tab collapses these into one "Other" group.
+   */
+  passive: boolean;
   pus: number;
   production: number;
   units: number;
   tuv: number;
   victoryCities: number;
-  /** Every (non-VP) resource's amount + income, in the engine's order (Resources tab). */
+  /** Every (non-VP) resource's amount + income, in the engine's order (PU cell + token chips). */
   resources: ResourceCell[];
 }
 

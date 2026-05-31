@@ -83,7 +83,7 @@ export function PurchasePanel({
         {request.bid ? "Bid purchase" : "Purchase"} — {request.player}
       </div>
       <div style={{ marginBottom: 8 }}>
-        Budget: <b>{request.pusAvailable}</b> PUs · spent {spent} ·{" "}
+        Budget: <b>{request.pusAvailable}</b> IPCs · spent {spent} ·{" "}
         <b style={{ color: overBudget ? "#f88" : "#7c7" }}>{remaining}</b> left
       </div>
       {request.error && (

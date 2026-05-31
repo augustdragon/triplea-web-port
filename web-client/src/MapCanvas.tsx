@@ -312,7 +312,7 @@ function Tooltip({
     >
       <div style={{ fontWeight: "bold", marginBottom: 2 }}>{displayTerritory(territory.name)}</div>
       <div style={{ color: "#9fb6c9" }}>
-        {territory.water ? "sea zone" : `land · PU ${territory.production}`}
+        {territory.water ? "sea zone" : `land · IPC ${territory.production}`}
         {territory.capitalOf ? ` · ${territory.capitalOf} capital` : ""}
       </div>
       {owner && !territory.water && (

@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import type { MapGeometry, ObjectiveItem, StateSnapshot, UnitStack } from "./types";
 import { PlayersTab } from "./PlayersTab";
-import { ResourcesTab } from "./ResourcesTab";
 import { TerritoryTab } from "./TerritoryTab";
 import { NotesTab } from "./NotesTab";
 import { RelationshipsTab } from "./RelationshipsTab";
@@ -11,7 +10,6 @@ import { ObjectivesTab } from "./ObjectivesTab";
 export const DOCK_TABS = [
   "Actions",
   "Players",
-  "Resources",
   "Relationships",
   "Objectives",
   "Notes",
@@ -143,8 +141,6 @@ export function BottomDock({
             actionsContent
           ) : activeTab === "Players" ? (
             <PlayersTab stats={snapshot?.playerStats ?? []} colors={colors} />
-          ) : activeTab === "Resources" ? (
-            <ResourcesTab stats={snapshot?.playerStats ?? []} colors={colors} />
           ) : activeTab === "Relationships" ? (
             <RelationshipsTab snapshot={snapshot} colors={colors} />
           ) : activeTab === "Objectives" ? (

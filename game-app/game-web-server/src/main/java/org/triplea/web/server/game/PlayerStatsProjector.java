@@ -46,6 +46,7 @@ public final class PlayerStatsProjector {
           new PlayerStat(
               player.getName(),
               List.copyOf(data.getAllianceTracker().getAlliancesPlayerIsIn(player)),
+              player.getOptional(),
               pus == null ? 0 : player.getResources().getQuantity(pus),
               production(data, player, puMultiplier),
               unitCount(data, player),
