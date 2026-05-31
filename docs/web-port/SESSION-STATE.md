@@ -382,3 +382,38 @@ use a shared `playerGroups.groupByAlliance`. Purchase list grouped into Land/Air
 
 **Next options:** 3f (Pacific naval/air queries), 3g (hotseat), the deferred 3h polish (focus-stealing,
 Technology, minimap), or re-run/extend the Playwright suite.
+
+---
+
+## ✅ Post-3h (movement redesign + map/UI polish) DONE — verified live (session 2026-05-31)
+Commits `3663239da`, `c8271f740`, `fc5b96a29`, `0fcedfa6b`, `4c19cd9f5`, `3f195e14b` on `web-port`.
+
+- **Players + Resources tabs merged** into one **Players** tab: IPC cell carries inline income + token chips;
+  passive minors (Russians/French/Dutch) collapse into one **"Other"** group via a new server `passive` flag
+  (`GamePlayer.getOptional()`); Allies subtotal is accounting-style. **All UI "PU(s)" → "IPC"** (engine resource
+  stays `"PUs"`; display-only).
+- **Map-data fixes:** dropped the misspelled `Suiyuyan` polygon (a duplicate overdrawing the Chinese-owned
+  `Suiyuan` as empty neutral — user-reported), and fold the corner decoration boxes into Yukon as a filler
+  rectangle. `MapGeometryConverter` now drops center-duplicate orphans and folds standalone decoration into the
+  nearest land territory. ⚠ `geometry.json` is **gitignored** — re-export after pulling (absolute output path).
+- **IPC value roundels** on every land territory (tan circle below center; fixed position).
+- **⭐ Click-destination movement** (replaces step-by-step path clicks): click source → pick units → click any
+  destination; the server auto-paths via the engine's `MoveValidator.getBestRoute` (the same routing the Swing
+  client uses) and **previews** the route (highlighted path + cost + per-type "can't reach") before committing.
+  Unit-aware (air re-routes over water). The preview rides the existing await loop as a **re-prompt** (a
+  `{previewRoute}` reply → `previewMove` → re-await `move` with `MoveRequest.preview` set, like `error`); the
+  move replies `{from,to,units}` → `getBestRoute` → existing `buildMove`/`performMove`. New record `MovePreview`.
+- **Bug fix:** transported cargo (0 own movement, rides the transport) was wrongly flagged "can't reach";
+  `previewMove` now skips `Matches.unitIsBeingTransported()` units in the cost + reachability check.
+- **Deferred (movement):** mixed-reachability on Move (engine rejects the whole move if some units can't reach —
+  Swing silently moves only the reachable subset). No automated test for the move/preview path yet (needs a
+  loaded-transport fixture; verified live). Lessons added: re-prompt-as-sub-query, and exempt carried units from
+  movement checks.
+
+## ⟵ NEXT (user-requested 2026-05-31): Phase 4 — multiplayer
+The user will do some manual testing of the new movement first, then wants **multiplayer functionality** next
+session. Groundwork is in place: `WebDecisionBridge` is already `requestId`-keyed. The blocker to solve (noted
+since 3g): today there's ONE game + one human seat, and `GameWebSocketServer` **broadcasts every decision to all
+connected clients** (first reply wins), with **no client WS auto-reconnect**. Multiplayer = seat-claiming +
+route each seat's requests only to the client that owns that seat (spectators get `state` only) + auto-reconnect
+re-sending the outstanding request *for that seat*. See `tasks/todo.md` Phase 4 for the step list.

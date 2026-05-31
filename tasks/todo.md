@@ -254,11 +254,66 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
   with "Declare war on French" available again; reset-while-parked-on-a-decision works and is repeatable; server
   stays live (no JVM exit). `:game-web-server:check` + `tsc` clean.
 
-### Phase 4 — LAN / ZeroTier multiplayer
-- [ ] Seat-claiming / session management (multiple browsers, one server)
-- [ ] Route each seat's queries to the owning client; spectators get state only
+#### Post-3h — Movement redesign + map/UI polish ✅ verified live (session 2026-05-31)
+- [x] **Players + Resources tabs merged → one "Players" tab; IPC labels.** Folded Resources into Players:
+  the IPC cell carries inline income (`26 (+36)`) and token chips (kamikaze/tech) ride beside the holder's
+  name; passive minors (Russians/French/Dutch) collapse into one **"Other"** group via a new server-side
+  `passive` flag (engine's `GamePlayer.getOptional()` — they're `optional="true"` in the map XML); the Allies
+  block gets an accounting-style subtotal (flush-left label, rule above the figures). All user-facing "PU(s)"
+  relabeled **IPC** (the engine resource stays `"PUs"`; display-only — `Constants.PUS` and the `PUS` match
+  constant unchanged). Objectives/Notes HTML left verbatim (map-authored text). Commit `3663239da`.
+- [x] **Map-data fix — `Suiyuyan` duplicate + decoration boxes.** `polygons.txt`/`centers.txt` had a
+  misspelled `Suiyuyan` with the *same* shape/center as the Chinese-owned `Suiyuan`, overdrawing it as an
+  empty neutral (user-reported), plus standalone corner `Box1/2/3`. `MapGeometryConverter` now (a) **drops** a
+  geometry-only polygon that duplicates a real territory's center, and (b) **folds** standalone decoration into
+  the nearest land territory as one bounding-box filler rectangle (→ Yukon) so the corner paints that
+  territory's color instead of leaving a notch. Pure helpers, unit-tested. Commits `c8271f740`, `fc5b96a29`.
+  ⚠ `web-client/public/geometry.json` is **gitignored** — re-run `:game-web-server:exportGeometry "<mapFolder>
+  <absOut> <gameXml>"` (output path must be ABSOLUTE — it resolves relative to the module dir) after a pull.
+- [x] **IPC value roundels on the map.** Each land territory with production draws its IPC value in a fixed
+  tan circle just below center (physical-board "value in a circle" convention); sea zones / 0-value land show
+  none. Unit-count badge stays at center; roundel position is **fixed** (doesn't hop as units come/go — a
+  stable map element). Commit `0fcedfa6b`.
+- [x] **⭐ Click-destination movement with live preview (replaces step-by-step path building).** Click a
+  source → pick units → click any destination; the server finds the best legal route via the engine's
+  `MoveValidator.getBestRoute(start,end,data,player,units,!isAirborneMove)` — the SAME routing the Swing
+  `MovePanel` uses — and echoes it back as a `preview` the client highlights, with movement cost + a per-type
+  "can't reach" warning, before the player commits. **Unit-aware** (air re-routes over water for a shorter
+  path; recomputed when the unit selection changes). The preview rides the existing decision await loop as a
+  **re-prompt**: a `{previewRoute:{from,to,units}}` reply → `WebPlayer.previewMove` computes → `continue` to
+  re-await `"move"` with `MoveRequest.preview` set (exactly how the `error` field re-prompts) — no new bridge
+  channel needed (the bridge is strictly requestId-keyed request/reply, see `WebDecisionBridge`). The move
+  itself replies `{from,to,units}`; `submitMove` runs `getBestRoute` → existing `buildMove`/`performMove`
+  (transport loads, validation, undo all unchanged). New record `MovePreview`. Commit `4c19cd9f5`. Verified
+  live: Manchuria→Kiangsu auto-pathed 4 territories; switching to fighters re-routed Manchuria→Sea Zone 19→
+  Kiangsu; move executed + undo recorded.
+- [x] **🐛 Transported cargo no longer flagged "can't reach".** The preview compared each unit's *own*
+  movement to the route cost; cargo aboard a transport has 0 movement (it rides along), so loaded inf/arty were
+  wrongly flagged (user-reported). `previewMove` now skips `Matches.unitIsBeingTransported()` units in both the
+  cost and the can't-reach check (the same matcher `movableMatch` uses to surface cargo). Commit `3f195e14b`.
+  Verified live: loaded inf+arty onto a transport, moved the transport — cargo not flagged, carried to the
+  destination.
+- [ ] **Deferred (movement):** mixed-reachability on **Move** — if you include units that can't *all* reach,
+  the engine rejects the whole move (the "can't reach" tag warns; you deselect manually). The Swing client
+  silently moves only the reachable subset (`MovableUnitsFilter`) — consider matching that, or disabling Move
+  while a blocked type is selected. No automated test yet for the click-destination move path or `previewMove`
+  (would need a loaded-transport game fixture; verified live instead); the Playwright suite predates this.
+
+### Phase 4 — LAN / ZeroTier multiplayer  ⟵ NEXT (user requested for next session, 2026-05-31)
+> **Where to start:** the groundwork is already laid — `WebDecisionBridge` is **requestId-keyed**, so per-seat
+> routing is the natural extension. The known blocker (noted in 3g): today there's ONE game + one human seat,
+> and `GameWebSocketServer` **broadcasts every decision request to all connected clients** (whoever replies
+> first drives), and the client has **no WS auto-reconnect**. Multiplayer = give each `WebPlayer` seat its own
+> identity, route its requests only to the client that claimed that seat, and let other clients spectate.
+- [ ] Seat-claiming / session management (multiple browsers, one server) — a client claims a power; the server
+      tracks seat→connection. Likely a `{type:"control",action:"claimSeat",player}` message + a lobby/seat screen.
+- [ ] Route each seat's queries to the owning client (the bridge already carries a `requestId`; add the seat's
+      identity so `GameWebSocketServer` sends a request only to that seat's connection); spectators get `state` only.
+- [ ] WS auto-reconnect on the client + re-send the outstanding request for *that seat* on reconnect (the
+      existing catch-up re-sends the latest broadcast request, which is wrong once requests are seat-targeted).
 - [ ] Lightweight auth / room code
 - [ ] **Exit check:** two machines play Pacific 1940 over LAN, then over ZeroTier
+- Related: 3g hotseat (pass-and-play on one machine) shares the seat-routing mechanism — may fall out of this.
 
 ### Phase 5 — Breadth & durability
 - [ ] Run converter across more maps; fix feature gaps (relief blending, scroll-wrap, markers)
