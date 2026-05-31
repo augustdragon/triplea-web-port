@@ -378,8 +378,13 @@ public final class WebPlayer extends AbstractBasePlayer {
     final List<String> names = best.getAllTerritories().stream().map(Territory::getName).toList();
     // Movement cost is per-unit (terrain-weighted). Flag any chosen type where no unit has the
     // movement left to make the whole trip; the engine does the exact per-unit check on submit.
+    // Cargo aboard a transport rides along with it — its own (zero) movement doesn't gate the trip,
+    // so it's excluded from both the cost and the "can't reach" check.
     final Map<String, List<Unit>> byType = new TreeMap<>();
     for (final Unit unit : units) {
+      if (Matches.unitIsBeingTransported().test(unit)) {
+        continue;
+      }
       byType.computeIfAbsent(unit.getType().getName(), k -> new ArrayList<>()).add(unit);
     }
     final List<String> blocked = new ArrayList<>();
