@@ -1,6 +1,8 @@
 package org.triplea.web.server.map;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasEntry;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
@@ -8,6 +10,7 @@ import static org.hamcrest.Matchers.notNullValue;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class MapGeometryConverterTest {
@@ -56,6 +59,32 @@ class MapGeometryConverterTest {
     assertThat(json, notNullValue());
     assertThat("includes territory names", json.contains("Alpha"), is(true));
     assertThat("includes pixel coordinates", json.contains("\"x\":10"), is(true));
+  }
+
+  @Test
+  void dropsNonTerritoryPolygonsButKeepsRealOnes() {
+    // The mislabeled duplicate "Suiyuyan" and the decorative "Box1" aren't game territories -> drop.
+    // Real territories "Suiyuan" and "Yukon Territory" are kept.
+    final Set<String> polygonNames =
+        Set.of("Suiyuan", "Suiyuyan", "Box1", "Yukon Territory");
+    final Set<String> realNames = Set.of("Suiyuan", "Yukon Territory");
+
+    final Set<String> dropped =
+        MapGeometryConverter.nonTerritoryPolygonNames(polygonNames, realNames);
+
+    assertThat(dropped, containsInAnyOrder("Suiyuyan", "Box1"));
+  }
+
+  @Test
+  void dropsNothingWhenNoGameDataToJudgeAgainst() {
+    // The geometry-only path passes no real-territory names; the converter then keeps every polygon,
+    // so this helper isn't consulted. Documented here: an empty realNames means "judge nothing kept".
+    final Set<String> polygonNames = Set.of("A", "B");
+
+    // Caller guards on game data; with an empty realNames every name would be "extra" — which is why
+    // readTerritories only consults this when game data exists.
+    assertThat(
+        MapGeometryConverter.nonTerritoryPolygonNames(polygonNames, polygonNames), is(empty()));
   }
 
   private static TerritoryGeometry findTerritory(final MapGeometry geometry, final String name) {

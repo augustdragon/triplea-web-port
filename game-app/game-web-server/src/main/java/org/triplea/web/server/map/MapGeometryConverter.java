@@ -10,8 +10,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import javax.annotation.Nullable;
 import org.triplea.util.PointFileReaderWriter;
 
@@ -72,16 +74,30 @@ public final class MapGeometryConverter {
     final Map<String, Point> centersByTerritory =
         Files.exists(centersFile) ? PointFileReaderWriter.readOneToOne(centersFile) : Map.of();
 
+    // Polygons the game data doesn't recognize as territories — non-territory extras to drop (below).
+    final Set<String> realNames = realTerritoryNames(polygonsByTerritory.keySet(), gameData);
+    final Set<String> extraNames =
+        gameData == null
+            ? Set.of()
+            : nonTerritoryPolygonNames(polygonsByTerritory.keySet(), realNames);
+
     final List<TerritoryGeometry> territories = new ArrayList<>();
     for (final var entry : polygonsByTerritory.entrySet()) {
       final String name = entry.getKey();
+      // Drop polygons the game data doesn't know as territories — non-territory extras in
+      // polygons.txt: a mislabeled duplicate (WW2 Pacific's "Suiyuyan", an identical-shape copy of
+      // the Chinese-owned "Suiyuan", which would mask the real territory beneath it) and the
+      // decorative corner boxes ("Box1".."Box3"). Both render as stray ownerless neutrals otherwise.
+      // The geometry-only path (no game data) can't judge, so extraNames is empty and all are kept.
+      if (extraNames.contains(name)) {
+        continue;
+      }
       final List<List<XyPoint>> polygons = new ArrayList<>();
       for (final Polygon polygon : entry.getValue()) {
         polygons.add(toPoints(polygon));
       }
       final Point center = centersByTerritory.get(name);
-      // Semantic attributes come from the game data when available. Geometry-only territories
-      // (in polygons.txt but not the game, e.g. UI decoration boxes) get safe defaults.
+      // Semantic attributes come from the game data when available; geometry-only polygons default.
       final Territory territory =
           gameData == null ? null : gameData.getMap().getTerritoryOrNull(name);
       final boolean water = territory != null && territory.isWater();
@@ -102,6 +118,38 @@ public final class MapGeometryConverter {
               capitalOf));
     }
     return territories;
+  }
+
+  /** Which of {@code polygonNames} the game data recognizes as territories (empty if no game). */
+  private static Set<String> realTerritoryNames(
+      final Set<String> polygonNames, @Nullable final GameData gameData) {
+    if (gameData == null) {
+      return Set.of();
+    }
+    final Set<String> names = new HashSet<>();
+    for (final String name : polygonNames) {
+      if (gameData.getMap().getTerritoryOrNull(name) != null) {
+        names.add(name);
+      }
+    }
+    return names;
+  }
+
+  /**
+   * Polygon names the game data doesn't recognize as territories — non-territory extras in
+   * polygons.txt (mislabeled duplicates like "Suiyuyan", and decorative corner boxes "Box1".."Box3")
+   * that shouldn't render as map regions. Pure function of its inputs, so it's unit-tested without a
+   * full game-data fixture.
+   */
+  static Set<String> nonTerritoryPolygonNames(
+      final Set<String> polygonNames, final Set<String> realNames) {
+    final Set<String> extras = new HashSet<>();
+    for (final String name : polygonNames) {
+      if (!realNames.contains(name)) {
+        extras.add(name);
+      }
+    }
+    return extras;
   }
 
   /** Serializes a {@link MapGeometry} to JSON for delivery to the web client. */
