@@ -32,7 +32,11 @@ public final class WebPlayableServer {
 
     final GameWebSocketServer server = new GameWebSocketServer(port);
     server.start();
-    new GameController(gameXml, maxRounds, stepDelayMs, server).start();
+    // Saves persist across restarts (the point of resume), so this is a stable per-user dir, not a
+    // temp folder. Becomes a per-game key in the store once the control plane / multi-game lands.
+    final SaveStore saveStore =
+        new SaveStore(Path.of(System.getProperty("user.home"), ".triplea-web", "saves"));
+    new GameController(gameXml, maxRounds, stepDelayMs, server, saveStore).start();
     log.info(
         "Playable {} — connect clients to ws://<host>:{} and claim seats",
         gameXml.getFileName(),

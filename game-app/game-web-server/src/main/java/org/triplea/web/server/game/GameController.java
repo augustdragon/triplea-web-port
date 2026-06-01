@@ -53,6 +53,7 @@ public final class GameController {
   private final int maxRounds;
   private final long stepDelayMs;
   private final GameWebSocketServer server;
+  private final SaveStore saveStore;
   // The map's objectives.properties (static per map); empty if the map has none.
   private final Properties objectivesProps;
 
@@ -70,16 +71,20 @@ public final class GameController {
   private volatile @Nullable SeatPlan plan;
   private volatile String phase = "setup";
   private volatile @Nullable Session current;
+  // The save slot for this game (derived from the game name); the autosave target.
+  private volatile @Nullable String saveSlot;
 
   public GameController(
       final Path gameXml,
       final int maxRounds,
       final long stepDelayMs,
-      final GameWebSocketServer server) {
+      final GameWebSocketServer server,
+      final SaveStore saveStore) {
     this.gameXml = gameXml;
     this.maxRounds = maxRounds;
     this.stepDelayMs = stepDelayMs;
     this.server = server;
+    this.saveStore = saveStore;
     this.objectivesProps = loadObjectivesProperties(gameXml);
   }
 
@@ -99,6 +104,7 @@ public final class GameController {
     }
     gameData = data;
     plan = newPlan;
+    saveSlot = slotFor(data.getGameName());
     phase = "setup";
     server.resetForNewGame();
     publishSeats();
@@ -237,6 +243,24 @@ public final class GameController {
     server.publishObjectives(GSON.toJson(envelope));
   }
 
+  /**
+   * Persist the current game state to the save slot (autosave). Called on the game-loop thread
+   * between steps, where the {@code GameData} is quiescent — {@code toBytes()} produces a
+   * forSaveGame() blob (delegates + history) that resumes mid-game. Crash recovery loses at most an
+   * in-progress (un-committed) step, never a completed one. I/O errors are swallowed by the store.
+   */
+  private void autosave(final GameData data) {
+    final String slot = saveSlot;
+    if (slot != null) {
+      saveStore.write(slot, data.toBytes());
+    }
+  }
+
+  /** A filesystem-safe save slot from the game name. */
+  private static String slotFor(final @Nullable String gameName) {
+    return gameName == null ? "autosave" : gameName.replaceAll("[^a-zA-Z0-9._-]", "_");
+  }
+
   /** A display label for a claiming connection: the client's chosen name, else a fallback. */
   private static String ownerLabel(final WebSocket conn, final JsonObject msg) {
     final String name = optString(msg, "name");
@@ -299,6 +323,11 @@ public final class GameController {
       try {
         server.publishState(GSON.toJson(StateProjector.project(game.getData())));
         publishObjectives(game.getData());
+        // Resume a loaded game (runs the saved step) or, for a fresh game, set the resume flag and
+        // start persistent delegates. Our loop steps via runNextStep(), so the engine's own
+        // startGame() — which normally does this — never runs; we do it here instead.
+        game.setUpGameForRunningSteps();
+        autosave(game.getData());
         int steps = 0;
         while (alive
             && !game.isGameOver()
@@ -310,6 +339,7 @@ public final class GameController {
           }
           server.publishState(GSON.toJson(StateProjector.project(game.getData())));
           publishObjectives(game.getData());
+          autosave(game.getData()); // flush after every committed step (glacial turn rate → cheap)
           steps++;
           Thread.sleep(stepDelayMs);
         }
