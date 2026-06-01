@@ -306,16 +306,56 @@ piece that touches the sensitive engine-adjacent decision path, so it's sequence
 
 ---
 
-## 9. Tech-stack decisions
+## 9. Tech stack
 
-| Decision | Recommendation | Rationale / alternative |
+The whole stack, pinned. Two tiers: **inherited** (already proven in Phases 0–3 — we don't
+churn what works) and **new** (added for the control plane / hosting). Each new choice carries
+its reason. The bias throughout: reuse what the repo already ships, stay right-sized for a solo
+maintainer, and don't take a heavy dependency where a light one covers the need.
+
+### Inherited — already in the web port, unchanged
+
+| Layer | Choice | Why it stays |
 |---|---|---|
-| Control-plane language | **Java** | Direct engine save-API access; one fewer language. Alt: Node/TS matches the frontend but can't read engine saves. Strong lean to Java. |
-| Database | **Postgres** | Already the lobby DB; `.docker/` scaffolding + Flyway convention in-repo. |
-| Migrations | **Flyway**, `V<compat>.<feature>.<patch>__desc.sql` | Matches existing convention; pure SQL, no ORM magic. |
-| Game-instance isolation | **Docker container per game** | Forced by §2; control plane spawns/reaps via Docker API. |
-| Hosting (this phase) | **Docker Compose on the existing Linux VM** | Lowest cost for a private group; scales to dozens before needing k8s. Azure swap is clean later. |
-| Save store | **Docker volume now → R2/S3 later** | Standards say "upload to object storage, never the app server." Pragmatic on one VM now; R2 swap is a clean seam. (Decision in §10.) |
+| Frontend | **React 18.3 + Vite 5.4 + TypeScript 5.6 + Canvas 2D** | Proven across Phases 1–3 rendering the live Pacific board; no reason to churn. TS strict mode per standards. |
+| Game engine | **Java 21 `game-core`, unmodified** | The whole point of the port — 20+ years of correct rules. Hard constraint. |
+| Game-WS transport | **`org.java-websocket` 1.6.0** | Already drives the game JVM's WebSocket (Phases 2–3). The per-game JVMs keep it — it works and is isolated from the control plane. |
+| JSON | **gson 2.14.0** | Already the project's JSON lib (`game-web-server` uses it). One JSON library end-to-end. |
+| Boilerplate | **Lombok 1.18.46** | Already used project-wide (`@Builder`/`@Slf4j` on the DTOs). |
+| Build | **Gradle 9.5.1**, flat project paths | Existing build; new modules slot in as `:game-control-plane` etc. |
+
+### New — control plane
+
+| Concern | Choice | Why |
+|---|---|---|
+| Language | **Java** | Only Java can call the engine's save API (`GameData.toBytes` / `GameDataManager.loadGame`) to inspect/restore games. Keeping the control plane in the same language as the engine avoids a second runtime and a serialization bridge. (Node/TS would match the frontend but can't read engine saves.) |
+| Web framework | **Javalin** (embedded Jetty) | Right-sized: one lightweight server hosts **both** the REST API *and* WebSocket (lobby + routing) on Jetty, so we don't run a separate WS stack for the control plane. Minimal boilerplate and no application-server ceremony vs **Spring Boot** — the better fit for a solo maintainer and a lean Gradle/Java codebase that uses no Spring today. Migration path is gentle: it's the same hand-rolled style as the existing `org.java-websocket` code, just with routing and lifecycle handled for us. |
+| OAuth | **pac4j** (`pac4j-oauth` + Javalin integration) | Token exchange, state/PKCE validation, and provider quirks (Google/Discord) are security-sensitive and easy to get subtly wrong by hand. pac4j ships vetted OAuth2/OIDC clients and a Javalin adapter — far less bespoke security code than a nimbus hand-roll. |
+| Sessions | **httpOnly + Secure + SameSite cookie carrying a stateless signed JWT** | Standards mandate httpOnly cookies (never localStorage). Stateless JWT = no session table to manage; short TTL (15–60 min idle) plus the allow-list check on each request covers revocation for a private group. |
+
+### New — data
+
+| Concern | Choice | Why |
+|---|---|---|
+| Database | **PostgreSQL** | Already the lobby DB; `.docker/` scaffolding present. Relational fits the `users`/`games`/`seats`/`saves` model cleanly; JSONB available where a blob is easier. |
+| Migrations | **Flyway** (`V<compat>.<feature>.<patch>__desc.sql`) | The repo's existing convention. Pure SQL — auditable, explainable, no ORM magic. |
+| DB access | **JDBI 3** over JDBC | Satisfies the "parameterized queries or ORM, never string-concatenate" standard without a heavy ORM. Thin SQL-on-objects mapping that pairs naturally with Flyway-managed, hand-written schema. (jOOQ — type-safe codegen — is the heavier alternative if we later want compile-time SQL checks.) |
+| Connection pooling | **HikariCP** | Standards require pooling (never a raw connection per request). The de-facto fastest/standard JDBC pool. |
+
+### New — infrastructure & ops
+
+| Concern | Choice | Why |
+|---|---|---|
+| Game-instance isolation | **Docker container per game** | Forced by §2 (engine process-global statics); also gives crash containment. Control plane spawns/reaps via the Docker API. |
+| Hosting (this phase) | **Docker Compose on the existing Linux VM** | Lowest cost for a private group; scales to dozens of users before k8s is warranted. Clean swap to Azure (Container Apps / a VM) later — the user's Azure background makes that a low-risk future move. |
+| Save store | **Docker volume now → R2/S3 later** | Standards say object storage, never the app server. A volume is pragmatic on one VM today; the storage access is a seam so the R2 swap is isolated. |
+| Structured logging | **SLF4J + Logback + `logstash-logback-encoder` (JSON)** | SLF4J/Logback are already in the stack (`@Slf4j` in use); adding a JSON encoder satisfies the "structured JSON logs on all routes/error paths" standard with zero new logging framework. |
+| Health check | **Javalin `/health`** route verifying DB connectivity (200/503) | Required by standards; trivial in Javalin. |
+| Rate limiting | **Bucket4j** (token bucket) on API routes | Standards require rate limiting (token-bucket/sliding-window) on every route; Bucket4j is the standard token-bucket lib for the JVM. |
+| Web Push ("your turn") | **`web-push` (VAPID)** — *wired in P4.5* | Out-of-site turn notifications are essential for multi-day play (§8). VAPID is the browser Web Push standard — no third-party push service or vendor lock-in. Pinned now, implemented in P4.5. |
+
+> **Net new dependencies to add:** Javalin, pac4j, JDBI 3, HikariCP, logstash-logback-encoder,
+> Bucket4j, a JWT lib, and (in P4.5) web-push. Everything else is already in the catalog.
 
 ---
 
