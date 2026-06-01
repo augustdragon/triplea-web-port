@@ -33,17 +33,26 @@ class SeatPlanTest {
   void setUp() {
     data = TestMapGameData.REVISED.getGameData();
     plan = new SeatPlan(data);
+    // Selectable seats exclude optional/inert minors (they aren't shown in the roster).
     final List<String> names =
-        data.getPlayerList().getPlayers().stream().map(GamePlayer::getName).toList();
+        data.getPlayerList().getPlayers().stream()
+            .filter(p -> !p.getOptional())
+            .map(GamePlayer::getName)
+            .toList();
     seatA = names.get(0);
     seatB = names.get(1);
   }
 
   @Test
-  void rosterListsEverySeatDefaultedToOpenWithFastAi() {
+  void rosterListsSelectableSeatsExcludingOptionalMinors() {
     final SeatRoster roster = plan.toRoster("setup");
     assertEquals("setup", roster.phase());
-    assertEquals(data.getPlayerList().getPlayers().size(), roster.seats().size());
+    final long selectable =
+        data.getPlayerList().getPlayers().stream().filter(p -> !p.getOptional()).count();
+    assertEquals(selectable, roster.seats().size(), "optional/inert minors are excluded");
+    assertTrue(
+        roster.seats().stream().noneMatch(SeatRoster.Seat::optional),
+        "no optional seat appears in the roster");
     final SeatRoster.Seat a = find(roster, seatA);
     assertNull(a.owner(), "seats start open (no human owner)");
     assertEquals(PlayerTypes.FAST_AI.getLabel(), a.aiType(), "default AI is Fast");

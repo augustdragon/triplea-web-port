@@ -11,6 +11,7 @@ import type {
   PoliticsRequest,
   PurchaseRequest,
   RetreatRequest,
+  SeatRoster,
   StateSnapshot,
 } from "./types";
 import { MapCanvas } from "./MapCanvas";
@@ -23,6 +24,7 @@ import { RetreatPanel } from "./RetreatPanel";
 import { PlacePanel } from "./PlacePanel";
 import { Sidebar } from "./Sidebar";
 import { BottomDock, type DockTab } from "./BottomDock";
+import { SeatSelect } from "./SeatSelect";
 
 // The game WebSocket server (see :game-web-server:runSpectator / runPlayable). Same host as the
 // page, so it works over LAN/ZeroTier too.
@@ -55,6 +57,11 @@ export default function App() {
   // A territory to pan the map to (from the air-can't-land warning pills); nonce re-triggers on
   // a repeat click of the same territory.
   const [airFocus, setAirFocus] = useState<{ name: string; nonce: number } | null>(null);
+  // Seat assignment (setup phase). `mySeat`/`myName` persist so a reload re-claims the same seat.
+  const [roster, setRoster] = useState<SeatRoster | null>(null);
+  const [mySeat, setMySeat] = useState<string | null>(() => sessionStorage.getItem("seat"));
+  const [myName, setMyName] = useState<string>(() => sessionStorage.getItem("name") ?? "");
+  const [spectating, setSpectating] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -70,16 +77,33 @@ export default function App() {
   useEffect(() => {
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
-    ws.onopen = () => setWsStatus("live");
+    ws.onopen = () => {
+      setWsStatus("live");
+      // Reconnect/reload: re-claim the seat we held so decisions keep routing to us.
+      const saved = sessionStorage.getItem("seat");
+      if (saved) {
+        ws.send(
+          JSON.stringify({
+            type: "control",
+            action: "claimSeat",
+            seat: saved,
+            name: sessionStorage.getItem("name") || undefined,
+          }),
+        );
+      }
+    };
     ws.onmessage = (e) => {
       const env = JSON.parse(e.data) as
         | { type: "state"; snapshot: StateSnapshot }
         | ({ type: "request" } & DecisionRequest)
         | ({ type: "battle" } & BattleEvent)
         | { type: "notes"; html: string }
-        | { type: "objectives"; items: ObjectiveItem[] };
+        | { type: "objectives"; items: ObjectiveItem[] }
+        | { type: "seats"; roster: SeatRoster };
       if (env.type === "state") {
         setSnapshot(env.snapshot);
+      } else if (env.type === "seats") {
+        setRoster(env.roster);
       } else if (env.type === "request") {
         setRequest(env);
       } else if (env.type === "battle") {
@@ -122,8 +146,37 @@ export default function App() {
     }
     setRequest(null);
     setBattleLog([]);
+    setSpectating(false);
     resetMove();
     resetPlace();
+  }
+
+  // ---- Seat setup controls (setup phase). ----
+  function sendControl(msg: object) {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "control", ...msg }));
+    }
+  }
+  function changeName(name: string) {
+    setMyName(name);
+    sessionStorage.setItem("name", name);
+  }
+  function claimSeat(seat: string) {
+    sendControl({ action: "claimSeat", seat, name: myName || undefined });
+    setMySeat(seat);
+    sessionStorage.setItem("seat", seat);
+  }
+  function releaseSeat(seat: string) {
+    sendControl({ action: "releaseSeat", seat });
+    setMySeat(null);
+    sessionStorage.removeItem("seat");
+  }
+  function setSeatType(seat: string, playerType: string) {
+    sendControl({ action: "setSeatType", seat, playerType });
+  }
+  function startGame() {
+    sendControl({ action: "startGame" });
   }
 
   // Politics: commit the staged set of declarations (possibly empty) and end the phase. The server
@@ -258,8 +311,29 @@ export default function App() {
     return <div style={{ color: "#ccc", padding: 16, fontFamily: "sans-serif" }}>Loading map…</div>;
   }
 
+  // Setup phase: choose seats before the game starts (unless the user opted to just watch).
+  if (roster && roster.phase === "setup" && !spectating) {
+    return (
+      <SeatSelect
+        roster={roster}
+        mySeat={mySeat}
+        myName={myName}
+        colors={geometry.playerColors}
+        onNameChange={changeName}
+        onClaim={claimSeat}
+        onRelease={releaseSeat}
+        onSetType={setSeatType}
+        onStart={startGame}
+        onSpectate={() => setSpectating(true)}
+      />
+    );
+  }
+
   // Live owners/units from the server when connected; otherwise the static initial ownership.
   const owners = snapshot?.owners ?? geometry.initialOwners ?? {};
+  // Whose turn it is when it isn't ours (no pending decision for our seat) — a "waiting" hint.
+  const waitingFor =
+    roster?.phase === "running" && !request ? (snapshot?.currentPlayer ?? null) : null;
   const units = snapshot?.units ?? {};
   // The territories to outline during a move: the server's previewed route (when it matches the
   // current source/destination), else just the chosen source.
@@ -289,6 +363,32 @@ export default function App() {
         }
         focus={request?.kind === "airWarning" ? airFocus : null}
       />
+      {(request || waitingFor || mySeat || spectating) && (
+        <div
+          style={{
+            position: "fixed",
+            top: 8,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: request ? "#163" : "#222",
+            border: "1px solid #444",
+            color: request ? "#bfb" : "#bbb",
+            padding: "4px 14px",
+            borderRadius: 14,
+            fontSize: 13,
+            zIndex: 20,
+            pointerEvents: "none",
+          }}
+        >
+          {request
+            ? `▶ Your turn — ${request.seat}`
+            : waitingFor
+              ? `⏳ Waiting for ${waitingFor}…`
+              : mySeat
+                ? `Seated as ${mySeat}`
+                : "Spectating"}
+        </div>
+      )}
       <Sidebar
         wsStatus={wsStatus}
         snapshot={snapshot}

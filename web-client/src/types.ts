@@ -253,9 +253,39 @@ export interface AirWarningRequest {
   territories: string[];
 }
 
+// ---- Seat assignment (setup phase: {type:"seats", roster}). ----
+
+/** One nation/seat in the setup roster (mirrors the server's SeatRoster.Seat / engine PlayerListing). */
+export interface SeatInfo {
+  name: string;
+  /** The connected human controlling it, or null = open (runs as `aiType` at launch). */
+  owner: string | null;
+  /** The AI label this seat runs as if not human-claimed at launch. */
+  aiType: string;
+  enabled: boolean;
+  canDisable: boolean;
+  /** Passive/optional minor power (e.g. Pacific's French/Dutch). */
+  optional: boolean;
+  alliances: string[];
+}
+
+/**
+ * The seat-assignment roster, broadcast as {type:"seats", roster}. `phase` is "setup" (assigning
+ * seats, no game yet → the client shows the seat-select screen) or "running" (the game UI shows).
+ * `aiTypes` is the catalog of selectable AI labels for the per-seat dropdown.
+ */
+export interface SeatRoster {
+  phase: string;
+  gameName: string;
+  seats: SeatInfo[];
+  aiTypes: string[];
+}
+
 /** A decision the active human seat must answer. payload shape depends on kind. */
 export interface DecisionRequest {
   requestId: string;
+  /** The nation this decision belongs to — the client only receives requests for its own seat. */
+  seat: string;
   kind: string;
   payload:
     | PoliticsRequest

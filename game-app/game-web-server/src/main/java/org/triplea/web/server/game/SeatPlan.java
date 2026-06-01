@@ -133,6 +133,12 @@ final class SeatPlan {
     final List<SeatRoster.Seat> list = new ArrayList<>();
     for (final Map.Entry<String, SeatState> e : seats.entrySet()) {
       final SeatState s = e.getValue();
+      // Optional/inert minors (e.g. Pacific's Russians/French/Dutch) aren't selectable seats —
+      // they never produce/move/fight, so they're hidden from the picker. buildPlayers still
+      // creates an (inert) AI player for them; the engine needs a Player for every nation.
+      if (s.optional) {
+        continue;
+      }
       list.add(
           new SeatRoster.Seat(
               e.getKey(), s.owner, s.aiType, s.enabled, s.canDisable, s.optional, s.alliances));
