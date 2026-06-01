@@ -130,6 +130,10 @@ final class SeatPlan {
   }
 
   SeatRoster toRoster(final String phase) {
+    return toRoster(phase, null);
+  }
+
+  SeatRoster toRoster(final String phase, final @Nullable SeatRoster.SavedGame savedGame) {
     final List<SeatRoster.Seat> list = new ArrayList<>();
     for (final Map.Entry<String, SeatState> e : seats.entrySet()) {
       final SeatState s = e.getValue();
@@ -143,6 +147,6 @@ final class SeatPlan {
           new SeatRoster.Seat(
               e.getKey(), s.owner, s.aiType, s.enabled, s.canDisable, s.optional, s.alliances));
     }
-    return new SeatRoster(phase, gameName, list, aiLabels);
+    return new SeatRoster(phase, gameName, list, aiLabels, savedGame);
   }
 }

@@ -17,6 +17,7 @@ interface Props {
   onRelease: (seat: string) => void;
   onSetType: (seat: string, type: string) => void;
   onStart: () => void;
+  onResume: () => void;
   onSpectate: () => void;
 }
 
@@ -30,6 +31,7 @@ export function SeatSelect({
   onRelease,
   onSetType,
   onStart,
+  onResume,
   onSpectate,
 }: Props) {
   const claimed = roster.seats.filter((s) => s.owner != null).length;
@@ -108,12 +110,23 @@ export function SeatSelect({
           <button style={btn} onClick={onSpectate}>
             Watch only
           </button>
-          <button style={primaryBtn} onClick={onStart}>
-            Start game
+          {roster.savedGame && (
+            <button
+              style={primaryBtn}
+              onClick={onResume}
+              title={`Resume at ${roster.savedGame.step}`}
+            >
+              Resume — round {roster.savedGame.round}
+            </button>
+          )}
+          <button style={roster.savedGame ? btn : primaryBtn} onClick={onStart}>
+            {roster.savedGame ? "Start new game" : "Start game"}
           </button>
         </div>
         <p style={{ color: "#777", fontSize: 12, marginTop: 12 }}>
-          Unclaimed nations play as the selected AI. Anyone can start once seats are set.
+          {roster.savedGame
+            ? "Resume continues the saved game. Starting a new game replaces the autosave."
+            : "Unclaimed nations play as the selected AI. Anyone can start once seats are set."}
         </p>
       </div>
     </div>

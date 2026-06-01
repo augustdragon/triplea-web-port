@@ -178,6 +178,9 @@ export default function App() {
   function startGame() {
     sendControl({ action: "startGame" });
   }
+  function resumeGame() {
+    sendControl({ action: "resumeGame" });
+  }
 
   // Politics: commit the staged set of declarations (possibly empty) and end the phase. The server
   // applies each, skips any made redundant by another, and re-prompts only if some were skipped.
@@ -324,6 +327,7 @@ export default function App() {
         onRelease={releaseSeat}
         onSetType={setSeatType}
         onStart={startGame}
+        onResume={resumeGame}
         onSpectate={() => setSpectating(true)}
       />
     );

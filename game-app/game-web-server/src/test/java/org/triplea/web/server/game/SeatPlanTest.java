@@ -105,6 +105,13 @@ class SeatPlanTest {
     assertFalse(plan.claim("Atlantis", "Nate"));
   }
 
+  @Test
+  void rosterCarriesSavedGameInfoWhenProvided() {
+    assertNull(plan.toRoster("setup").savedGame(), "no resume option by default");
+    final SeatRoster.SavedGame info = new SeatRoster.SavedGame(4, "Combat Move");
+    assertEquals(info, plan.toRoster("setup", info).savedGame());
+  }
+
   private static SeatRoster.Seat find(final SeatRoster roster, final String name) {
     return roster.seats().stream().filter(s -> s.name().equals(name)).findFirst().orElseThrow();
   }

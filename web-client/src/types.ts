@@ -274,11 +274,18 @@ export interface SeatInfo {
  * seats, no game yet → the client shows the seat-select screen) or "running" (the game UI shows).
  * `aiTypes` is the catalog of selectable AI labels for the per-seat dropdown.
  */
+/** A resumable autosave for this game (round + current step), or null if none exists. */
+export interface SavedGame {
+  round: number;
+  step: string;
+}
+
 export interface SeatRoster {
   phase: string;
   gameName: string;
   seats: SeatInfo[];
   aiTypes: string[];
+  savedGame: SavedGame | null;
 }
 
 /** A decision the active human seat must answer. payload shape depends on kind. */

@@ -13,7 +13,15 @@ import javax.annotation.Nullable;
  * <p>{@code phase} is {@code "setup"} (assigning seats, no game yet) or {@code "running"} (the game
  * has launched) — the client switches between the seat-select screen and the game UI on it.
  */
-public record SeatRoster(String phase, String gameName, List<Seat> seats, List<String> aiTypes) {
+public record SeatRoster(
+    String phase,
+    String gameName,
+    List<Seat> seats,
+    List<String> aiTypes,
+    @Nullable SavedGame savedGame) {
+
+  /** A resumable autosave for this game (its round + current step), or absent if none exists. */
+  public record SavedGame(int round, String step) {}
 
   /**
    * One nation/seat's assignment.

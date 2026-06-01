@@ -3,12 +3,15 @@ package org.triplea.web.server.game;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import games.strategy.engine.data.GameData;
+import games.strategy.engine.framework.GameDataManager;
 import games.strategy.engine.framework.ServerGame;
 import games.strategy.engine.player.Player;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -73,6 +76,8 @@ public final class GameController {
   private volatile @Nullable Session current;
   // The save slot for this game (derived from the game name); the autosave target.
   private volatile @Nullable String saveSlot;
+  // Metadata about an existing autosave (round + step), surfaced in the roster as a resume option.
+  private volatile @Nullable SeatRoster.SavedGame savedGameInfo;
 
   public GameController(
       final Path gameXml,
@@ -105,6 +110,7 @@ public final class GameController {
     gameData = data;
     plan = newPlan;
     saveSlot = slotFor(data.getGameName());
+    savedGameInfo = peekSave(saveSlot); // offer a resume option if an autosave exists
     phase = "setup";
     server.resetForNewGame();
     publishSeats();
@@ -168,6 +174,7 @@ public final class GameController {
         }
       }
       case "startGame" -> lifecycleExecutor.submit(this::doStartGame);
+      case "resumeGame" -> lifecycleExecutor.submit(this::doResumeGame);
       case "newGame" -> lifecycleExecutor.submit(this::doReturnToSetup);
       default -> log.warn("Unknown control action: {}", action);
     }
@@ -189,7 +196,36 @@ public final class GameController {
     session.start(data, p);
     phase = "running";
     publishSeats(); // phase flips to "running" → client switches from seat-select to the game UI
+    savedGameInfo = null;
     log.info("Game launched ({})", gameXml.getFileName());
+  }
+
+  /** Lifecycle thread: load the autosave and launch it — the engine resumes from the saved step. */
+  private synchronized void doResumeGame() {
+    if (current != null) {
+      return; // already running
+    }
+    final String slot = saveSlot;
+    final SeatPlan p = plan;
+    if (slot == null || p == null) {
+      return;
+    }
+    final Optional<GameData> loaded =
+        saveStore.read(slot).flatMap(b -> GameDataManager.loadGame(new ByteArrayInputStream(b)));
+    if (loaded.isEmpty()) {
+      log.warn("Resume requested but no loadable save in slot '{}'", slot);
+      return;
+    }
+    server.resetForNewGame();
+    final Session session = new Session();
+    current = session;
+    // The seat plan's nations match the saved game (same map); buildPlayers binds humans/AI by
+    // name.
+    session.start(loaded.get(), p);
+    phase = "running";
+    publishSeats();
+    savedGameInfo = null;
+    log.info("Resumed game from save '{}'", slot);
   }
 
   /** Lifecycle thread: stop the running game and return to a fresh setup (keeping seat choices). */
@@ -219,8 +255,25 @@ public final class GameController {
     }
     final JsonObject env = new JsonObject();
     env.addProperty("type", "seats");
-    env.add("roster", GSON.toJsonTree(p.toRoster(phase)));
+    env.add("roster", GSON.toJsonTree(p.toRoster(phase, savedGameInfo)));
     server.publishSeats(GSON.toJson(env));
+  }
+
+  /**
+   * Load any existing save only to read its round/step for the resume option; data is discarded.
+   */
+  private @Nullable SeatRoster.SavedGame peekSave(final @Nullable String slot) {
+    if (slot == null) {
+      return null;
+    }
+    return saveStore
+        .read(slot)
+        .flatMap(b -> GameDataManager.loadGame(new ByteArrayInputStream(b)))
+        .map(
+            s ->
+                new SeatRoster.SavedGame(
+                    s.getSequence().getRound(), s.getSequence().getStep().getDisplayName()))
+        .orElse(null);
   }
 
   /** Broadcast the map's notes (the {@code <property name="notes">} HTML in the game XML). */
