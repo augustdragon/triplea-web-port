@@ -81,6 +81,15 @@ public final class WebPlayer extends AbstractBasePlayer {
     return false;
   }
 
+  /**
+   * Send a decision request to <i>this seat</i> and block for the reply. Tags the request with this
+   * player's name so {@link WebDecisionBridge} routes it to the owning connection and rejects a
+   * reply from any other seat.
+   */
+  private JsonObject await(final String kind, final Object payload) {
+    return bridge.await(getGamePlayer().getName(), kind, payload);
+  }
+
   @Override
   public void start(final String stepName) {
     super.start(stepName); // waits for the player bridge to sync to this step
@@ -134,7 +143,7 @@ public final class WebPlayer extends AbstractBasePlayer {
         return; // nothing legal (or nothing left after a prior commit) — end the phase
       }
       final JsonObject reply =
-          bridge.await("politics", new PoliticsRequest(getGamePlayer().getName(), options, error));
+          await("politics", new PoliticsRequest(getGamePlayer().getName(), options, error));
       final List<String> staged = new ArrayList<>();
       if (reply.has("commit") && reply.get("commit").isJsonArray()) {
         for (final JsonElement element : reply.getAsJsonArray("commit")) {
@@ -272,7 +281,7 @@ public final class WebPlayer extends AbstractBasePlayer {
     String error = null;
     while (!getPlayerBridge().isGameOver()) {
       final JsonObject reply =
-          bridge.await(
+          await(
               "purchase", new PurchaseRequest(player.getName(), pusAvailable, bid, options, error));
 
       final IntegerMap<ProductionRule> chosen = new IntegerMap<>();
@@ -311,7 +320,7 @@ public final class WebPlayer extends AbstractBasePlayer {
     while (!getPlayerBridge().isGameOver()) {
       final IMoveDelegate delegate = (IMoveDelegate) getPlayerBridge().getRemoteDelegate();
       final var reply =
-          bridge.await(
+          await(
               "move",
               new MoveRequest(
                   player.getName(),
@@ -320,7 +329,8 @@ public final class WebPlayer extends AbstractBasePlayer {
                   toUndoInfos(delegate.getMovesMade()),
                   error,
                   preview));
-      error = null; // both are one-shot: only set again by this iteration's action, for the re-prompt
+      error =
+          null; // both are one-shot: only set again by this iteration's action, for the re-prompt
       preview = null;
       if (reply.has("done") && reply.get("done").getAsBoolean()) {
         if (keepMovingToSaveAir(delegate, player, data)) {
@@ -352,8 +362,8 @@ public final class WebPlayer extends AbstractBasePlayer {
   /**
    * Compute — without executing — the engine's best legal route for a source/destination/units the
    * browser asked to preview, via {@link MoveValidator#getBestRoute} (the same routing the Swing
-   * client uses). Returns a {@link MovePreview} the browser highlights before committing; the actual
-   * move is still fully validated by the move delegate on submit.
+   * client uses). Returns a {@link MovePreview} the browser highlights before committing; the
+   * actual move is still fully validated by the move delegate on submit.
    */
   private MovePreview previewMove(
       final GamePlayer player, final GameData data, final JsonObject previewRoute) {
@@ -422,8 +432,7 @@ public final class WebPlayer extends AbstractBasePlayer {
     if (stranded.isEmpty()) {
       return false; // all air can land — safe to end
     }
-    final JsonObject reply =
-        bridge.await("airWarning", new AirWarningRequest(player.getName(), stranded));
+    final JsonObject reply = await("airWarning", new AirWarningRequest(player.getName(), stranded));
     // endAnyway=true → accept the loss and end the phase; anything else → keep moving.
     return !(reply.has("endAnyway") && reply.get("endAnyway").getAsBoolean());
   }
@@ -577,7 +586,9 @@ public final class WebPlayer extends AbstractBasePlayer {
     return counts;
   }
 
-  /** The requested {@code type -> count} drawn from the player's movable units in {@code source}. */
+  /**
+   * The requested {@code type -> count} drawn from the player's movable units in {@code source}.
+   */
   private static List<Unit> selectUnits(
       final Territory source, final GamePlayer player, final Map<String, Integer> unitCounts) {
     final List<Unit> movablePool =
@@ -684,7 +695,7 @@ public final class WebPlayer extends AbstractBasePlayer {
         return; // everything placed
       }
       final JsonObject reply =
-          bridge.await("place", new PlaceRequest(player.getName(), bid, placePool(pool), error));
+          await("place", new PlaceRequest(player.getName(), bid, placePool(pool), error));
       if (reply.has("done") && reply.get("done").getAsBoolean()) {
         return; // browser ended the phase (any leftover units are lost)
       }
@@ -759,7 +770,7 @@ public final class WebPlayer extends AbstractBasePlayer {
       final boolean allowMultipleHitsPerUnit) {
     try {
       final JsonObject reply =
-          bridge.await(
+          await(
               "selectCasualties",
               new CasualtyRequest(
                   hit.getName(),
@@ -914,7 +925,7 @@ public final class WebPlayer extends AbstractBasePlayer {
       final List<String> options =
           possibleTerritories.stream().map(Territory::getName).sorted().toList();
       final JsonObject reply =
-          bridge.await(
+          await(
               "retreat",
               new RetreatRequest(
                   getGamePlayer().getName(),

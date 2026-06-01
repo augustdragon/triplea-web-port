@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.framework.ServerGame;
-import games.strategy.engine.framework.startup.ui.PlayerTypes;
+import games.strategy.engine.player.Player;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -13,23 +13,36 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
+import org.java_websocket.WebSocket;
 
 /**
- * Owns the playable game's lifecycle behind one long-lived {@link GameWebSocketServer}, so the
- * browser can reset the game without restarting the JVM. It runs the current game on its own daemon
- * game-loop thread; a client {@code {type:"control",action:"newGame"}} message stops that session
- * and starts a fresh one on the same socket (same map + human seat the server launched with) — a
- * testing convenience equivalent to {@code restart-web.ps1} but without a process bounce.
+ * Owns one game's full lifecycle behind a long-lived {@link GameWebSocketServer}. A game JVM has
+ * two states:
  *
- * <p>How a reset stops a parked engine cleanly: {@link WebPlayer#start} runs synchronously on the
- * game-loop thread and parks in {@link WebDecisionBridge#await} when waiting for a browser
- * decision. Closing the bridge completes that future exceptionally, so {@code await} throws and the
- * exception unwinds straight out of {@code runNextStep}; the loop sees {@code alive == false} and
- * exits. We deliberately do <b>not</b> call {@link ServerGame#stopGame()} here — it can {@code
- * ExitStatus.exit()} the whole JVM if it can't block delegate execution — and instead abandon the
- * old {@link ServerGame} to GC (each reset builds a fresh one). Resets are a manual, occasional
- * testing action, so the small per-reset retained state is acceptable.
+ * <ul>
+ *   <li><b>SETUP</b> — no {@link ServerGame} yet. The controller loads {@link GameData}, builds a
+ *       {@link SeatPlan}, and serves a roster. Clients claim seats as human or assign AI types to
+ *       the rest (mirroring the engine's local/network seat selection). On {@code startGame} the
+ *       plan becomes the engine's {@code Set<Player>} and the game launches.
+ *   <li><b>RUNNING</b> — the {@link Session} steps the game on a daemon loop thread, parking in
+ *       {@link WebDecisionBridge#await} whenever a human seat must decide. Decision requests are
+ *       routed to the owning seat's connection; {@code newGame} returns to SETUP.
+ * </ul>
+ *
+ * <p>The {@link GameWebSocketServer}'s seat↔connection registry serves both phases: a claim made in
+ * SETUP is the same ownership the in-game router uses to deliver decisions in RUNNING.
+ *
+ * <p>How a reset stops a parked engine cleanly: {@link WebPlayer#start} runs on the game-loop
+ * thread and parks in {@code await}. Closing the bridge completes that future exceptionally, so
+ * {@code await} throws and unwinds out of {@code runNextStep}; the loop sees {@code alive == false}
+ * and exits. We deliberately do <b>not</b> call {@link ServerGame#stopGame()} (it can {@code
+ * ExitStatus.exit()} the JVM) and instead abandon the old {@link ServerGame} to GC.
+ *
+ * <p>Setup mutations arrive on WebSocket threads; all are serialized behind this controller's
+ * monitor. Game launch/reset run on a single-thread executor so the WebSocket thread is never
+ * blocked while a game loop winds down.
  */
 @Slf4j
 public final class GameController {
@@ -37,36 +50,214 @@ public final class GameController {
   private static final Gson GSON = new Gson();
 
   private final Path gameXml;
-  private final String humanPlayer;
   private final int maxRounds;
   private final long stepDelayMs;
   private final GameWebSocketServer server;
   // The map's objectives.properties (static per map); empty if the map has none.
   private final Properties objectivesProps;
 
-  // Resets run on a single thread so they're serialized and never block the WebSocket thread.
-  private final ExecutorService restartExecutor =
+  // Launches and resets run on a single thread so they're serialized and never block a WS thread.
+  private final ExecutorService lifecycleExecutor =
       Executors.newSingleThreadExecutor(
           r -> {
-            final Thread t = new Thread(r, "web-newgame");
+            final Thread t = new Thread(r, "web-game-lifecycle");
             t.setDaemon(true);
             return t;
           });
 
-  private volatile Session current;
+  // The setup-loaded game data + seat plan (SETUP). At launch, gameData is handed to the engine.
+  private volatile @Nullable GameData gameData;
+  private volatile @Nullable SeatPlan plan;
+  private volatile String phase = "setup";
+  private volatile @Nullable Session current;
 
   public GameController(
       final Path gameXml,
-      final String humanPlayer,
       final int maxRounds,
       final long stepDelayMs,
       final GameWebSocketServer server) {
     this.gameXml = gameXml;
-    this.humanPlayer = humanPlayer;
     this.maxRounds = maxRounds;
     this.stepDelayMs = stepDelayMs;
     this.server = server;
     this.objectivesProps = loadObjectivesProperties(gameXml);
+  }
+
+  /** Wire routing and enter the setup phase. Call once, after {@code server.start()}. */
+  public void start() {
+    server.setInboundHandler(this::onClientMessage);
+    server.setSeatVacatedHandler(this::onSeatVacated);
+    enterSetup(null);
+  }
+
+  /** Load fresh game data + a seat plan (carrying over prior seat choices) and serve the roster. */
+  private synchronized void enterSetup(final @Nullable SeatPlan prior) {
+    final GameData data = WebGameHost.load(gameXml);
+    final SeatPlan newPlan = new SeatPlan(data);
+    if (prior != null) {
+      newPlan.carryOver(prior);
+    }
+    gameData = data;
+    plan = newPlan;
+    phase = "setup";
+    server.resetForNewGame();
+    publishSeats();
+    publishNotes();
+    log.info(
+        "Setup phase: {} ({} seats)",
+        gameXml.getFileName(),
+        newPlan.toRoster(phase).seats().size());
+  }
+
+  /**
+   * WebSocket thread: a {@code control} message drives setup (claim/release/type) or lifecycle
+   * (start/new game); anything else is a decision reply routed to the running game's bridge, tagged
+   * with the connection's seat so cross-seat replies are rejected.
+   */
+  private void onClientMessage(final WebSocket conn, final String message) {
+    final JsonObject msg = tryParse(message);
+    if (msg != null && "control".equals(optString(msg, "type"))) {
+      handleControl(conn, msg);
+      return;
+    }
+    final Session session = current;
+    if (session != null) {
+      final String seat = server.seatOf(conn);
+      if (session.bridge.onClientMessage(seat, message)) {
+        server.clearPendingRequest();
+      }
+    }
+  }
+
+  private synchronized void handleControl(final WebSocket conn, final JsonObject msg) {
+    final String action = optString(msg, "action");
+    if (action == null) {
+      return;
+    }
+    switch (action) {
+      case "claimSeat" -> {
+        final String seat = optString(msg, "seat");
+        final SeatPlan p = plan;
+        if (seat != null && p != null && p.hasSeat(seat)) {
+          p.claim(seat, ownerLabel(conn, msg));
+          server.bindSeat(conn, seat); // route this seat's decisions to conn (replays any pending)
+          publishSeats();
+        }
+      }
+      case "releaseSeat" -> {
+        final String seat = optString(msg, "seat");
+        final SeatPlan p = plan;
+        if (seat != null && p != null && seat.equals(server.seatOf(conn))) {
+          server.unbindSeat(conn, seat);
+          p.release(seat);
+          publishSeats();
+        }
+      }
+      case "setSeatType" -> {
+        final String seat = optString(msg, "seat");
+        final String type = optString(msg, "playerType");
+        final SeatPlan p = plan;
+        if (seat != null && type != null && p != null && p.setAiType(seat, type)) {
+          publishSeats();
+        }
+      }
+      case "startGame" -> lifecycleExecutor.submit(this::doStartGame);
+      case "newGame" -> lifecycleExecutor.submit(this::doReturnToSetup);
+      default -> log.warn("Unknown control action: {}", action);
+    }
+  }
+
+  /** Lifecycle thread: turn the seat plan into players and launch the game (SETUP → RUNNING). */
+  private synchronized void doStartGame() {
+    if (current != null) {
+      return; // already running
+    }
+    final GameData data = gameData;
+    final SeatPlan p = plan;
+    if (data == null || p == null) {
+      return;
+    }
+    server.resetForNewGame();
+    final Session session = new Session();
+    current = session;
+    session.start(data, p);
+    phase = "running";
+    publishSeats(); // phase flips to "running" → client switches from seat-select to the game UI
+    log.info("Game launched ({})", gameXml.getFileName());
+  }
+
+  /** Lifecycle thread: stop the running game and return to a fresh setup (keeping seat choices). */
+  private synchronized void doReturnToSetup() {
+    final Session old = current;
+    if (old != null) {
+      old.stop();
+      current = null;
+    }
+    enterSetup(plan);
+    log.info("Returned to setup ({})", gameXml.getFileName());
+  }
+
+  /** WebSocket thread (via the server): a seat's controlling connection dropped — free the seat. */
+  private synchronized void onSeatVacated(final String seat) {
+    final SeatPlan p = plan;
+    if (p != null) {
+      p.release(seat);
+      publishSeats();
+    }
+  }
+
+  private void publishSeats() {
+    final SeatPlan p = plan;
+    if (p == null) {
+      return;
+    }
+    final JsonObject env = new JsonObject();
+    env.addProperty("type", "seats");
+    env.add("roster", GSON.toJsonTree(p.toRoster(phase)));
+    server.publishSeats(GSON.toJson(env));
+  }
+
+  /** Broadcast the map's notes (the {@code <property name="notes">} HTML in the game XML). */
+  private void publishNotes() {
+    final GameData data = gameData;
+    if (data == null) {
+      return;
+    }
+    final JsonObject envelope = new JsonObject();
+    envelope.addProperty("type", "notes");
+    envelope.addProperty("html", data.getProperties().get("notes", ""));
+    server.publishNotes(GSON.toJson(envelope));
+  }
+
+  /** Evaluate national objectives against the given state and broadcast them (read-only). */
+  private void publishObjectives(final GameData data) {
+    final JsonObject envelope = new JsonObject();
+    envelope.addProperty("type", "objectives");
+    envelope.add("items", GSON.toJsonTree(ObjectivesProjector.project(data, objectivesProps)));
+    server.publishObjectives(GSON.toJson(envelope));
+  }
+
+  /** A display label for a claiming connection: the client's chosen name, else a fallback. */
+  private static String ownerLabel(final WebSocket conn, final JsonObject msg) {
+    final String name = optString(msg, "name");
+    if (name != null && !name.isBlank()) {
+      return name;
+    }
+    return "Player " + conn.getRemoteSocketAddress();
+  }
+
+  private static @Nullable JsonObject tryParse(final String json) {
+    try {
+      return GSON.fromJson(json, JsonObject.class);
+    } catch (final RuntimeException e) {
+      return null; // not JSON
+    }
+  }
+
+  private static @Nullable String optString(final @Nullable JsonObject o, final String key) {
+    return o != null && o.has(key) && o.get(key).isJsonPrimitive()
+        ? o.get(key).getAsString()
+        : null;
   }
 
   /**
@@ -85,97 +276,18 @@ public final class GameController {
     return props;
   }
 
-  /** Wire inbound routing and launch the first game. Call once, after {@code server.start()}. */
-  public void start() {
-    server.setInboundHandler(this::onClientMessage);
-    startSession();
-    publishNotes();
-  }
-
-  /**
-   * Read this game's notes (the {@code <property name="notes">} HTML in the game XML, parsed into
-   * game properties) and broadcast them once. The socket caches and re-sends them on connect; they
-   * don't change across {@code newGame} resets, so this runs only at startup.
-   */
-  private void publishNotes() {
-    final String notes = current.game.getData().getProperties().get("notes", "");
-    final JsonObject envelope = new JsonObject();
-    envelope.addProperty("type", "notes");
-    envelope.addProperty("html", notes);
-    server.publishNotes(GSON.toJson(envelope));
-  }
-
-  /**
-   * Evaluate the national objectives against the given game state and broadcast them. Published at
-   * each step boundary (objectives change as territories/relationships change), and cached +
-   * re-sent on connect. Read-only (see {@link ObjectivesProjector}).
-   */
-  private void publishObjectives(final GameData data) {
-    final JsonObject envelope = new JsonObject();
-    envelope.addProperty("type", "objectives");
-    envelope.add("items", GSON.toJsonTree(ObjectivesProjector.project(data, objectivesProps)));
-    server.publishObjectives(GSON.toJson(envelope));
-  }
-
-  /**
-   * WebSocket thread: a {@code control}/{@code newGame} message resets the game (off-thread, so the
-   * socket isn't blocked while the old loop winds down); anything else is a decision reply routed
-   * to the current game's bridge.
-   */
-  private void onClientMessage(final String json) {
-    if (isNewGameControl(json)) {
-      log.info("New-game requested by client");
-      restartExecutor.submit(this::newGame);
-      return;
-    }
-    final Session session = current;
-    if (session != null) {
-      session.bridge.onClientMessage(json);
-    }
-  }
-
-  private static boolean isNewGameControl(final String json) {
-    try {
-      final JsonObject msg = GSON.fromJson(json, JsonObject.class);
-      return msg != null
-          && msg.has("type")
-          && "control".equals(msg.get("type").getAsString())
-          && msg.has("action")
-          && "newGame".equals(msg.get("action").getAsString());
-    } catch (final RuntimeException e) {
-      return false; // not JSON / not our control shape
-    }
-  }
-
-  /** Restart-executor thread: tear down the running game (if any) and start a fresh one. */
-  private void newGame() {
-    final Session old = current;
-    if (old != null) {
-      old.stop();
-    }
-    server.resetForNewGame();
-    startSession();
-    log.info("New game started ({} as '{}')", gameXml.getFileName(), humanPlayer);
-  }
-
-  private void startSession() {
-    final Session session = new Session();
-    current = session;
-    session.start();
-  }
-
-  /** One game instance: its bridge, display, engine, and the loop thread that steps it. */
+  /** One running game instance: its bridge, display, engine, and the loop thread that steps it. */
   private final class Session {
     private final WebDecisionBridge bridge =
-        new WebDecisionBridge(server::send, server::publishState);
+        new WebDecisionBridge(server::sendToSeat, server::publishState);
     private final WebDisplay display = new WebDisplay(server::publishBattleEvent);
     private volatile boolean alive = true;
     private Thread thread;
     private ServerGame game;
 
-    void start() {
-      game =
-          WebGameHost.startGame(gameXml, Set.of(humanPlayer), PlayerTypes.FAST_AI, bridge, display);
+    void start(final GameData data, final SeatPlan seatPlan) {
+      final Set<Player> players = seatPlan.buildPlayers(bridge);
+      game = WebGameHost.launch(data, players, display);
       display.setGameData(game.getData()); // enables battle-by-id round/force lookups
       game.setStopGameOnDelegateExecutionStop(true);
       thread = new Thread(this::run, "web-game-loop");

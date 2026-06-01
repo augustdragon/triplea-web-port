@@ -47,11 +47,12 @@ tasks.register<JavaExec>("runSpectator") {
     classpath = sourceSets["main"].runtimeClasspath
 }
 
-// Playable: one seat driven from the browser (3b: purchase), the rest AI.
-// Run: ./gradlew :game-web-server:runPlayable --args="<gameXml> <humanPlayer> [port] [maxRounds] [stepDelayMs]"
+// Playable multiplayer: browsers claim human seats / assign AI in a setup phase, then play.
+// Run: ./gradlew :game-web-server:runPlayable --args="<gameXml> [port] [maxRounds] [stepDelayMs]"
+// Seats are chosen in the browser, not on the command line.
 tasks.register<JavaExec>("runPlayable") {
     group = "web-port"
-    description = "Runs a game with one browser-driven human seat over WebSocket."
+    description = "Hosts a multiplayer game: browsers claim seats over WebSocket, then play."
     mainClass.set("org.triplea.web.server.game.WebPlayableServer")
     classpath = sourceSets["main"].runtimeClasspath
 }

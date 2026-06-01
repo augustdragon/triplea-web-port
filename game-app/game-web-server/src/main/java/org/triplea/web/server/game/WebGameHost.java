@@ -16,7 +16,6 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
@@ -55,14 +54,19 @@ public final class WebGameHost {
     engineInitialized = true;
   }
 
+  /** Parses {@code gameXml} into a fresh {@link GameData} (engine initialized, no game started). */
+  public static GameData load(final Path gameXml) {
+    initEngine();
+    return GameDataLoader.load(gameXml);
+  }
+
   /**
    * Parses {@code gameXml}, assigns every player the given AI type, and starts a ready-to-step
    * {@link ServerGame} that reports to {@code display}.
    */
   public static ServerGame startAiGame(
       final Path gameXml, final PlayerTypes.Type aiType, final IDisplay display) {
-    initEngine();
-    final GameData gameData = GameDataLoader.load(gameXml);
+    final GameData gameData = load(gameXml);
 
     final Map<String, PlayerTypes.Type> playerTypes = new HashMap<>();
     for (final var player : gameData.getPlayerList().getPlayers()) {
@@ -72,34 +76,13 @@ public final class WebGameHost {
   }
 
   /**
-   * Like {@link #startAiGame} but the players named in {@code humanPlayers} get a browser-driven
-   * {@link WebPlayer} (blocking on {@code bridge}); everyone else gets {@code aiType}. The mixed
-   * {@link Player} set is hand-built and passed straight to the engine — {@code PlayerTypes.Type}
-   * is an open class and neither {@code ServerGame} nor {@code startGame} validates player
-   * provenance, so this needs no engine change.
+   * Engine-host construction for a hand-built player set: no UI, no real networking, ready to step.
+   * The mixed {@link Player} set (human {@link WebPlayer}s + AI) is passed straight to the engine —
+   * {@code PlayerTypes.Type} is an open class and neither {@code ServerGame} nor {@code startGame}
+   * validates player provenance, so this needs no engine change. The caller (e.g. {@code SeatPlan})
+   * decides which seats are human vs AI.
    */
-  public static ServerGame startGame(
-      final Path gameXml,
-      final Set<String> humanPlayers,
-      final PlayerTypes.Type aiType,
-      final WebDecisionBridge bridge,
-      final IDisplay display) {
-    initEngine();
-    final GameData gameData = GameDataLoader.load(gameXml);
-
-    final Set<Player> players = new HashSet<>();
-    for (final var player : gameData.getPlayerList().getPlayers()) {
-      final String name = player.getName();
-      players.add(
-          humanPlayers.contains(name)
-              ? new WebPlayer(name, "Web", bridge)
-              : aiType.newPlayerWithName(name));
-    }
-    return launch(gameData, players, display);
-  }
-
-  /** Shared engine-host construction: no UI, no real networking, ready to step. */
-  private static ServerGame launch(
+  public static ServerGame launch(
       final GameData gameData, final Set<Player> players, final IDisplay display) {
     final WebLaunchAction launchAction = new WebLaunchAction(display);
     final Messengers messengers = new Messengers(new LocalNoOpMessenger());
