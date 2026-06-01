@@ -337,6 +337,12 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
       **Re-scoped:** versioned events were unnecessary for our snapshot architecture (see spec §6.2). Commits
       `98b2692a4` (a), `5f9580051` (b), `45684bec2` (c). Verified live: play→restart→resume at round 5; battle-log
       replay on reconnect. Single save slot per server; DB metadata + multi-game deferred to the control plane (P4.4).
+- [x] **P4.1/P4.2 refinement — reconnect rejoin** ✅ (commit `b3605788d`) — closing the browser clears
+      `sessionStorage`, so a reopened page reconnected as an unbound spectator and the seat's buffered decision
+      was never delivered (user-reported). Fix: a **Rejoin prompt** in the running phase (your seat open →
+      "Rejoin"; held by another → "Take over"; else picker/spectate), offering only **human** seats (server now
+      flags `WebPlayer` seats in the roster); seat remembered in `localStorage` (survives a full close); setup
+      still auto-reclaims. Confirm-on-takeover, never silent (user design call). Verified in-browser.
 - [ ] **P4.3 — Auth + lobby** — Google/Discord OAuth, httpOnly sessions, lobby UI (public open-seat tables +
       private invite links + ready-up gate), create/join/list.
 - [ ] **P4.4 — Orchestrator** — control plane spawns/reaps per-game containers via the Docker API; routes the

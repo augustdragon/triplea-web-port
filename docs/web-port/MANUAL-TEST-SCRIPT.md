@@ -189,12 +189,21 @@ Tabs: **Actions · Players · Relationships · Objectives · Notes · Territory*
 
 ---
 
-## 11. Reconnection (page reload mid-game)
+## 11. Reconnection & rejoin (mid-game)
 
 - [ ] **11.1 State restored.** Mid-game, **reload** your tab. **Expect:** the board, owners, units,
-  notes, objectives, and the **seat roster** all come back; if you'd claimed a seat, it re-claims
-  automatically (persisted), and an outstanding decision for your seat is re-prompted.
-- [ ] **11.2 Battle log restored.** After some battles, reload → the **Battle Log is repopulated**
+  notes, objectives, and the **seat roster** all come back.
+- [ ] **11.2 Rejoin after a browser close.** Claim a seat, play to a decision, then **fully close the
+  browser** (not just the tab) and reopen the page. **Expect:** a **"{game} — game in progress"**
+  prompt: *"Rejoin as {your seat}? Your turn is waiting."* → **[Rejoin]** / **[Watch only]**. Click
+  **Rejoin** → your decision panel appears and you can continue. (A *tab reload* mid-game keeps you
+  seated without the prompt; only a full close/cross-device reconnect shows it.)
+- [ ] **11.3 Take-over wording.** (Two browsers) If a *second* browser reconnects to a seat a *first*
+  is still holding, the prompt reads *"… is controlled by {name}. Take it over?"* — explicit, never
+  silent. Confirm it doesn't silently evict the first player without that click.
+- [ ] **11.4 No dead seats.** The rejoin picker only offers **human** seats (ones a person claimed at
+  launch); AI-controlled nations are not offered to rejoin.
+- [ ] **11.5 Battle log restored.** After some battles, reload → the **Battle Log is repopulated**
   (not empty) — the server replays it on connect.
 
 ---
