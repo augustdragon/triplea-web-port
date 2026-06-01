@@ -343,10 +343,45 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
       "Rejoin"; held by another → "Take over"; else picker/spectate), offering only **human** seats (server now
       flags `WebPlayer` seats in the roster); seat remembered in `localStorage` (survives a full close); setup
       still auto-reclaims. Confirm-on-takeover, never silent (user design call). Verified in-browser.
-- [ ] **P4.3 — Auth + lobby** — Google/Discord OAuth, httpOnly sessions, lobby UI (public open-seat tables +
-      private invite links + ready-up gate), create/join/list.
-- [ ] **P4.4 — Orchestrator** — control plane spawns/reaps per-game containers via the Docker API; routes the
-      browser to the right game's WS; lazy rehydration on reconnect.
+  - [ ] **Multi-human play — revisit** (from `b3605788d` code review; bounded, not blocking solo testing):
+        (1) **RejoinPrompt take-over dead-end** (`RejoinPrompt.tsx:43`) — when your remembered seat is held by
+        another, the prompt offers only "Take over" or "Watch"; the open-seat picker is unreachable even if a
+        *different* human seat is genuinely abandoned. (2) **Optimistic-claim race** (`App.tsx:199`) — `claimSeat`
+        sets `mySeat` with no revert; if two clients rejoin the same open seat at once the server binds the last
+        claimer, leaving the loser seated in the UI but controlling nothing. Both only bite once real multi-human
+        games run (→ P4.3). Also discretionary: extract shared seat-modal styles (RejoinPrompt/SeatSelect dup).
+- [ ] **P4.3 + P4.4 — Control plane (Auth + Lobby + Orchestrator)** — planned in one pass (approved plan:
+      `~/.claude/plans/lucky-sprouting-minsky.md`, machine-local). P4.3 and P4.4 build **one** new Java service,
+      `:game-control-plane` (Javalin/embedded Jetty), owning OAuth, sessions, lobby, Postgres, presence,
+      orchestration; the existing `:game-web-server` becomes a parameterized, multi-seat, reporting **game
+      container** (engine stays unmodified). Build-strategy calls: **child-process spawn first** behind a
+      `GameLauncher` seam (Docker swapped in at M5); **dev-only fake-login** seam so the lobby/orchestrator are
+      buildable before real OAuth apps exist. Milestones (each independently verifiable; don't advance until its
+      check passes):
+  - [x] **M1** ✅ — `:game-control-plane` module (Javalin + JDBI/Hikari + Flyway-on-boot) + baseline schema
+        V1.00.00–V1.04.00 (`users`/`games`/`seats`/`saves`, spec §6.1) + `/health` (200/503) + `GameLauncher`
+        seam (`ProcessGameLauncher`, fails loudly until M4a). Verified via `./gradlew :game-control-plane:run`
+        **and** the packaged `installDist` binary: 5 migrations apply, 4 tables created, `/health` 200 (5ms) with
+        DB up / 503 (fast) with DB down / recovers. Unit test on config fail-fast. **Deviations from plan
+        (deliberate):** (1) new non-destructive `.docker/web-port-db.yml` (Postgres 16) instead of trimming the
+        legacy upstream `docker-compose.yml`; (2) **no shadow/fat-jar** — a fat jar merges `META-INF/services`
+        lossily under shadow 9.4.1 and Flyway silently loses its SQL-migration resolver, so we run via the
+        `application` plugin (`run`/`installDist`, ServiceLoader-safe; also the P4.5 container path); (3) deferred
+        `:game-core`/`:domain-data` deps to M4b/M5 (M1 doesn't touch the engine). Added `hikari.connectionTimeout=5s`
+        so `/health` fails fast instead of blocking 30s. Run: `docker compose -f .docker/web-port-db.yml up -d` →
+        `export CONTROL_PLANE_DB_PASSWORD=triplea_web` → `./gradlew :game-control-plane:run`.
+  - [ ] **M2** — OAuth (pac4j Google/Discord) → JWT httpOnly cookie + allow-list + `AuthFilter` + `/api/me`;
+        dev-flag fake-login (fails under prod profile). Verify: cookie set, `/me` works, non-allow-listed 403, no-cookie 401.
+  - [ ] **M3** — Lobby REST + lobby WS (tables/seats/ready-up/presence; seat owner = authenticated principal, not
+        client name) + React multi-view (react-router: login→lobby→game; `App.tsx`→Game route; Vite `/api` proxy).
+        Verify: two sessions form a table, ready-up, host-launch invokes `GameLauncher`.
+  - [ ] **M4a** — Parameterize `:game-web-server` (`--game-id`/`--port`/`--save-ref`/`--control-plane-url`; `SaveStore`
+        slot by game id; back-compat defaults). Verify: run on `:8090`, save under game-id slot, resume via `--save-ref`.
+  - [ ] **M4b** — Game container reports `game-started`/`turn-committed`/`game-finished` → control plane updates
+        `games`/`saves` in a tx (flush per committed turn). Hook: `GameController.autosave`. Verify: DB advances per step.
+  - [ ] **M5** — `DockerGameLauncher` (container per game via Docker API) + `IdleReaper` + `GET /api/games/:id/connect`
+        (authorize, lazy-rehydrate from latest save, return `ws_endpoint`); client dials dynamic endpoint. Verify:
+        full lobby→launch→play→kill→reconnect-rehydrate→idle-reap cycle.
 - [ ] **P4.5 — Hosting** — Docker Compose on the VM (control plane + Postgres + on-demand game containers);
       presence fed into the game process; **"your turn" Web Push** (the gap Lichess under-built; multi-day turns
       make it essential — a stalled seat blocks 3–5 players).

@@ -1,0 +1,5 @@
+-- Baseline of the web-port control-plane schema. Greenfield: we adopt none of the deleted
+-- upstream lobby DDL (see PHASE-4-MULTIPLAYER.md §4). This marker establishes our own Flyway
+-- history starting at V1.00.00; the user/game/seat/save tables follow in V1.01–V1.04.
+--
+-- All timestamps are stored as TIMESTAMPTZ in UTC (repo DB convention).

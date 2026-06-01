@@ -14,6 +14,14 @@ Entries: the pattern → what went wrong → the rule to follow.
 - **What went wrong:** After `winget install` of JDK 21, the machine `JAVA_HOME`/PATH updated (registry) but the agent's spawned shells still didn't see `java`.
 - **Rule:** After installing a tool mid-session, don't assume PATH updated. Read the machine env var from the registry (`[Environment]::GetEnvironmentVariable('JAVA_HOME','Machine')`), locate the install dir, and set `$env:JAVA_HOME` / prepend PATH explicitly per command until a fresh shell is available.
 
+## Don't `pkill`/`pgrep -f` a pattern that matches your own command line
+- **What went wrong:** Killed background apps with `pkill -f ControlPlaneMain` / `pgrep -f ControlPlaneMain` from a Bash command whose own command line *contained* that string. The pattern matched the running shell, killing it (exit 144) before the real work ran. Happened repeatedly in one session.
+- **Rule:** Kill background jobs by exact PID (capture `$!` when launching, `kill <pid>`). If you must pattern-match, choose a pattern that cannot appear in the kill command itself (e.g. a fragment like `controlplane.Control`) and always append `| grep -v pgrep`. Never `pkill -f <X>` while `<X>` is literally in the same command.
+
+## Shadow fat-jars break ServiceLoader-based libs (Flyway) — use `installDist`
+- **What went wrong:** The `:game-control-plane` shadowJar ran but Flyway applied 0 migrations ("detected but did not follow the filename convention"). Cause: multiple jars ship `META-INF/services/org.flywaydb.core.extensibility.Plugin`; the fat jar kept only one (last-wins), so Flyway lost its SQL-migration resolver. `mergeServiceFiles()` did **not** fix it under shadow 9.4.1 (still last-wins).
+- **Rule:** For apps that resolve plugins via ServiceLoader (Flyway, JDBC, SLF4J, Jetty), prefer the `application` plugin's `run`/`installDist` (each dep stays its own jar → ServiceLoader intact) over a shadow fat jar. If a fat jar is required, verify the merged `META-INF/services/*` actually contains entries from *all* contributing jars, not just one. Diagnose fat-jar-only failures by re-running on the normal classpath (`gradlew run`).
+
 ## Gradle project paths here are flat
 - **What went wrong (potential):** AGENTS.md shows `./gradlew :game-app:game-core:test`, but `settings.gradle.kts` registers projects flat via `include(":game-core")` + `projectDir` override.
 - **Rule:** Trust `settings.gradle.kts` for project paths: use `:game-core`, `:smoke-testing`, `:game-headless`, etc. — not `:game-app:...`.

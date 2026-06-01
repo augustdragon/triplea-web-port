@@ -1,0 +1,30 @@
+# Local dev Postgres for the web-port control plane (P4.3/P4.4). Deliberately separate from the
+# legacy .docker/docker-compose.yml (the deleted upstream desktop lobby) so neither disturbs the
+# other. The control plane runs Flyway in-process, so there is no migration service here — just an
+# empty database for it to migrate and own.
+#
+#   docker compose -f .docker/web-port-db.yml up -d
+#   export CONTROL_PLANE_DB_PASSWORD=triplea_web   # db url/user default to localhost/triplea_web
+#   ./gradlew :game-control-plane:run
+#
+# The triplea_web/triplea_web credentials are local-dev only; the control plane still requires the
+# password to be supplied via env (it has no default), so nothing secret is baked into the app.
+services:
+  web-port-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: triplea_web
+      POSTGRES_USER: triplea_web
+      POSTGRES_PASSWORD: triplea_web
+    ports:
+      - "5432:5432"
+    volumes:
+      - web-port-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U triplea_web -d triplea_web"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  web-port-db-data:

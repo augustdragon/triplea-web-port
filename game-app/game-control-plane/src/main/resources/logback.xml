@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Console logging for the control plane. INFO by default with a compact pattern; the noisy
+  startup chatter from Jetty/Hikari/Flyway is pinned to WARN. Structured JSON logging (the
+  logstash encoder) is a later milestone's concern; this keeps the dev console readable.
+-->
+<configuration>
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <logger name="org.eclipse.jetty" level="WARN"/>
+  <logger name="io.javalin" level="INFO"/>
+  <logger name="com.zaxxer.hikari" level="WARN"/>
+  <logger name="org.flywaydb" level="INFO"/>
+
+  <root level="INFO">
+    <appender-ref ref="STDOUT"/>
+  </root>
+</configuration>

@@ -11,7 +11,11 @@ commons-text = "1.15.0"
 dropwizard-websockets = "1.3.14"
 equals-verifier = "4.5"
 feign = "13.12"
+flyway = "11.8.2"
 gson = "2.14.0"
+hikaricp = "6.3.0"
+javalin = "6.7.0"
+jdbi = "3.49.3"
 guava = "33.6.0-jre"
 hamcrest-optional = "2.0.0"
 hamcrest = "2.0.0.0"
@@ -28,6 +32,7 @@ logback-classic = "1.5.32"
 lombok = "1.18.46"
 mockito = "5.23.0"
 pmd = "7.0.0"
+postgresql = "42.7.7"
 snake-yaml = "3.0.1"
 sonatype-goodies-prefs = "2.3.9"
 substance = "4.5.0"
@@ -54,8 +59,14 @@ commons-text = { module = "org.apache.commons:commons-text", version.ref = "comm
 dropwizard-websockets = { module = "com.liveperson:dropwizard-websockets", version.ref = "dropwizard-websockets" }
 equals-verifier = { module = "nl.jqno.equalsverifier:equalsverifier", version.ref = "equals-verifier" }
 feign-gson = { module = "io.github.openfeign:feign-gson", version.ref = "feign" }
+flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
+flyway-database-postgresql = { module = "org.flywaydb:flyway-database-postgresql", version.ref = "flyway" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
+hikaricp = { module = "com.zaxxer:HikariCP", version.ref = "hikaricp" }
+javalin = { module = "io.javalin:javalin", version.ref = "javalin" }
+jdbi3-core = { module = "org.jdbi:jdbi3-core", version.ref = "jdbi" }
+jdbi3-sqlobject = { module = "org.jdbi:jdbi3-sqlobject", version.ref = "jdbi" }
 hamcrest-optional = { module = "com.github.npathai:hamcrest-optional", version.ref = "hamcrest-optional" }
 hamcrest = { module = "org.hamcrest:java-hamcrest", version.ref = "hamcrest" }
 jackson-datatype-jsr310 = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jsr310", version.ref = "jackson-datatype" }
@@ -74,6 +85,7 @@ lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
 mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
 mockito-junit-jupiter = { module = "org.mockito:mockito-junit-jupiter", version.ref = "mockito" }
 mockito-subclass = { module = "org.mockito:mockito-subclass", version.ref = "mockito" }
+postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
 radiance-substance = { module = "org.pushing-pixels:radiance-substance", version.ref = "substance" }
 snakeyaml-engine = { module = "org.snakeyaml:snakeyaml-engine", version.ref = "snake-yaml" }
 sonatype-goodies-prefs = { module = "org.sonatype.goodies:goodies-prefs", version.ref = "sonatype-goodies-prefs" }
