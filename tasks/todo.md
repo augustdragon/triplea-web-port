@@ -324,14 +324,19 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
 **Build-out phases (each shippable):**
 - [x] **P4.0 — Recon** (this session) — process model settled, reuse audit done, Lichess/BGA patterns captured,
       spec written + committed (`34619e2f6`).
-- [ ] **P4.1 — Multi-seat single game** (highest-risk first) — extend the playable server so 2+ humans share one
-      game, **seat-routed and seat-validated**. Groundwork laid: `WebDecisionBridge` is **requestId-keyed**;
-      today `GameWebSocketServer` broadcasts every decision to all clients (whoever replies first drives) with no
-      seat filtering and no WS auto-reconnect. Bind each WS connection to a seat (derive from the authenticated
-      session + a `seats` table — never trust the client's claimed seat), tag requests/replies with the seat, and
-      reject cross-seat replies. This is the one piece touching the engine-adjacent decision path → de-risk early.
-- [ ] **P4.2 — Persistence & resume** — versioned events + `lastSeenVersion` catch-up; flush-on-turn-commit;
-      resume a game from a save.
+- [x] **P4.1 — Multi-seat single game** ✅ — playable server now has a **pre-game seat-setup phase** (claim seats
+      as human / assign any AI type, reusing the engine's `PlayerListing`/`PlayerTypes`) and **seat-routed,
+      seat-validated** in-game decisions: each WS connection binds to a seat, requests/replies are seat-tagged,
+      cross-seat & spectator replies rejected (`WebDecisionBridge`). Optional/inert minors excluded from the
+      picker. Commits `5ca3d54d0` (a, server), `38f60ac9f` (b, client). Verified: 2-client probe (routing +
+      rejection) + browser claim flow. Seat claims are *trusted* until auth (P4.3) — validation guards accidents,
+      not impersonation.
+- [x] **P4.2 — Persistence & resume** ✅ — per-step **autosave** (`SaveStore` filesystem seam, `GameData.toBytes()`)
+      + **resume from the setup screen** (peek save → "Resume — round N" → `GameDataManager.loadGame` → engine
+      resumes via `setUpGameForRunningSteps()`); reconnection = snapshot catch-up + **battle-log replay** (P4.2c).
+      **Re-scoped:** versioned events were unnecessary for our snapshot architecture (see spec §6.2). Commits
+      `98b2692a4` (a), `5f9580051` (b), `45684bec2` (c). Verified live: play→restart→resume at round 5; battle-log
+      replay on reconnect. Single save slot per server; DB metadata + multi-game deferred to the control plane (P4.4).
 - [ ] **P4.3 — Auth + lobby** — Google/Discord OAuth, httpOnly sessions, lobby UI (public open-seat tables +
       private invite links + ready-up gate), create/join/list.
 - [ ] **P4.4 — Orchestrator** — control plane spawns/reaps per-game containers via the Docker API; routes the

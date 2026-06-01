@@ -202,6 +202,20 @@ known, low-risk addition, not a redesign. Build it when we add public signup, no
 
 Players come and go across **hours to days**. Async-resumable, DB-backed is the model.
 
+> **✅ Implemented in P4.2 (single-JVM, pre-control-plane).** Built against the **filesystem**
+> storage seam, not Postgres (the DB arrives with the control plane, §4/P4.4):
+> - **Autosave** after every committed step (`GameData.toBytes()` → `SaveStore`, a per-user
+>   `~/.triplea-web/saves` dir, atomic write). Glacial turn rate → per-step is cheap; a crash
+>   loses at most an in-progress step, never a committed one.
+> - **Resume:** a restarted server peeks the autosave, offers "Resume — round N" in the seat
+>   screen, and on `resumeGame` loads it via `GameDataManager.loadGame` and relaunches. The
+>   engine resumes from the saved step (the save carries `GAME_HAS_BEEN_SAVED_PROPERTY`; our run
+>   loop calls `setUpGameForRunningSteps()`). **Zero engine changes.**
+> - **Reconnection:** snapshot catch-up (already present) + a bounded **battle-log replay** on
+>   connect — see the §6.2 re-scope below.
+> - **Known limits (deferred to the control plane):** one save *slot* per server (single game);
+>   starting a new game overwrites the slot; no DB metadata rows / lazy multi-game rehydration yet.
+
 ### 6.1 Persistence — DB is the source of truth (Lichess pattern)
 
 The live game JVM is a **cache**; the durable record is in the save store + Postgres.
@@ -225,9 +239,18 @@ saves(id, game_id, turn, round, bytes_ref, created_at)
 sessions(token_hash, user_id, expires_at)   -- or signed cookie, no table
 ```
 
-### 6.2 Reconnection & catch-up — version every event (Lichess pattern, copy directly)
+### 6.2 Reconnection & catch-up — snapshot-based (versioned events NOT needed)
 
-This is the single most directly reusable pattern from the research.
+> **Re-scoped in P4.2.** The original plan (below) called for Lichess-style **versioned events +
+> `lastSeenVersion` replay**. That's a pattern for systems that stream *incremental* events — but
+> our web port broadcasts **full state snapshots**. `onOpen` already replays the complete picture
+> (seats + latest state + notes + objectives, and `bindSeat` re-sends a seat's outstanding
+> decision). The only gap was **battle-log history** (transient `{type:"battle"}` events), which
+> P4.2c closes with a bounded in-memory cache replayed on connect. So reconnection is solved
+> **without** event-versioning machinery. Keep versioning as a *future* option only if we ever move
+> from full snapshots to incremental events.
+
+The originally-planned (now unnecessary) incremental-event design, kept for reference:
 
 - Every game event carries a **monotonic version `v`**. The game JVM keeps a bounded
   in-memory buffer of recent events.
@@ -237,10 +260,6 @@ This is the single most directly reusable pattern from the research.
 - If the client is too far behind (e.g. the JVM restarted and the buffer is empty), fall back
   to a **fresh snapshot from the DB**, then resume version-based catch-up.
 - **Spectators** join the same versioned stream from the current version.
-
-> Replaces today's crude `onOpen` "replay the last snapshot to anyone" in
-> `GameWebSocketServer`. Assume the transport is lossy and rely on version reconciliation for
-> correctness, not on delivery guarantees.
 
 ### 6.3 Turn clock — days-per-move (Lichess correspondence model)
 
@@ -379,10 +398,13 @@ maintainer, and don't take a heavy dependency where a light one covers the need.
 
 - **P4.0 — Recon** ✅ *(this document)* — process model settled; reuse audit done; patterns
   captured from Lichess/BGA.
-- **P4.1 — Multi-seat single game** — extend the playable server so 2+ humans share one game,
-  seat-routed and seat-validated (§7). Proves the hardest, riskiest part first.
-- **P4.2 — Persistence & resume** — versioned events + `lastSeenVersion` catch-up (§6.2);
-  flush-on-turn-commit (§6.1); resume a game from a save. Async play becomes real.
+- **P4.1 — Multi-seat single game** ✅ — playable server with a pre-game seat-setup phase
+  (claim seats / assign AI, reusing the engine's `PlayerListing`/`PlayerTypes`) and
+  seat-routed, seat-validated in-game decisions (§7). Hardest/riskiest part proven first.
+- **P4.2 — Persistence & resume** ✅ — per-step **autosave** + **resume from the setup screen**
+  (filesystem `SaveStore` seam, engine resumes via `setUpGameForRunningSteps()`); reconnection
+  via snapshot catch-up + **battle-log replay**. Re-scoped: versioned events were unnecessary
+  for our snapshot architecture (§6.2). Async play is real. (DB metadata + multi-game → P4.4.)
 - **P4.3 — Auth + lobby** — Google/Discord OAuth, httpOnly sessions, lobby UI, create/join/
   list, ready-up.
 - **P4.4 — Orchestrator** — control plane spawns/reaps per-game containers via Docker API;
