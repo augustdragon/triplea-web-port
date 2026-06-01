@@ -299,21 +299,50 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
   while a blocked type is selected. No automated test yet for the click-destination move path or `previewMove`
   (would need a loaded-transport game fixture; verified live instead); the Playwright suite predates this.
 
-### Phase 4 — LAN / ZeroTier multiplayer  ⟵ NEXT (user requested for next session, 2026-05-31)
-> **Where to start:** the groundwork is already laid — `WebDecisionBridge` is **requestId-keyed**, so per-seat
-> routing is the natural extension. The known blocker (noted in 3g): today there's ONE game + one human seat,
-> and `GameWebSocketServer` **broadcasts every decision request to all connected clients** (whoever replies
-> first drives), and the client has **no WS auto-reconnect**. Multiplayer = give each `WebPlayer` seat its own
-> identity, route its requests only to the client that claimed that seat, and let other clients spectate.
-- [ ] Seat-claiming / session management (multiple browsers, one server) — a client claims a power; the server
-      tracks seat→connection. Likely a `{type:"control",action:"claimSeat",player}` message + a lobby/seat screen.
-- [ ] Route each seat's queries to the owning client (the bridge already carries a `requestId`; add the seat's
-      identity so `GameWebSocketServer` sends a request only to that seat's connection); spectators get `state` only.
-- [ ] WS auto-reconnect on the client + re-send the outstanding request for *that seat* on reconnect (the
-      existing catch-up re-sends the latest broadcast request, which is wrong once requests are seat-targeted).
-- [ ] Lightweight auth / room code
-- [ ] **Exit check:** two machines play Pacific 1940 over LAN, then over ZeroTier
-- Related: 3g hotseat (pass-and-play on one machine) shares the seat-routing mechanism — may fall out of this.
+### Phase 4 — Multiplayer hosting (server-authoritative SaaS-style)  ⟵ NEXT
+> **Full design: `docs/web-port/PHASE-4-MULTIPLAYER.md`** (written this session, P4.0). Direction shifted from
+> the old "LAN/ZeroTier" idea to a **true server** that replaces the legacy player-hosted headless bot:
+> browser-only (zero install), the engine runs on *our* server, engineered cleanly for a private group now but
+> scalable to a SaaS later. Engine stays unmodified throughout.
+
+**Decisions locked (P4.0):**
+- **One JVM per active game** — *forced*, not chosen: `game-core` has process-global static state
+  (`GameData.current`, `GameState.started`, `RemoteRandom`, `ClientSetting`) that two games in one JVM would
+  corrupt, and we can't fix it without editing the engine. `HeadlessGameServer` hosts one game per instance too.
+- **Java control plane** + **Postgres** + per-game game JVMs; **social OAuth** (Google/Discord), httpOnly cookies.
+- **Async-resumable, DB-backed** persistence: DB is source of truth; **flush on every committed turn** (our turn
+  rate is glacial, so we never lose a committed move — stricter than Lichess's periodic flush); lazy-rehydrate
+  the game JVM on reconnect via `GameData.toBytes()` / `GameDataManager.loadGame`.
+- **Reconnection:** version every game event; client sends `lastSeenVersion`; server replays the tail (Lichess
+  pattern — replaces today's crude "replay latest snapshot to anyone").
+- **Abandonment:** timed-out seat → **AI takeover** (engine AI caretakes); escalating play-bans for repeat griefers.
+- **Schema:** greenfield, our own Flyway history. Upstream `spitfire-server` lobby (deleted upstream mid-2024)
+  has no game-state/seats/resume — its game model doesn't fit. Moderation/audit DDL is a **deferred transplant**
+  (not v1 — a private allow-list has no one to moderate; the allow-list *is* the access control).
+- **Save store:** Docker volume now → R2/S3 later via the storage seam. **Host:** Docker Compose on the VM.
+
+**Build-out phases (each shippable):**
+- [x] **P4.0 — Recon** (this session) — process model settled, reuse audit done, Lichess/BGA patterns captured,
+      spec written + committed (`34619e2f6`).
+- [ ] **P4.1 — Multi-seat single game** (highest-risk first) — extend the playable server so 2+ humans share one
+      game, **seat-routed and seat-validated**. Groundwork laid: `WebDecisionBridge` is **requestId-keyed**;
+      today `GameWebSocketServer` broadcasts every decision to all clients (whoever replies first drives) with no
+      seat filtering and no WS auto-reconnect. Bind each WS connection to a seat (derive from the authenticated
+      session + a `seats` table — never trust the client's claimed seat), tag requests/replies with the seat, and
+      reject cross-seat replies. This is the one piece touching the engine-adjacent decision path → de-risk early.
+- [ ] **P4.2 — Persistence & resume** — versioned events + `lastSeenVersion` catch-up; flush-on-turn-commit;
+      resume a game from a save.
+- [ ] **P4.3 — Auth + lobby** — Google/Discord OAuth, httpOnly sessions, lobby UI (public open-seat tables +
+      private invite links + ready-up gate), create/join/list.
+- [ ] **P4.4 — Orchestrator** — control plane spawns/reaps per-game containers via the Docker API; routes the
+      browser to the right game's WS; lazy rehydration on reconnect.
+- [ ] **P4.5 — Hosting** — Docker Compose on the VM (control plane + Postgres + on-demand game containers);
+      presence fed into the game process; **"your turn" Web Push** (the gap Lichess under-built; multi-day turns
+      make it essential — a stalled seat blocks 3–5 players).
+- [ ] **Exit check:** a private group plays a full Pacific 1940 game over the internet, browser-only, resumable
+      across days, with an abandoned seat caretaken by AI.
+- Related: 3g hotseat (pass-and-play on one machine) shares the seat-routing mechanism — falls out of P4.1.
+- Deferred to "when we open up": moderation/ban/audit tooling (schema known, see spec §4/§10.4); R2/S3 save store.
 
 ### Phase 5 — Breadth & durability
 - [ ] Run converter across more maps; fix feature gaps (relief blending, scroll-wrap, markers)
