@@ -1,3 +1,7 @@
+**This is the web-port fork** — read [`docs/web-port/CHARTER.md`](docs/web-port/CHARTER.md) first;
+it is the source of truth for what governs the active work. The root `AGENTS.md` documents the
+underlying engine and Java/build conventions (still accurate, but predates the fork).
+
 See `AGENTS.md` (this directory) for project-wide guidance.
 
 Nested `AGENTS.md` files exist throughout the source tree (under `lib/`,

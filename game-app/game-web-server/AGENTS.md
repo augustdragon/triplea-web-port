@@ -9,7 +9,8 @@ WebSocket + JSON. Build only — no UI here.
   seams (`Player`, `IDisplay`, `LaunchAction`). If a change to `game-core` seems
   necessary, STOP and reconsider — respect the save-game serialization and
   `@RemoteActionCode` network-compatibility constraints in the root `AGENTS.md`.
-- Local work only; never push to the remote (per the web-port initiative).
+- Pushing to this fork's own `origin` (`augustdragon/triplea-web-port`) is fine — it's the
+  cross-machine sync point. **Never push to the upstream `triplea-game/triplea` repo.**
 
 ## What lives here
 - `map/` — **MapGeometryConverter**: turns a TripleA map folder's geometry files

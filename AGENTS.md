@@ -4,6 +4,24 @@ TripleA is an open-source, turn-based strategy game engine inspired by Axis & Al
 It supports community-created maps, AI opponents, and online multiplayer via a lobby server.
 The project has been active since 2002.
 
+## ⚠️ This is the web-port fork
+
+This repository is a **web-port fork** of TripleA. The active work replaces the Swing UI and
+custom-socket networking with a browser (React + WebSocket/JSON) client and a Java control plane,
+**reusing the `game-core` engine unchanged**. The rest of this file documents the underlying engine
+and Java/build conventions — still accurate — but it predates the fork and says nothing about the
+web port.
+
+**The [web-port charter](docs/web-port/CHARTER.md) is the source of truth for what governs this
+work.** In short:
+
+- **The engine stays unmodified.** Adapt it at existing seams; if a `game-core` change seems
+  necessary, STOP and reconsider (see the save-game serialization + `@RemoteActionCode` constraints
+  below). The web port's own networking does **not** use the `@RemoteActionCode` path.
+- **The web port is the active workstream**; the desktop client still builds but is not the focus.
+- **Work lives on this fork** (`augustdragon/triplea-web-port`). Push to this fork's `origin`
+  freely; **never push to the upstream `triplea-game/triplea` repo.**
+
 ## Project Structure
 
 This is a multi-module Gradle (Kotlin DSL) project. Key top-level directories:
@@ -32,26 +50,31 @@ http-clients/lobby-client → domain-data, lib/feign-common, lib/java-extras, li
 
 - **Java version**: JDK 21
 - **Build tool**: Gradle with Kotlin DSL, configuration cache enabled
+- **Project paths are flat**: `:game-core`, `:game-headed`, `:game-web-server`,
+  `:game-control-plane` — **not** `:game-app:game-core` (see `settings.gradle.kts`)
 - **Formatting**: Google Java Format via Spotless (`./gradlew spotlessApply`)
-- **Static analysis**: Checkstyle (`.build/checkstyle.xml`) + PMD (`.build/pmd.xml`)
+- **Static analysis**: Spotless (formatting) plus a custom style check
+  (`.build/code-convention-checks/check-custom-style`, run by `./verify`). Note: `.build/checkstyle.xml`
+  and `.build/pmd.xml` exist but are **not** wired into the game modules' builds in this fork —
+  the convention plugins apply Spotless only.
 
 ### Common Commands
 
 ```bash
-# Build and run the desktop client
-./gradlew :game-app:game-headed:run
+# Build and run the desktop client (still builds; not the web-port focus)
+./gradlew :game-headed:run
 
-# Run all checks (formatting + tests + static analysis + custom checks)
+# Run all checks (spotlessApply + check [compile + tests] + custom style check)
 ./verify
 
 # Run all tests
 ./gradlew test
 
 # Run tests for a specific module
-./gradlew :game-app:game-core:test
+./gradlew :game-core:test
 
 # Run a specific test class
-./gradlew :game-app:game-core:test --tests games.strategy.triplea.UnitUtilsTest
+./gradlew :game-core:test --tests games.strategy.triplea.UnitUtilsTest
 
 # Apply formatting
 ./gradlew spotlessApply
