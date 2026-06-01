@@ -10,8 +10,8 @@ import java.util.List;
  * @param player the power's name.
  * @param alliances the alliances this power belongs to (drives the client's alliance total rows).
  * @param passive the engine's "optional" player flag — the passive minor powers (e.g. Pacific's
- *     Russians/French/Dutch) that never produce/move/fight. The client collapses these into a single
- *     "Other" group rather than giving each its own alliance section.
+ *     Russians/French/Dutch) that never produce/move/fight. The client collapses these into a
+ *     single "Other" group rather than giving each its own alliance section.
  * @param pus current PUs on hand.
  * @param production raw territory production × the map's PU multiplier (StatPanel "Production").
  * @param units total units owned across the map (all units; no map-art draw filter, which we lack

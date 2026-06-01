@@ -76,7 +76,8 @@ public final class MapGeometryConverter {
         Files.exists(centersFile) ? PointFileReaderWriter.readOneToOne(centersFile) : Map.of();
 
     // Polygons in polygons.txt that the game data doesn't recognize as territories are handled two
-    // ways (below): a mislabeled duplicate that shares a real territory's center ("Suiyuyan" over the
+    // ways (below): a mislabeled duplicate that shares a real territory's center ("Suiyuyan" over
+    // the
     // Chinese-owned "Suiyuan") is dropped, while standalone decoration (the corner "Box1".."Box3")
     // is folded into the nearest land territory as one filler rectangle so it reads as part of that
     // territory rather than leaving a hole. The geometry-only path (no game data) keeps everything.
@@ -95,7 +96,8 @@ public final class MapGeometryConverter {
     final List<TerritoryGeometry> territories = new ArrayList<>();
     for (final var entry : polygonsByTerritory.entrySet()) {
       final String name = entry.getKey();
-      // Skip non-territory polygons as standalone regions: their shapes are either dropped or merged
+      // Skip non-territory polygons as standalone regions: their shapes are either dropped or
+      // merged
       // into a neighbor as corner fill (see above). Keep everything when there's no game data.
       if (gameData != null && !realNames.contains(name)) {
         continue;

@@ -70,7 +70,8 @@ class PlayerStatsProjectorTest {
 
   @Test
   void passiveMatchesTheEngineOptionalFlag() {
-    // The "Other"-group signal: the projected passive flag must mirror the engine's optional player.
+    // The "Other"-group signal: the projected passive flag must mirror the engine's optional
+    // player.
     for (final GamePlayer player : data.getPlayerList().getPlayers()) {
       assertEquals(
           player.getOptional(),

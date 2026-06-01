@@ -87,8 +87,7 @@ class MapGeometryConverterTest {
     final Set<String> landNames = Set.of("Suiyuan", "Yukon Territory");
 
     final Map<String, int[]> fill =
-        MapGeometryConverter.cornerFillBounds(
-            polys.keySet(), polys, centers, realNames, landNames);
+        MapGeometryConverter.cornerFillBounds(polys.keySet(), polys, centers, realNames, landNames);
 
     assertThat(fill.keySet(), contains("Yukon Territory"));
     assertThat(fill.get("Yukon Territory"), is(new int[] {120, 10, 180, 50}));
@@ -100,8 +99,7 @@ class MapGeometryConverterTest {
     final Map<String, Point> centers = Map.of("Box1", new Point(5, 5));
 
     final Map<String, int[]> fill =
-        MapGeometryConverter.cornerFillBounds(
-            polys.keySet(), polys, centers, Set.of(), Set.of());
+        MapGeometryConverter.cornerFillBounds(polys.keySet(), polys, centers, Set.of(), Set.of());
 
     assertThat(fill.isEmpty(), is(true));
   }
