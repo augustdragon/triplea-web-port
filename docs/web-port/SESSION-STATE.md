@@ -167,7 +167,8 @@ real data, extract the `map/` geometry files (or read straight from the zip).
 - ✅ `WebGameHost`/`WebLaunchAction` run an AI `ServerGame` in-process (in-memory prefs isolate the user's TripleA settings; autosaves redirected to a temp dir). `:game-web-server:runAiGame` smoke-runs it.
 - ✅ `StateProjector` → `StateSnapshot` (round/step/currentPlayer/owners). `SpectatorWebSocketServer` (org.java_websocket, already on classpath via root build) broadcasts; `WebSpectatorServer` main runs the game and publishes per step. `:game-web-server:runSpectator --args="<gameXml> [port=8080] [maxRounds] [stepDelayMs]"`.
 - ✅ Client connects to `ws://<host>:8080`, live-updates owners + a round/step/turn status bar. Verified live on Pacific 1940.
-- To demo: terminal 1 `:game-web-server:runSpectator --args="...\map\games\ww2pac40.xml 8080 6 350"`; terminal 2 `npm --prefix web-client run dev`; open http://localhost:5173/.
+- To demo: terminal 1 `:game-web-server:runSpectator --args="...\map\games\ww2pac40_2nd_edition.xml 8080 6 350"`; terminal 2 `npm --prefix web-client run dev`; open http://localhost:5173/.
+- **⚠ Canonical game file: `ww2pac40_2nd_edition.xml`.** Always launch `runSpectator` / `runPlayable` / `exportGeometry` against the **2nd edition** — it matches the saved rules PDF and the exported `geometry.json`. The 1st-ed `ww2pac40.xml` defines *different* politics and combat stats (e.g. Japan gets only the single combined declaration of war, not the four 2e options) and will look like a "config bug." Linux map workdir: `/home/<user>/triplea-webport-work/world_war_ii_pacific-master/map/games/`.
 
 ## Immediate next action when resuming
 **Phase 3 (playable) is the chosen track.** Full sub-phase breakdown + the
