@@ -1,6 +1,10 @@
 package org.triplea.web.server.game;
 
 import java.net.InetSocketAddress;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
@@ -44,6 +48,11 @@ public final class GameWebSocketServer extends WebSocketServer {
   private volatile @Nullable String notesEnvelope;
   private volatile @Nullable String objectivesEnvelope;
   private volatile @Nullable String seatsEnvelope;
+
+  // Battle-result events are transient (one per completed battle); cache a bounded history so a
+  // reconnecting client (page reload) sees the full log, not just battles after it reconnected.
+  private static final int MAX_BATTLE_LOG = 500;
+  private final Deque<String> battleLog = new ArrayDeque<>();
 
   // The single outstanding decision (engine is single-threaded), cached for (re)claim catch-up.
   private volatile @Nullable String pendingRequestSeat;
@@ -136,6 +145,9 @@ public final class GameWebSocketServer extends WebSocketServer {
   public void resetForNewGame() {
     latestState = null;
     clearPendingRequest();
+    synchronized (battleLog) {
+      battleLog.clear();
+    }
   }
 
   /** Wrap a state snapshot in a {@code state} envelope, store it for catch-up, and broadcast it. */
@@ -163,9 +175,24 @@ public final class GameWebSocketServer extends WebSocketServer {
     broadcast(envelopeJson);
   }
 
-  /** Broadcast a pre-built {@code {type:"battle",...}} event envelope (not cached for catch-up). */
+  /**
+   * Broadcast a {@code {type:"battle",...}} event and cache it (bounded) for reconnect catch-up.
+   */
   public void publishBattleEvent(final String envelopeJson) {
+    synchronized (battleLog) {
+      battleLog.addLast(envelopeJson);
+      while (battleLog.size() > MAX_BATTLE_LOG) {
+        battleLog.removeFirst();
+      }
+    }
     broadcast(envelopeJson);
+  }
+
+  /** A snapshot copy of the cached battle-log envelopes, oldest first. */
+  List<String> snapshotBattleLog() {
+    synchronized (battleLog) {
+      return new ArrayList<>(battleLog);
+    }
   }
 
   @Override
@@ -175,6 +202,9 @@ public final class GameWebSocketServer extends WebSocketServer {
     sendIfPresent(conn, latestState);
     sendIfPresent(conn, notesEnvelope);
     sendIfPresent(conn, objectivesEnvelope);
+    for (final String battle : snapshotBattleLog()) {
+      conn.send(battle); // replay the battle log so a reconnecting client's log isn't empty
+    }
     // No decision request here: the connection has not claimed a seat yet. bindSeat() replays any
     // outstanding request once it claims one.
   }
