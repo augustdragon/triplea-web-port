@@ -33,6 +33,10 @@ public record SeatRoster(
    * @param enabled whether the seat participates (disabling is not yet wired; always true for now).
    * @param canDisable whether the engine permits this seat to be disabled.
    * @param optional whether this is a passive/optional minor power (e.g. Pacific's French/Dutch).
+   * @param human whether this seat is human-driven (a {@code WebPlayer}) in the <i>running</i> game
+   *     — i.e. it was claimed at launch. Only such seats are rejoinable mid-game (an open {@code
+   *     human} seat means its player dropped and its decision is buffered); AI seats are not.
+   *     Always {@code false} in the setup phase.
    * @param alliances the alliance groups this seat belongs to (for client grouping).
    */
   public record Seat(
@@ -42,5 +46,6 @@ public record SeatRoster(
       boolean enabled,
       boolean canDisable,
       boolean optional,
+      boolean human,
       List<String> alliances) {}
 }

@@ -5,6 +5,7 @@ import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.framework.startup.ui.PlayerTypes;
 import games.strategy.engine.player.Player;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -129,11 +130,33 @@ final class SeatPlan {
     return players;
   }
 
+  /** Names of seats currently owned by a human — the {@code WebPlayer} seats at launch time. */
+  Set<String> claimedSeatNames() {
+    final Set<String> names = new HashSet<>();
+    for (final Map.Entry<String, SeatState> e : seats.entrySet()) {
+      if (e.getValue().owner != null) {
+        names.add(e.getKey());
+      }
+    }
+    return names;
+  }
+
   SeatRoster toRoster(final String phase) {
-    return toRoster(phase, null);
+    return toRoster(phase, null, Set.of());
   }
 
   SeatRoster toRoster(final String phase, final @Nullable SeatRoster.SavedGame savedGame) {
+    return toRoster(phase, savedGame, Set.of());
+  }
+
+  /**
+   * @param humanSeats names of seats that are human-driven in the running game (empty in setup), so
+   *     the client knows which open seats are rejoinable.
+   */
+  SeatRoster toRoster(
+      final String phase,
+      final @Nullable SeatRoster.SavedGame savedGame,
+      final Set<String> humanSeats) {
     final List<SeatRoster.Seat> list = new ArrayList<>();
     for (final Map.Entry<String, SeatState> e : seats.entrySet()) {
       final SeatState s = e.getValue();
@@ -145,7 +168,14 @@ final class SeatPlan {
       }
       list.add(
           new SeatRoster.Seat(
-              e.getKey(), s.owner, s.aiType, s.enabled, s.canDisable, s.optional, s.alliances));
+              e.getKey(),
+              s.owner,
+              s.aiType,
+              s.enabled,
+              s.canDisable,
+              s.optional,
+              humanSeats.contains(e.getKey()),
+              s.alliances));
     }
     return new SeatRoster(phase, gameName, list, aiLabels, savedGame);
   }

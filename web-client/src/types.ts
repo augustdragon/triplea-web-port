@@ -266,6 +266,8 @@ export interface SeatInfo {
   canDisable: boolean;
   /** Passive/optional minor power (e.g. Pacific's French/Dutch). */
   optional: boolean;
+  /** Human-driven (a WebPlayer) in the running game — only such seats are rejoinable mid-game. */
+  human: boolean;
   alliances: string[];
 }
 

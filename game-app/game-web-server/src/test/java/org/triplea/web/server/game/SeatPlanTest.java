@@ -112,6 +112,15 @@ class SeatPlanTest {
     assertEquals(info, plan.toRoster("setup", info).savedGame());
   }
 
+  @Test
+  void claimedSeatNamesAndHumanFlagMarkHumanSeats() {
+    plan.claim(seatA, "Nate");
+    assertEquals(java.util.Set.of(seatA), plan.claimedSeatNames());
+    final SeatRoster running = plan.toRoster("running", null, java.util.Set.of(seatA));
+    assertTrue(find(running, seatA).human(), "claimed seat is human (rejoinable)");
+    assertFalse(find(running, seatB).human(), "unclaimed seat is AI (not rejoinable)");
+  }
+
   private static SeatRoster.Seat find(final SeatRoster roster, final String name) {
     return roster.seats().stream().filter(s -> s.name().equals(name)).findFirst().orElseThrow();
   }

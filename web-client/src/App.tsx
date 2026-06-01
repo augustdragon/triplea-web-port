@@ -25,6 +25,7 @@ import { PlacePanel } from "./PlacePanel";
 import { Sidebar } from "./Sidebar";
 import { BottomDock, type DockTab } from "./BottomDock";
 import { SeatSelect } from "./SeatSelect";
+import { RejoinPrompt } from "./RejoinPrompt";
 
 // The game WebSocket server (see :game-web-server:runSpectator / runPlayable). Same host as the
 // page, so it works over LAN/ZeroTier too.
@@ -32,6 +33,25 @@ const WS_URL = `ws://${location.hostname}:8080`;
 
 // Width of the fixed right sidebar; the bottom dock spans from the left edge to here.
 const SIDEBAR_WIDTH = 300;
+
+// Seat memory: sessionStorage (per-tab) is primary — it keeps two tabs on distinct seats and
+// survives a tab reload; localStorage is the fallback that survives a full browser close, so
+// reopening the page can offer to re-claim the same seat.
+function recalledSeat(): string | null {
+  return sessionStorage.getItem("seat") ?? localStorage.getItem("seat");
+}
+function rememberSeat(seat: string): void {
+  sessionStorage.setItem("seat", seat);
+  localStorage.setItem("seat", seat);
+}
+function forgetSeat(): void {
+  sessionStorage.removeItem("seat");
+  localStorage.removeItem("seat");
+}
+function rememberName(name: string): void {
+  sessionStorage.setItem("name", name);
+  localStorage.setItem("name", name);
+}
 
 export default function App() {
   const [geometry, setGeometry] = useState<MapGeometry | null>(null);
@@ -57,11 +77,17 @@ export default function App() {
   // A territory to pan the map to (from the air-can't-land warning pills); nonce re-triggers on
   // a repeat click of the same territory.
   const [airFocus, setAirFocus] = useState<{ name: string; nonce: number } | null>(null);
-  // Seat assignment (setup phase). `mySeat`/`myName` persist so a reload re-claims the same seat.
+  // `mySeat` is the seat we've claimed THIS session (null until we claim/rejoin) — it drives the
+  // in-game UI and routing. `recalledRef` is the seat we last held (from storage), used to silently
+  // re-claim in setup and to default the running-phase rejoin prompt.
   const [roster, setRoster] = useState<SeatRoster | null>(null);
-  const [mySeat, setMySeat] = useState<string | null>(() => sessionStorage.getItem("seat"));
-  const [myName, setMyName] = useState<string>(() => sessionStorage.getItem("name") ?? "");
+  const [mySeat, setMySeat] = useState<string | null>(null);
+  const [myName, setMyName] = useState<string>(
+    () => sessionStorage.getItem("name") ?? localStorage.getItem("name") ?? "",
+  );
   const [spectating, setSpectating] = useState(false);
+  const recalledRef = useRef<string | null>(recalledSeat());
+  const setupReclaimDone = useRef(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -77,21 +103,9 @@ export default function App() {
   useEffect(() => {
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
-    ws.onopen = () => {
-      setWsStatus("live");
-      // Reconnect/reload: re-claim the seat we held so decisions keep routing to us.
-      const saved = sessionStorage.getItem("seat");
-      if (saved) {
-        ws.send(
-          JSON.stringify({
-            type: "control",
-            action: "claimSeat",
-            seat: saved,
-            name: sessionStorage.getItem("name") || undefined,
-          }),
-        );
-      }
-    };
+    // Reclaim is handled by the roster-driven effect below (it knows the phase: auto in setup,
+    // confirm in running), so onopen just marks the connection live.
+    ws.onopen = () => setWsStatus("live");
     ws.onmessage = (e) => {
       const env = JSON.parse(e.data) as
         | { type: "state"; snapshot: StateSnapshot }
@@ -128,6 +142,24 @@ export default function App() {
     }
   }, [request]);
 
+  // Reconnect handling. In SETUP, silently re-claim the seat we last held (harmless, pre-game). In
+  // RUNNING we do NOT auto-claim — the RejoinPrompt asks first, since taking a live seat can take
+  // over a buffered decision or evict whoever is there.
+  useEffect(() => {
+    if (!roster || mySeat || spectating || setupReclaimDone.current) return;
+    if (roster.phase === "setup") {
+      const recalled = recalledRef.current;
+      if (recalled) {
+        const seat = roster.seats.find((s) => s.name === recalled);
+        if (seat && !seat.owner) {
+          setupReclaimDone.current = true;
+          claimSeat(recalled);
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roster, mySeat, spectating]);
+
   function sendDecision(payload: object) {
     const ws = wsRef.current;
     if (ws && request) {
@@ -160,17 +192,18 @@ export default function App() {
   }
   function changeName(name: string) {
     setMyName(name);
-    sessionStorage.setItem("name", name);
+    rememberName(name);
   }
   function claimSeat(seat: string) {
     sendControl({ action: "claimSeat", seat, name: myName || undefined });
     setMySeat(seat);
-    sessionStorage.setItem("seat", seat);
+    recalledRef.current = seat;
+    rememberSeat(seat);
   }
   function releaseSeat(seat: string) {
     sendControl({ action: "releaseSeat", seat });
     setMySeat(null);
-    sessionStorage.removeItem("seat");
+    forgetSeat();
   }
   function setSeatType(seat: string, playerType: string) {
     sendControl({ action: "setSeatType", seat, playerType });
@@ -328,6 +361,20 @@ export default function App() {
         onSetType={setSeatType}
         onStart={startGame}
         onResume={resumeGame}
+        onSpectate={() => setSpectating(true)}
+      />
+    );
+  }
+
+  // Running game but no claimed seat (e.g. reconnected after a full browser close): confirm a
+  // rejoin rather than silently grabbing a live seat.
+  if (roster && roster.phase === "running" && !mySeat && !spectating) {
+    return (
+      <RejoinPrompt
+        roster={roster}
+        recalledSeat={recalledRef.current}
+        colors={geometry.playerColors}
+        onRejoin={claimSeat}
         onSpectate={() => setSpectating(true)}
       />
     );

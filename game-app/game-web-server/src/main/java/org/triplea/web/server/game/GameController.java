@@ -78,6 +78,9 @@ public final class GameController {
   private volatile @Nullable String saveSlot;
   // Metadata about an existing autosave (round + step), surfaced in the roster as a resume option.
   private volatile @Nullable SeatRoster.SavedGame savedGameInfo;
+  // Seats that are human-driven (WebPlayer) in the running game — set at launch, empty in setup.
+  // Lets the client offer rejoin on an unmanned human seat (whose decision is buffered) but not AI.
+  private volatile Set<String> humanSeats = Set.of();
 
   public GameController(
       final Path gameXml,
@@ -111,6 +114,7 @@ public final class GameController {
     plan = newPlan;
     saveSlot = slotFor(data.getGameName());
     savedGameInfo = peekSave(saveSlot); // offer a resume option if an autosave exists
+    humanSeats = Set.of(); // no running game yet
     phase = "setup";
     server.resetForNewGame();
     publishSeats();
@@ -194,6 +198,7 @@ public final class GameController {
     final Session session = new Session();
     current = session;
     session.start(data, p);
+    humanSeats = p.claimedSeatNames(); // the seats that became WebPlayers — rejoinable mid-game
     phase = "running";
     publishSeats(); // phase flips to "running" → client switches from seat-select to the game UI
     savedGameInfo = null;
@@ -222,6 +227,7 @@ public final class GameController {
     // The seat plan's nations match the saved game (same map); buildPlayers binds humans/AI by
     // name.
     session.start(loaded.get(), p);
+    humanSeats = p.claimedSeatNames();
     phase = "running";
     publishSeats();
     savedGameInfo = null;
@@ -255,7 +261,7 @@ public final class GameController {
     }
     final JsonObject env = new JsonObject();
     env.addProperty("type", "seats");
-    env.add("roster", GSON.toJsonTree(p.toRoster(phase, savedGameInfo)));
+    env.add("roster", GSON.toJsonTree(p.toRoster(phase, savedGameInfo, humanSeats)));
     server.publishSeats(GSON.toJson(env));
   }
 
