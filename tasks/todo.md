@@ -370,8 +370,18 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
         `:game-core`/`:domain-data` deps to M4b/M5 (M1 doesn't touch the engine). Added `hikari.connectionTimeout=5s`
         so `/health` fails fast instead of blocking 30s. Run: `docker compose -f .docker/web-port-db.yml up -d` →
         `export CONTROL_PLANE_DB_PASSWORD=triplea_web` → `./gradlew :game-control-plane:run`.
-  - [ ] **M2** — OAuth (pac4j Google/Discord) → JWT httpOnly cookie + allow-list + `AuthFilter` + `/api/me`;
-        dev-flag fake-login (fails under prod profile). Verify: cookie set, `/me` works, non-allow-listed 403, no-cookie 401.
+  - [x] **M2** ✅ — Session auth: JWT (HS256, auth0 java-jwt) in an httpOnly+SameSite cookie (Secure in prod),
+        config-backed allow-list checked at login **and** per-request (revocation), `AuthFilter` on `/api/*`,
+        `GET /api/me`, `POST /api/logout`, and a dev-only fake-login (`POST /api/dev-login`, synthetic google
+        identity, registered only when `CONTROL_PLANE_DEV_LOGIN=true`; config **fails fast** if that's set under
+        `profile=prod`). All login paths funnel through one `LoginService` (allow-list → `UserDao` upsert → mint)
+        so pac4j drops in behind the same seam. gson `JsonMapper` wired into Javalin. **Deferred (deliberate, per
+        the de-risk fork):** the real pac4j Google/Discord provider — can't verify without registered OAuth apps;
+        dev-login exercises the whole flow meanwhile. Verified end-to-end (Postgres): no-cookie→401, dev-login
+        listed→200+httpOnly cookie & `/me`→200, unlisted→403, tampered cookie→401, logout→204 then 401, revocation
+        (valid JWT but removed from allow-list)→403, prod+dev-login→startup exit 1. Unit tests: JwtService
+        round-trip/tamper/wrong-secret, ConfigAllowList, config validation. Run: add `CONTROL_PLANE_JWT_SECRET`
+        (≥32 chars), `CONTROL_PLANE_DEV_LOGIN=true`, `CONTROL_PLANE_ALLOWLIST="google:<subject>"` to the M1 run env.
   - [ ] **M3** — Lobby REST + lobby WS (tables/seats/ready-up/presence; seat owner = authenticated principal, not
         client name) + React multi-view (react-router: login→lobby→game; `App.tsx`→Game route; Vite `/api` proxy).
         Verify: two sessions form a table, ready-up, host-launch invokes `GameLauncher`.

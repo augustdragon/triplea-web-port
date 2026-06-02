@@ -22,6 +22,8 @@ configurations.all {
 dependencies {
     // HTTP API + (later) lobby WebSocket on embedded Jetty.
     implementation(libs.javalin)
+    // Stateless session: sign/verify the JWT carried in the auth cookie (HMAC).
+    implementation(libs.java.jwt)
     // Postgres source-of-truth: pooled JDBC + thin SQL mapping + schema migrations on boot.
     implementation(libs.hikaricp)
     implementation(libs.jdbi3.core)

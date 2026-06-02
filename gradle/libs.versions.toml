@@ -14,6 +14,7 @@ feign = "13.12"
 flyway = "11.8.2"
 gson = "2.14.0"
 hikaricp = "6.3.0"
+java-jwt = "4.5.0"
 javalin = "6.7.0"
 jdbi = "3.49.3"
 guava = "33.6.0-jre"
@@ -64,6 +65,7 @@ flyway-database-postgresql = { module = "org.flywaydb:flyway-database-postgresql
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
 hikaricp = { module = "com.zaxxer:HikariCP", version.ref = "hikaricp" }
+java-jwt = { module = "com.auth0:java-jwt", version.ref = "java-jwt" }
 javalin = { module = "io.javalin:javalin", version.ref = "javalin" }
 jdbi3-core = { module = "org.jdbi:jdbi3-core", version.ref = "jdbi" }
 jdbi3-sqlobject = { module = "org.jdbi:jdbi3-sqlobject", version.ref = "jdbi" }
