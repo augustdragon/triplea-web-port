@@ -49,5 +49,8 @@ transport and client are new.
 - Java 21 (SDKMAN), Node 22 (nvm); Gradle project paths are **flat** (`:game-core`,
   `:game-web-server`, `:game-control-plane` — not `:game-app:game-core`).
 - Game container (browser plays a map): `./gradlew :game-web-server:runPlayable --args="<gameXml>"`.
-- Control plane (P4.3+): `docker compose -f .docker/web-port-db.yml up -d` →
-  `export CONTROL_PLANE_DB_PASSWORD=triplea_web` → `./gradlew :game-control-plane:run`.
+- Control plane (P4.3+): `docker compose -f .docker/web-port-db.yml up -d`, then export the required
+  env and run. Minimum: `CONTROL_PLANE_DB_PASSWORD=triplea_web` and `CONTROL_PLANE_JWT_SECRET=<≥32 chars>`.
+  For local auth: also `CONTROL_PLANE_DEV_LOGIN=true` and `CONTROL_PLANE_ALLOWLIST="google:<subject>,…"`,
+  then `POST /api/dev-login {"subject":"…"}` to get a session cookie. Run with `./gradlew :game-control-plane:run`.
+  (`profile=prod` forbids dev-login and marks cookies Secure; startup fails fast if misconfigured.)
