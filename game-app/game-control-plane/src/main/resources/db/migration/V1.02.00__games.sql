@@ -1,8 +1,13 @@
 -- Games: the lobby/active/paused/finished lifecycle row, and the orchestration handle
 -- (container_id, ws_endpoint) the control plane fills in when it spawns a game container.
 -- id is a UUID so it can sit in URLs (/api/games/:id/connect) without exposing a sequence.
--- current_save_id points at the latest save row; its FK is added in V1.04 once `saves` exists
--- (saves references games, so the two-way link is completed from the saves side).
+--
+-- Live position is modelled as Round / Power / Phase (the unambiguous TripleA + rulebook
+-- vocabulary): `round` mirrors the engine's getSequence().getRound() (one full cycle of all
+-- powers; the "1" in community shorthand like "J1"), `current_power` is whose turn it is, and
+-- `current_phase` is the raw engine step display name. The latter two are null while status is
+-- 'lobby' (no game running yet). `updated_at` is set by the app on each write (no trigger).
+-- current_save_id points at the chosen resume save; its FK is added in V1.04 once `saves` exists.
 CREATE TABLE games (
     id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     map_xml         TEXT        NOT NULL,
@@ -12,8 +17,9 @@ CREATE TABLE games (
     container_id    TEXT,
     ws_endpoint     TEXT,
     current_save_id BIGINT,
-    turn            INTEGER     NOT NULL DEFAULT 0,
     round           INTEGER     NOT NULL DEFAULT 0,
+    current_power   TEXT,
+    current_phase   TEXT,
     created_by      BIGINT      NOT NULL REFERENCES users (id),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()

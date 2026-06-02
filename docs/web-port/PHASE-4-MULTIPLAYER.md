@@ -230,14 +230,25 @@ The live game JVM is a **cache**; the durable record is in the save store + Post
   resume. Reap idle game JVMs; their state is safely on disk.
 
 ```
-games(id, map_xml, edition, status[lobby|active|paused|finished],
-      container_id, ws_endpoint, current_save_id, turn, round,
+games(id UUID, map_xml, edition, status[lobby|active|paused|finished],
+      container_id, ws_endpoint, current_save_id,
+      round, current_power, current_phase,           -- live Round / Power / Phase position
       created_by, created_at, updated_at)
 seats(game_id, power_name, user_id NULL, kind[human|ai|open],
-      connected_bool, turn_deadline_at NULL)
-saves(id, game_id, turn, round, bytes_ref, created_at)
+      connected, turn_deadline_at NULL)               -- CHECK: kind=human  <=>  user_id set
+saves(id, game_id, round, power, phase, bytes_ref, created_at)  -- one row per committed step; latest = MAX(id)
 sessions(token_hash, user_id, expires_at)   -- or signed cookie, no table
 ```
+
+> **Implemented in M1** (see `game-app/game-control-plane/src/main/resources/db/migration/`,
+> Flyway `V1.00.00`–`V1.04.00`). Refinements made during M1 review: progression is modelled as
+> **Round / Power / Phase** rather than a bare `turn` (the engine's `getRound()` is the global cycle
+> counter; `current_power`/`phase` carry the within-round position — "round" and a power's
+> turn-count coincide in normal play but diverge when powers are eliminated or enter late). "Latest
+> save" is keyed on the monotonic `saves.id`, not `created_at`. A `CHECK` keeps `seats.kind`
+> consistent with `user_id`, and `oauth_provider` is constrained to the supported providers. Saves
+> are flushed **per committed step** (the engine autosaves after every step), which is the finest
+> "never lose a move" granularity.
 
 ### 6.2 Reconnection & catch-up — snapshot-based (versioned events NOT needed)
 

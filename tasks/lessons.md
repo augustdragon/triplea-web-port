@@ -22,6 +22,10 @@ Entries: the pattern → what went wrong → the rule to follow.
 - **What went wrong:** The `:game-control-plane` shadowJar ran but Flyway applied 0 migrations ("detected but did not follow the filename convention"). Cause: multiple jars ship `META-INF/services/org.flywaydb.core.extensibility.Plugin`; the fat jar kept only one (last-wins), so Flyway lost its SQL-migration resolver. `mergeServiceFiles()` did **not** fix it under shadow 9.4.1 (still last-wins).
 - **Rule:** For apps that resolve plugins via ServiceLoader (Flyway, JDBC, SLF4J, Jetty), prefer the `application` plugin's `run`/`installDist` (each dep stays its own jar → ServiceLoader intact) over a shadow fat jar. If a fat jar is required, verify the merged `META-INF/services/*` actually contains entries from *all* contributing jars, not just one. Diagnose fat-jar-only failures by re-running on the normal classpath (`gradlew run`).
 
+## Rebuild a bundled artifact after editing bundled resources before testing it
+- **What went wrong:** Edited the Flyway migration `.sql` files (bundled into the module jar), then ran the previously-built `installDist` binary to verify the new CHECK constraints. The binary still carried the OLD migrations, so every "should-fail" insert succeeded — I nearly reported a broken schema as working.
+- **Rule:** A packaged/bundled artifact (shadowJar, `installDist`, Docker image) is a *snapshot*; it does not track source like `./gradlew run` does. After changing any bundled resource, rebuild the artifact (and ideally assert the change is present in it, e.g. `unzip -p <jar> <resource> | grep ...`) before testing. When in doubt, test via `gradlew run` (live classpath) or rebuild first.
+
 ## Gradle project paths here are flat
 - **What went wrong (potential):** AGENTS.md shows `./gradlew :game-app:game-core:test`, but `settings.gradle.kts` registers projects flat via `include(":game-core")` + `projectDir` override.
 - **Rule:** Trust `settings.gradle.kts` for project paths: use `:game-core`, `:smoke-testing`, `:game-headless`, etc. — not `:game-app:...`.

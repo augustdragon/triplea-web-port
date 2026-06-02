@@ -3,7 +3,8 @@
 -- moderation will target later, so it survives display-name changes.
 CREATE TABLE users (
     id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    oauth_provider  TEXT        NOT NULL,
+    oauth_provider  TEXT        NOT NULL
+                        CHECK (oauth_provider IN ('google', 'discord')),
     oauth_subject   TEXT        NOT NULL,
     display_name    TEXT        NOT NULL,
     player_chat_id  TEXT        NOT NULL,
