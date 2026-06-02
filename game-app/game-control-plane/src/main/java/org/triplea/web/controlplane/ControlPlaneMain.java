@@ -10,6 +10,7 @@ import org.triplea.web.controlplane.auth.LoginService;
 import org.triplea.web.controlplane.auth.SessionCookies;
 import org.triplea.web.controlplane.config.ControlPlaneConfig;
 import org.triplea.web.controlplane.db.Database;
+import org.triplea.web.controlplane.game.GameCatalog;
 import org.triplea.web.controlplane.http.DevLoginController;
 import org.triplea.web.controlplane.http.HealthController;
 import org.triplea.web.controlplane.http.MeController;
@@ -34,6 +35,7 @@ public final class ControlPlaneMain {
   public static void main(final String[] args) {
     final ControlPlaneConfig config = ControlPlaneConfig.fromEnv();
     final Database database = Database.create(config);
+    final GameCatalog gameCatalog = GameCatalog.fromConfig(config);
 
     final JwtService jwt = new JwtService(config.jwtSecret(), config.sessionTtlMinutes());
     final AllowList allowList = new ConfigAllowList(config.allowList());
@@ -71,9 +73,10 @@ public final class ControlPlaneMain {
 
     app.start(config.httpPort());
     log.info(
-        "Control plane listening on :{} (profile={}, {} allow-listed)",
+        "Control plane listening on :{} (profile={}, {} allow-listed, {} game(s) available)",
         config.httpPort(),
         config.profile(),
-        config.allowList().size());
+        config.allowList().size(),
+        gameCatalog.all().size());
   }
 }

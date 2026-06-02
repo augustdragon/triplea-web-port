@@ -22,6 +22,8 @@ import java.util.Set;
  * @param jwtSecret HMAC signing key for the session JWT (>= 32 chars for HS256).
  * @param sessionTtlMinutes session lifetime; also the cookie max-age and JWT expiry.
  * @param allowList invited identities as {@code "provider:subject"} strings; access control v1.
+ * @param gameXml path to the one map's game XML the lobby can host (optional; empty lobby if
+ *     unset).
  */
 public record ControlPlaneConfig(
     String dbUrl,
@@ -32,7 +34,8 @@ public record ControlPlaneConfig(
     boolean devLoginEnabled,
     String jwtSecret,
     int sessionTtlMinutes,
-    Set<String> allowList) {
+    Set<String> allowList,
+    String gameXml) {
 
   private static final String DEFAULT_DB_URL = "jdbc:postgresql://localhost:5432/triplea_web";
   private static final String DEFAULT_DB_USER = "triplea_web";
@@ -94,6 +97,7 @@ public record ControlPlaneConfig(
 
     final int sessionTtlMinutes = parseTtl(env, problems);
     final Set<String> allowList = parseAllowList(env.getOrDefault("CONTROL_PLANE_ALLOWLIST", ""));
+    final String gameXml = env.get("CONTROL_PLANE_GAME_XML");
 
     if (!problems.isEmpty()) {
       throw new IllegalStateException(
@@ -108,7 +112,8 @@ public record ControlPlaneConfig(
         devLoginEnabled,
         jwtSecret,
         sessionTtlMinutes,
-        allowList);
+        allowList,
+        gameXml);
   }
 
   private static int parsePort(final Map<String, String> env, final List<String> problems) {

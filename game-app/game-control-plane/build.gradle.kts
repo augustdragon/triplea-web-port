@@ -24,6 +24,11 @@ dependencies {
     implementation(libs.javalin)
     // Stateless session: sign/verify the JWT carried in the auth cookie (HMAC).
     implementation(libs.java.jwt)
+    // Engine (parse-only): enumerate a map's playable powers for lobby tables. The control plane
+    // never RUNS a game — that's the per-game container — so parsing here does not touch the
+    // engine's process-global game state. MemoryPreferences isolates engine settings from disk.
+    implementation(project(":game-core"))
+    implementation(libs.sonatype.goodies.prefs)
     // Postgres source-of-truth: pooled JDBC + thin SQL mapping + schema migrations on boot.
     implementation(libs.hikaricp)
     implementation(libs.jdbi3.core)

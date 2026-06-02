@@ -382,9 +382,19 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
         (valid JWT but removed from allow-list)→403, prod+dev-login→startup exit 1. Unit tests: JwtService
         round-trip/tamper/wrong-secret, ConfigAllowList, config validation. Run: add `CONTROL_PLANE_JWT_SECRET`
         (≥32 chars), `CONTROL_PLANE_DEV_LOGIN=true`, `CONTROL_PLANE_ALLOWLIST="google:<subject>"` to the M1 run env.
-  - [ ] **M3** — Lobby REST + lobby WS (tables/seats/ready-up/presence; seat owner = authenticated principal, not
-        client name) + React multi-view (react-router: login→lobby→game; `App.tsx`→Game route; Vite `/api` proxy).
-        Verify: two sessions form a table, ready-up, host-launch invokes `GameLauncher`.
+  - [ ] **M3** — Lobby. **Decisions:** lobby owns power-level seats (Model A; matches spec §8 + the
+        `seats` table); the control plane enumerates a map's playable powers **live via game-core**
+        (user's call — always correct, scales to many maps) rather than seeding a static list.
+    - [x] **M3a-foundation** ✅ — game-core wired into the control plane (parse-only, never runs a game);
+          `GameXmlReader` (engine init + `GameParser` + `!optional` filter) + `GameCatalog` (built at startup
+          from `CONTROL_PLANE_GAME_XML`, powers cached). Verified: Pacific 1940 2E → 5 playable powers
+          `[Japanese, Americans, Chinese, British, ANZAC]`; Javalin still boots clean with game-core present.
+    - [ ] **M3a-lobby** — `GameDao`/`SeatDao`; REST: create-table (open seat per power), list, claim/release
+          (authenticated user), set ready, host-launch (creator-only + ready-up gate → `GameLauncher`). Needs a
+          `seats.ready` column migration; flip `ProcessGameLauncher` from throw→log. Verify via curl.
+    - [ ] **M3a-ws** — authenticated lobby WebSocket broadcasting table/seat/ready changes; verify 2 sessions live.
+    - [ ] **M3b** — React multi-view (react-router: login→lobby→game; `App.tsx`→Game route; `/api` Vite proxy).
+          Verify: two sessions form a table, ready-up, host-launch invokes `GameLauncher`.
   - [ ] **M4a** — Parameterize `:game-web-server` (`--game-id`/`--port`/`--save-ref`/`--control-plane-url`; `SaveStore`
         slot by game id; back-compat defaults). Verify: run on `:8090`, save under game-id slot, resume via `--save-ref`.
   - [ ] **M4b** — Game container reports `game-started`/`turn-committed`/`game-finished` → control plane updates
