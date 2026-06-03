@@ -405,8 +405,12 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
           `tsc`+`vite build` clean; proxy/cookie/WS round-trip through `:5173`; **headless-browser e2e** (system
           chromium) drove login→create→claim→ready→launch green. Game route still dials the standalone `:8080`
           game server until M5 wires the dynamic endpoint.
-  - [ ] **M4a** — Parameterize `:game-web-server` (`--game-id`/`--port`/`--save-ref`/`--control-plane-url`; `SaveStore`
-        slot by game id; back-compat defaults). Verify: run on `:8090`, save under game-id slot, resume via `--save-ref`.
+  - [x] **M4a** ✅ — Parameterized `:game-web-server`: named-flag args (gameXml positional + `--port`/`--max-rounds`/
+        `--step-delay-ms`/`--game-id`/`--save-ref`; back-compat defaults so a bare `<gameXml>` still works).
+        `GameController` takes `gameId` (drives the `SaveStore` slot → per-game autosave isolation) + `saveRef`
+        (resume source via `resumeSlot()`). `--control-plane-url` lands in M4b. Verified headlessly: `--game-id=m4a-test`
+        autosaves to the `m4a-test` slot, and restart detects `savedGame` from that slot + resumes to a live state
+        snapshot. Updated runPlayable comment + manual test doc (positional → flags).
   - [ ] **M4b** — Game container reports `game-started`/`turn-committed`/`game-finished` → control plane updates
         `games`/`saves` in a tx (flush per committed turn). Hook: `GameController.autosave`. Verify: DB advances per step.
   - [ ] **M5** — `DockerGameLauncher` (container per game via Docker API) + `IdleReaper` + `GET /api/games/:id/connect`

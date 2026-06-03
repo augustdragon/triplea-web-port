@@ -57,6 +57,12 @@ public final class GameController {
   private final long stepDelayMs;
   private final GameWebSocketServer server;
   private final SaveStore saveStore;
+  // The control plane's game id, when this container was spawned for a lobby game. Drives the save
+  // slot so each game's autosave is isolated. Null in standalone dev (slot derived from game name).
+  private final @Nullable String gameId;
+  // A save to resume from at the control plane's behest. Null → resume from this game's own slot
+  // when an autosave exists there.
+  private final @Nullable String saveRef;
   // The map's objectives.properties (static per map); empty if the map has none.
   private final Properties objectivesProps;
 
@@ -87,13 +93,22 @@ public final class GameController {
       final int maxRounds,
       final long stepDelayMs,
       final GameWebSocketServer server,
-      final SaveStore saveStore) {
+      final SaveStore saveStore,
+      final @Nullable String gameId,
+      final @Nullable String saveRef) {
     this.gameXml = gameXml;
     this.maxRounds = maxRounds;
     this.stepDelayMs = stepDelayMs;
     this.server = server;
     this.saveStore = saveStore;
+    this.gameId = gameId;
+    this.saveRef = saveRef;
     this.objectivesProps = loadObjectivesProperties(gameXml);
+  }
+
+  /** The save slot to READ when resuming: an explicit save-ref, else this game's own slot. */
+  private @Nullable String resumeSlot() {
+    return saveRef != null ? saveRef : saveSlot;
   }
 
   /** Wire routing and enter the setup phase. Call once, after {@code server.start()}. */
@@ -112,8 +127,10 @@ public final class GameController {
     }
     gameData = data;
     plan = newPlan;
-    saveSlot = slotFor(data.getGameName());
-    savedGameInfo = peekSave(saveSlot); // offer a resume option if an autosave exists
+    // The save slot is the control-plane game id when spawned for a lobby game (isolates each
+    // game's autosave); otherwise it's derived from the game name (standalone dev, single game).
+    saveSlot = gameId != null ? gameId : slotFor(data.getGameName());
+    savedGameInfo = peekSave(resumeSlot()); // offer a resume option if an autosave exists
     humanSeats = Set.of(); // no running game yet
     phase = "setup";
     server.resetForNewGame();
@@ -210,7 +227,7 @@ public final class GameController {
     if (current != null) {
       return; // already running
     }
-    final String slot = saveSlot;
+    final String slot = resumeSlot();
     final SeatPlan p = plan;
     if (slot == null || p == null) {
       return;

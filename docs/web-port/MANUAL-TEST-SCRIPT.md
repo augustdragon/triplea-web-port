@@ -18,7 +18,7 @@ Two terminals, then a browser.
   ```
   source "$HOME/.sdkman/bin/sdkman-init.sh"; export JAVA_HOME="$HOME/.sdkman/candidates/java/current"
   ./gradlew :game-web-server:runPlayable \
-    --args="/home/gandalf/triplea-webport-work/world_war_ii_pacific-master/map/games/ww2pac40_2nd_edition.xml 8080 20 300"
+    --args="/home/gandalf/triplea-webport-work/world_war_ii_pacific-master/map/games/ww2pac40_2nd_edition.xml --port=8080 --step-delay-ms=300"
   ```
   **Expect:** it logs "Setup phase: … (5 seats)" and stays running.
 - [ ] **0.2 Web client.** In a second terminal:

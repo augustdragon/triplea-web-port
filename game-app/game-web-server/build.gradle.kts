@@ -48,8 +48,10 @@ tasks.register<JavaExec>("runSpectator") {
 }
 
 // Playable multiplayer: browsers claim human seats / assign AI in a setup phase, then play.
-// Run: ./gradlew :game-web-server:runPlayable --args="<gameXml> [port] [maxRounds] [stepDelayMs]"
-// Seats are chosen in the browser, not on the command line.
+// Run: ./gradlew :game-web-server:runPlayable \
+//   --args="<gameXml> [--port=8080] [--max-rounds=20] [--step-delay-ms=300] [--game-id=<id>] [--save-ref=<slot>]"
+// Seats are chosen in the browser. The control plane spawns this with --game-id (per-game save slot)
+// and, to resume, --save-ref.
 tasks.register<JavaExec>("runPlayable") {
     group = "web-port"
     description = "Hosts a multiplayer game: browsers claim seats over WebSocket, then play."
