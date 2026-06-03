@@ -398,8 +398,13 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
     - [x] **M3a-ws** ✅ — authenticated lobby WebSocket (`/ws/lobby`, same session cookie) broadcasting the table
           list on connect + after every mutation (`LobbyBroadcaster`). Verified (node `ws`): snapshot + live
           broadcast on create; unauthenticated connection closed with no data.
-    - [ ] **M3b** — React multi-view (react-router: login→lobby→game; `App.tsx`→Game route; `/api` Vite proxy).
-          Verify: two sessions form a table, ready-up, host-launch invokes `GameLauncher`.
+    - [x] **M3b** ✅ — React multi-view: `react-router-dom` (login → lobby → game; `App.tsx` is the `/game` route),
+          `routes/Login.tsx` (dev-login), `routes/Lobby.tsx` (catalog + create + live table list with
+          claim/ready/leave + host launch), `api/controlPlane.ts` (fetch, `credentials:"include"`),
+          `lobby/useLobbySocket.ts` (`/ws/lobby`), and a Vite proxy for `/api` + `/ws/lobby` → `:7000`. Verified:
+          `tsc`+`vite build` clean; proxy/cookie/WS round-trip through `:5173`; **headless-browser e2e** (system
+          chromium) drove login→create→claim→ready→launch green. Game route still dials the standalone `:8080`
+          game server until M5 wires the dynamic endpoint.
   - [ ] **M4a** — Parameterize `:game-web-server` (`--game-id`/`--port`/`--save-ref`/`--control-plane-url`; `SaveStore`
         slot by game id; back-compat defaults). Verify: run on `:8090`, save under game-id slot, resume via `--save-ref`.
   - [ ] **M4b** — Game container reports `game-started`/`turn-committed`/`game-finished` → control plane updates
