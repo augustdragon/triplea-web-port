@@ -451,6 +451,14 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
           Verified end-to-end: finished → container reaped + status `finished`; played → reaped → reconnect
           **respawns and resumes from the save** (roster `savedGame={round 1, Combat}` via the shared volume); an
           idle setup game is swept and reaped.
+    - [x] **Bid-phase fast-forward** ✅ (from manual testing, session 2026-06-02) — a new game appeared to "let the
+          AI act before Japan." Root cause: the Pacific sequence runs game-init + a `bid`/`placeBid` step for *every*
+          power before the first turn; bidding is a tournament balancing house-rule that is **off by default** (all
+          `<power> bid` properties = 0), so the steps are no-ops, but the loop published a state per step, flashing
+          the AI powers' "Bid" phases. `GameController.isSilentStep` now fast-forwards `initDelegate` + zero-bid
+          `bid`/`placeBid` steps without publishing, so a fresh game opens on the first power's real turn. Conditioned
+          on `BidPurchaseDelegate.doesPlayerHaveBid`, so a real bid still shows — see the Phase 5 "bidding as a setup
+          option" item. Verified: first surfaced phase is `Japanese | japanesePolitics`, no bid steps. (`053fa8abd`)
   - [ ] **M6 — Lobby↔container identity handoff (NEXT real work).** Today the lobby (control-plane auth = Alice)
         and the game container's setup phase (old, trusted client-supplied name, auto-reclaimed from `localStorage`)
         are two disconnected identity layers — so the game shows a stale browser name ("Gandalf"), not the
