@@ -3,18 +3,21 @@ package org.triplea.web.controlplane.orchestrator;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Seam for starting a game's JVM and telling browsers where to reach it. The control plane depends
- * only on this interface; the implementation varies by environment: {@link ProcessGameLauncher} (a
- * local child process, the development default) now, and a Docker-API launcher (one container per
- * game) in M5. Introduced early so the lobby and routing (M3+) can be built and verified against a
- * stable seam before Docker enters the picture.
+ * Seam for spawning and reaping a game's container. The control plane depends only on this
+ * interface; {@link DockerGameLauncher} is the implementation. Introduced as a seam in M1 so the
+ * lobby and routing could be built and verified before Docker; M5 makes it real.
  */
 public interface GameLauncher {
 
-  /**
-   * Start a game for {@code gameId}, resuming from {@code saveRef} when non-null (lazy
-   * rehydration), and return the WebSocket endpoint (e.g. {@code ws://host:port}) the browser
-   * should connect to.
-   */
-  String launch(String gameId, @Nullable String saveRef);
+  /** What to launch: the game id, the map XML path, and an optional save to resume from. */
+  record LaunchSpec(String gameId, String mapXml, @Nullable String saveRef) {}
+
+  /** A launched game: a handle for reaping (the container id) and where browsers reach it. */
+  record LaunchedGame(String handle, String wsEndpoint) {}
+
+  /** Spawn a container for the game and return its handle + WebSocket endpoint. */
+  LaunchedGame launch(LaunchSpec spec);
+
+  /** Stop and remove a previously launched container. */
+  void reap(String handle);
 }

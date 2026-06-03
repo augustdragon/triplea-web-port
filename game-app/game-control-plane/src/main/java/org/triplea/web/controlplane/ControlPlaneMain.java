@@ -14,6 +14,7 @@ import org.triplea.web.controlplane.db.Database;
 import org.triplea.web.controlplane.game.GameCatalog;
 import org.triplea.web.controlplane.game.GameReportController;
 import org.triplea.web.controlplane.game.GameReportDao;
+import org.triplea.web.controlplane.game.GameRouteController;
 import org.triplea.web.controlplane.http.DevLoginController;
 import org.triplea.web.controlplane.http.HealthController;
 import org.triplea.web.controlplane.http.MeController;
@@ -21,8 +22,8 @@ import org.triplea.web.controlplane.json.GsonJsonMapper;
 import org.triplea.web.controlplane.lobby.LobbyBroadcaster;
 import org.triplea.web.controlplane.lobby.LobbyController;
 import org.triplea.web.controlplane.lobby.LobbyDao;
+import org.triplea.web.controlplane.orchestrator.DockerGameLauncher;
 import org.triplea.web.controlplane.orchestrator.GameLauncher;
-import org.triplea.web.controlplane.orchestrator.ProcessGameLauncher;
 import org.triplea.web.controlplane.user.UserDao;
 
 /**
@@ -54,15 +55,16 @@ public final class ControlPlaneMain {
 
     final Javalin app = Javalin.create(cfg -> cfg.jsonMapper(new GsonJsonMapper()));
 
-    final GameLauncher gameLauncher = new ProcessGameLauncher();
+    final GameLauncher gameLauncher = new DockerGameLauncher(config);
     final LobbyDao lobbyDao = new LobbyDao(database.jdbi());
     final LobbyBroadcaster lobbyBroadcaster = new LobbyBroadcaster(lobbyDao);
 
     new HealthController(database).register(app);
     app.before("/api/*", new AuthFilter(jwt, allowList));
     new MeController(userDao).register(app);
-    new LobbyController(lobbyDao, gameCatalog, userDao, gameLauncher, lobbyBroadcaster::broadcast)
-        .register(app);
+    new LobbyController(lobbyDao, gameCatalog, userDao, lobbyBroadcaster::broadcast).register(app);
+    // Lazy spawn + route the browser to a launched game's container.
+    new GameRouteController(lobbyDao, gameLauncher, userDao).register(app);
     // Service-to-service: game containers report lifecycle/turn events here (token-authenticated,
     // outside /api/* so the user AuthFilter doesn't apply).
     new GameReportController(new GameReportDao(database.jdbi()), config.gameToken()).register(app);

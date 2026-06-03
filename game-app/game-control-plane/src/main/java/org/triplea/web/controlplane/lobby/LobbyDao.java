@@ -202,18 +202,74 @@ public final class LobbyDao {
                 .one());
   }
 
-  /** Flip a lobby table to active, recording the game's WS endpoint. True if it was launched. */
-  public boolean markActive(final UUID gameId, final String wsEndpoint) {
+  /**
+   * Flip a lobby table to active (launched). The container is spawned lazily on first connect, so
+   * no ws_endpoint is set here. True if it was in the lobby to launch.
+   */
+  public boolean markActive(final UUID gameId) {
     return jdbi.withHandle(
             handle ->
                 handle
                     .createUpdate(
-                        "UPDATE games SET status = 'active', ws_endpoint = :ep, updated_at = now()"
+                        "UPDATE games SET status = 'active', updated_at = now()"
                             + " WHERE id = :gid AND status = 'lobby'")
-                    .bind("ep", wsEndpoint)
                     .bind("gid", gameId)
                     .execute())
         == 1;
+  }
+
+  /** What the route controller needs to connect a browser to a game (or spawn its container). */
+  public record ConnectInfo(
+      String status, String mapXml, String containerId, String wsEndpoint, String saveRef) {}
+
+  /** Status, map, current container/endpoint, and the latest save's bytes_ref for rehydration. */
+  public Optional<ConnectInfo> connectInfo(final UUID gameId) {
+    return jdbi.withHandle(
+        handle ->
+            handle
+                .createQuery(
+                    "SELECT g.status, g.map_xml, g.container_id, g.ws_endpoint, s.bytes_ref"
+                        + " FROM games g LEFT JOIN saves s ON s.id = g.current_save_id"
+                        + " WHERE g.id = :gid")
+                .bind("gid", gameId)
+                .map(
+                    (rs, ctx) ->
+                        new ConnectInfo(
+                            rs.getString("status"),
+                            rs.getString("map_xml"),
+                            rs.getString("container_id"),
+                            rs.getString("ws_endpoint"),
+                            rs.getString("bytes_ref")))
+                .findOne());
+  }
+
+  /** True if the user holds a seat in the game or created it — i.e., may connect. */
+  public boolean isUserInGame(final UUID gameId, final long userId) {
+    return jdbi.withHandle(
+        handle ->
+            handle
+                .createQuery(
+                    "SELECT EXISTS ("
+                        + "  SELECT 1 FROM seats WHERE game_id = :gid AND user_id = :uid"
+                        + "  UNION SELECT 1 FROM games WHERE id = :gid AND created_by = :uid)")
+                .bind("gid", gameId)
+                .bind("uid", userId)
+                .mapTo(Boolean.class)
+                .one());
+  }
+
+  /** Record the container handle + WS endpoint once a container is spawned for the game. */
+  public void setContainer(final UUID gameId, final String containerId, final String wsEndpoint) {
+    jdbi.useHandle(
+        handle ->
+            handle
+                .createUpdate(
+                    "UPDATE games SET container_id = :cid, ws_endpoint = :ep, updated_at = now()"
+                        + " WHERE id = :gid")
+                .bind("cid", containerId)
+                .bind("ep", wsEndpoint)
+                .bind("gid", gameId)
+                .execute());
   }
 
   private static SeatView seat(final java.sql.ResultSet rs) throws java.sql.SQLException {

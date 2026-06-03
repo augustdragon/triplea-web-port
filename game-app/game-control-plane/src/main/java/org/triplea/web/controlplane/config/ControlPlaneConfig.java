@@ -26,6 +26,11 @@ import java.util.Set;
  *     unset).
  * @param gameToken shared token game containers present to the internal reporting endpoint
  *     (optional; reports are rejected when unset). M5 replaces it with a per-game token.
+ * @param gameImage the Docker image the orchestrator spawns for each game.
+ * @param saveVolume the Docker volume mounted into game containers for the save store.
+ * @param gameCallbackUrl the control-plane URL a game container uses to report (reachable from
+ *     inside the container — host-gateway by default).
+ * @param gameWsHost the host the browser dials for a game container's WebSocket.
  */
 public record ControlPlaneConfig(
     String dbUrl,
@@ -38,7 +43,11 @@ public record ControlPlaneConfig(
     int sessionTtlMinutes,
     Set<String> allowList,
     String gameXml,
-    String gameToken) {
+    String gameToken,
+    String gameImage,
+    String saveVolume,
+    String gameCallbackUrl,
+    String gameWsHost) {
 
   private static final String DEFAULT_DB_URL = "jdbc:postgresql://localhost:5432/triplea_web";
   private static final String DEFAULT_DB_USER = "triplea_web";
@@ -102,6 +111,13 @@ public record ControlPlaneConfig(
     final Set<String> allowList = parseAllowList(env.getOrDefault("CONTROL_PLANE_ALLOWLIST", ""));
     final String gameXml = env.get("CONTROL_PLANE_GAME_XML");
     final String gameToken = env.get("CONTROL_PLANE_GAME_TOKEN");
+    final String gameImage =
+        env.getOrDefault("CONTROL_PLANE_GAME_IMAGE", "triplea-game-web-server");
+    final String saveVolume = env.getOrDefault("CONTROL_PLANE_SAVE_VOLUME", "triplea-web-saves");
+    final String gameCallbackUrl =
+        env.getOrDefault(
+            "CONTROL_PLANE_GAME_CALLBACK_URL", "http://host.docker.internal:" + httpPort);
+    final String gameWsHost = env.getOrDefault("CONTROL_PLANE_GAME_WS_HOST", "localhost");
 
     if (!problems.isEmpty()) {
       throw new IllegalStateException(
@@ -118,7 +134,11 @@ public record ControlPlaneConfig(
         sessionTtlMinutes,
         allowList,
         gameXml,
-        gameToken);
+        gameToken,
+        gameImage,
+        saveVolume,
+        gameCallbackUrl,
+        gameWsHost);
   }
 
   private static int parsePort(final Map<String, String> env, final List<String> problems) {

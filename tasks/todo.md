@@ -429,10 +429,14 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
           Verified: `docker run` starts a playable game reachable on the published port; `startGame` over the WS
           works; the autosave persists to the shared volume. NB: Pacific takes ~10-40s to load before the WS serves
           — M5b must wait for container readiness. (Logs: game-core `logback.xml` root=WARN suppresses INFO.)
-    - [ ] **M5b** — `DockerGameLauncher` (spawn container per game: `-p` published port, host-gateway
-          control-plane-url, shared save volume; record `container_id`/`ws_endpoint`) + `GameRouteController`
-          (`GET /api/games/:id/connect`: authorize via `seats`, lazy-spawn if no live container, wait for readiness,
-          return `ws_endpoint`). Client `Game` route fetches + dials the dynamic endpoint.
+    - [x] **M5b-server** ✅ — `DockerGameLauncher` (spawn container per game via `docker` CLI: `-p` published port,
+          `--add-host host.docker.internal:host-gateway` callback, map folder + save volume mounts; container id =
+          reap handle) + `GameRouteController` (`GET /api/games/:id/connect`: authorize via `seats`/host, lazy-spawn
+          if no live container, return `ws_endpoint`). `LobbyController.launch` now just flips to active (lazy
+          spawn). Verified end-to-end through real Docker: launch → /connect spawns a container → drive it → it
+          reports back via host-gateway → games row advances (round 1, Japanese) + 23 saves rows.
+    - [ ] **M5b-client** — `/game/:id` route fetches `/api/games/:id/connect` and dials the dynamic endpoint, with
+          **connection retry** (the container takes ~10-40s to load). Replaces `App.tsx`'s hardcoded `ws://:8080`.
     - [ ] **M5c** — Lazy rehydration (reconnect respawns from `current_save_id` via `--save-ref`) + reap on
           `game-finished` + `IdleReaper` (no connected seats). Verify the full launch→play→kill→rehydrate→reap cycle.
 - [ ] **P4.5 — Hosting** — Docker Compose on the VM (control plane + Postgres + on-demand game containers);

@@ -13,7 +13,6 @@ import org.triplea.web.controlplane.auth.AuthFilter;
 import org.triplea.web.controlplane.auth.Identity;
 import org.triplea.web.controlplane.game.GameCatalog;
 import org.triplea.web.controlplane.game.GameCatalog.AvailableGame;
-import org.triplea.web.controlplane.orchestrator.GameLauncher;
 import org.triplea.web.controlplane.user.User;
 import org.triplea.web.controlplane.user.UserDao;
 
@@ -42,19 +41,16 @@ public final class LobbyController {
   private final LobbyDao dao;
   private final GameCatalog catalog;
   private final UserDao userDao;
-  private final GameLauncher launcher;
   private final ChangeListener onChange;
 
   public LobbyController(
       final LobbyDao dao,
       final GameCatalog catalog,
       final UserDao userDao,
-      final GameLauncher launcher,
       final ChangeListener onChange) {
     this.dao = dao;
     this.catalog = catalog;
     this.userDao = userDao;
-    this.launcher = launcher;
     this.onChange = onChange;
   }
 
@@ -149,8 +145,8 @@ public final class LobbyController {
     if (counts.unready() > 0) {
       throw new ConflictResponse(counts.unready() + " human seat(s) not ready");
     }
-    final String wsEndpoint = launcher.launch(id.toString(), null);
-    if (!dao.markActive(id, wsEndpoint)) {
+    // Go active; the container is spawned lazily when the first player hits /connect.
+    if (!dao.markActive(id)) {
       throw new ConflictResponse("Table is no longer in the lobby");
     }
     onChange.onLobbyChanged();
