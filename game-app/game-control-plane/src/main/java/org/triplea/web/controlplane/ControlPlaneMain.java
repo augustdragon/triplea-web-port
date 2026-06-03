@@ -24,6 +24,8 @@ import org.triplea.web.controlplane.lobby.LobbyController;
 import org.triplea.web.controlplane.lobby.LobbyDao;
 import org.triplea.web.controlplane.orchestrator.DockerGameLauncher;
 import org.triplea.web.controlplane.orchestrator.GameLauncher;
+import org.triplea.web.controlplane.orchestrator.GameReaper;
+import org.triplea.web.controlplane.orchestrator.IdleReaper;
 import org.triplea.web.controlplane.user.UserDao;
 
 /**
@@ -66,8 +68,12 @@ public final class ControlPlaneMain {
     // Lazy spawn + route the browser to a launched game's container.
     new GameRouteController(lobbyDao, gameLauncher, userDao).register(app);
     // Service-to-service: game containers report lifecycle/turn events here (token-authenticated,
-    // outside /api/* so the user AuthFilter doesn't apply).
-    new GameReportController(new GameReportDao(database.jdbi()), config.gameToken()).register(app);
+    // outside /api/* so the user AuthFilter doesn't apply). Reaping (on game-finish and on idle)
+    // frees containers — their state stays on disk, and the next connect respawns from the save.
+    final GameReportDao gameReportDao = new GameReportDao(database.jdbi());
+    final GameReaper gameReaper = new GameReaper(gameLauncher, gameReportDao);
+    new GameReportController(gameReportDao, gameReaper, config.gameToken()).register(app);
+    new IdleReaper(gameReportDao, gameReaper, config.gameIdleSeconds()).start();
 
     // Live lobby updates. The WS handshake carries the same session cookie; reject unauthenticated
     // or un-invited connections, otherwise register the client for broadcasts.

@@ -1,5 +1,7 @@
 package org.triplea.web.controlplane.game;
 
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jdbi.v3.core.Jdbi;
 
@@ -74,5 +76,40 @@ public final class GameReportDao {
                     "UPDATE games SET status = 'finished', updated_at = now() WHERE id = :gid")
                 .bind("gid", gameId)
                 .execute());
+  }
+
+  /** The running container's id for a game, or empty if none is live. */
+  public Optional<String> containerId(final UUID gameId) {
+    return jdbi.withHandle(
+        handle ->
+            handle
+                .createQuery("SELECT container_id FROM games WHERE id = :gid")
+                .bind("gid", gameId)
+                .mapTo(String.class)
+                .findOne());
+  }
+
+  /** Clear the container handle + endpoint after a reap, so the next connect respawns. */
+  public void clearContainer(final UUID gameId) {
+    jdbi.useHandle(
+        handle ->
+            handle
+                .createUpdate(
+                    "UPDATE games SET container_id = NULL, ws_endpoint = NULL WHERE id = :gid")
+                .bind("gid", gameId)
+                .execute());
+  }
+
+  /** Games with a live container that haven't committed a turn within the idle window. */
+  public List<UUID> idleGameIds(final int idleSeconds) {
+    return jdbi.withHandle(
+        handle ->
+            handle
+                .createQuery(
+                    "SELECT id FROM games WHERE container_id IS NOT NULL"
+                        + " AND updated_at < now() - (:secs * interval '1 second')")
+                .bind("secs", idleSeconds)
+                .mapTo(UUID.class)
+                .list());
   }
 }

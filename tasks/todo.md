@@ -350,7 +350,7 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
         sets `mySeat` with no revert; if two clients rejoin the same open seat at once the server binds the last
         claimer, leaving the loser seated in the UI but controlling nothing. Both only bite once real multi-human
         games run (→ P4.3). Also discretionary: extract shared seat-modal styles (RejoinPrompt/SeatSelect dup).
-- [ ] **P4.3 + P4.4 — Control plane (Auth + Lobby + Orchestrator)** — planned in one pass (approved plan:
+- [x] **P4.3 + P4.4 — Control plane (Auth + Lobby + Orchestrator)** ✅ (M1–M5 all done & verified) — planned in one pass (approved plan:
       `~/.claude/plans/lucky-sprouting-minsky.md`, machine-local). P4.3 and P4.4 build **one** new Java service,
       `:game-control-plane` (Javalin/embedded Jetty), owning OAuth, sessions, lobby, Postgres, presence,
       orchestration; the existing `:game-web-server` becomes a parameterized, multi-seat, reporting **game
@@ -420,9 +420,12 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
         end-to-end: a reporting container drove `games` to `round=1, Americans, Purchase Units` and inserted 25
         `saves` rows; a wrong token → 401. (Single save slot per game → all `bytes_ref` point at the latest; older
         `saves` rows are a history log, only the current is loadable until the store is versioned.)
-  - [ ] **M5** — Orchestrator. **Decisions:** real Docker spawn now; lobby seats are advisory — the browser
-        re-selects in the container's existing setup phase (no game-WS auth changes). DockerGameLauncher via the
-        `docker` CLI; maps + saves mounted as volumes; control-plane URL reached from the container via host-gateway.
+  - [x] **M5** ✅ — Orchestrator (M5a image + M5b spawn/route/client + M5c reap/rehydrate). **Decisions:** real
+        Docker spawn; lobby seats advisory — the browser re-selects in the container's setup phase (no game-WS auth
+        changes). DockerGameLauncher via the `docker` CLI; maps + saves mounted as volumes; control-plane URL
+        reached from the container via host-gateway. **Follow-ups:** an "active games" list so non-host players can
+        enter a launched game; per-game tokens (vs the shared token); versioned save store (older `saves` rows are
+        a log, only the latest is loadable); presence-based reaping (vs idle-timeout).
     - [x] **M5a** ✅ — Game-container Docker image. `:game-web-server` gains the `application` plugin
           (`installDist`, entrypoint `WebPlayableServer`); `Dockerfile` (FROM temurin:21-jre, COPY the dist) +
           `.dockerignore`. Map dir + `~/.triplea-web/saves` mounted at runtime (image stays map-agnostic, 526 MB).
@@ -441,8 +444,13 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
           Verified in a real (headless) browser: login → create → claim → ready → launch → `/game/:id` → the
           container's setup screen renders over the dynamic endpoint. (Non-host players reaching a launched game —
           an "active games" list — is a follow-up; M5b proves the host loop.)
-    - [ ] **M5c** — Lazy rehydration (reconnect respawns from `current_save_id` via `--save-ref`) + reap on
-          `game-finished` + `IdleReaper` (no connected seats). Verify the full launch→play→kill→rehydrate→reap cycle.
+    - [x] **M5c** ✅ — Reaping + lazy rehydration. `GameReaper` (reap container + clear `container_id`/`ws_endpoint`
+          so the next connect respawns); reap on `game-finished` (in `GameReportController`); `IdleReaper`
+          (scheduled sweep, reaps games with a container and no committed turn within `CONTROL_PLANE_GAME_IDLE_SECONDS`,
+          default 1800). Rehydration falls out of M5b's `/connect` (spawns with `--save-ref` = latest `bytes_ref`).
+          Verified end-to-end: finished → container reaped + status `finished`; played → reaped → reconnect
+          **respawns and resumes from the save** (roster `savedGame={round 1, Combat}` via the shared volume); an
+          idle setup game is swept and reaped.
 - [ ] **P4.5 — Hosting** — Docker Compose on the VM (control plane + Postgres + on-demand game containers);
       presence fed into the game process; **"your turn" Web Push** (the gap Lichess under-built; multi-day turns
       make it essential — a stalled seat blocks 3–5 players).

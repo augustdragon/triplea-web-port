@@ -31,6 +31,8 @@ import java.util.Set;
  * @param gameCallbackUrl the control-plane URL a game container uses to report (reachable from
  *     inside the container — host-gateway by default).
  * @param gameWsHost the host the browser dials for a game container's WebSocket.
+ * @param gameIdleSeconds reap a game container after this many seconds with no committed turn (its
+ *     state is safe on disk; reconnecting respawns it from the latest save).
  */
 public record ControlPlaneConfig(
     String dbUrl,
@@ -47,7 +49,8 @@ public record ControlPlaneConfig(
     String gameImage,
     String saveVolume,
     String gameCallbackUrl,
-    String gameWsHost) {
+    String gameWsHost,
+    int gameIdleSeconds) {
 
   private static final String DEFAULT_DB_URL = "jdbc:postgresql://localhost:5432/triplea_web";
   private static final String DEFAULT_DB_USER = "triplea_web";
@@ -118,6 +121,7 @@ public record ControlPlaneConfig(
         env.getOrDefault(
             "CONTROL_PLANE_GAME_CALLBACK_URL", "http://host.docker.internal:" + httpPort);
     final String gameWsHost = env.getOrDefault("CONTROL_PLANE_GAME_WS_HOST", "localhost");
+    final int gameIdleSeconds = parseIdleSeconds(env, problems);
 
     if (!problems.isEmpty()) {
       throw new IllegalStateException(
@@ -138,7 +142,22 @@ public record ControlPlaneConfig(
         gameImage,
         saveVolume,
         gameCallbackUrl,
-        gameWsHost);
+        gameWsHost,
+        gameIdleSeconds);
+  }
+
+  private static int parseIdleSeconds(final Map<String, String> env, final List<String> problems) {
+    final String raw = env.getOrDefault("CONTROL_PLANE_GAME_IDLE_SECONDS", "1800");
+    try {
+      final int seconds = Integer.parseInt(raw.trim());
+      if (seconds < 1) {
+        problems.add("CONTROL_PLANE_GAME_IDLE_SECONDS (must be >= 1, was " + raw + ")");
+      }
+      return seconds;
+    } catch (final NumberFormatException e) {
+      problems.add("CONTROL_PLANE_GAME_IDLE_SECONDS (must be an integer, was " + raw + ")");
+      return 0;
+    }
   }
 
   private static int parsePort(final Map<String, String> env, final List<String> problems) {

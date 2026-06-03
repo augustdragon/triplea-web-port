@@ -7,6 +7,7 @@ import io.javalin.http.NotFoundResponse;
 import io.javalin.http.UnauthorizedResponse;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.triplea.web.controlplane.orchestrator.GameReaper;
 
 /**
  * Receives a game container's lifecycle/turn reports at {@code POST /internal/games/{id}/events}.
@@ -21,10 +22,13 @@ public final class GameReportController {
   public record Event(String type, Integer round, String power, String phase, String bytesRef) {}
 
   private final GameReportDao dao;
+  private final GameReaper reaper;
   private final String expectedToken;
 
-  public GameReportController(final GameReportDao dao, final String expectedToken) {
+  public GameReportController(
+      final GameReportDao dao, final GameReaper reaper, final String expectedToken) {
     this.dao = dao;
+    this.reaper = reaper;
     this.expectedToken = expectedToken;
   }
 
@@ -52,7 +56,10 @@ public final class GameReportController {
       case "turn" ->
           dao.recordTurn(
               gameId, intOr(event.round(), 0), event.power(), event.phase(), event.bytesRef());
-      case "finished" -> dao.markFinished(gameId);
+      case "finished" -> {
+        dao.markFinished(gameId);
+        reaper.reapGame(gameId); // the game is over — stop its container
+      }
       default -> throw new BadRequestResponse("unknown event type: " + event.type());
     }
     ctx.status(204);
