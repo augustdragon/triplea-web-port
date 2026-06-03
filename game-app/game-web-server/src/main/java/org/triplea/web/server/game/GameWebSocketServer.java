@@ -70,9 +70,18 @@ public final class GameWebSocketServer extends WebSocketServer {
   private volatile @Nullable Consumer<String> seatVacatedHandler;
   private volatile @Nullable Consumer<WebSocket> connectHandler;
 
+  // Heartbeat: send WS pings on this cadence and actively close a connection that doesn't pong.
+  // This is also the fix for the M6 "half-dead first connection" race — a freshly-spawned
+  // container's first socket(s) could accept TCP but drop inbound, leaving a dead-but-open socket
+  // the app-level auth timeout couldn't see; the lost-connection checker now closes it, so the
+  // browser's reconnect loop recovers.
+  private static final int CONNECTION_LOST_TIMEOUT_SECONDS = 20;
+
   public GameWebSocketServer(final int port) {
     super(new InetSocketAddress(port));
     setReuseAddr(true);
+    setConnectionLostTimeout(
+        CONNECTION_LOST_TIMEOUT_SECONDS); // ping/pong + auto-close dead sockets
   }
 
   /** Routes raw inbound client messages here as {@code (connection, message)}. */

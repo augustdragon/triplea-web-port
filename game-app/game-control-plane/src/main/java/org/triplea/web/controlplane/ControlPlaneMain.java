@@ -1,6 +1,9 @@
 package org.triplea.web.controlplane;
 
 import io.javalin.Javalin;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.triplea.web.controlplane.auth.AllowList;
 import org.triplea.web.controlplane.auth.AuthFilter;
@@ -78,6 +81,17 @@ public final class ControlPlaneMain {
     new GameReportController(gameReportDao, gameReaper, config.gameToken()).register(app);
     new InternalSeatsController(lobbyDao, config.gameToken()).register(app);
     new IdleReaper(gameReportDao, gameReaper, config.gameIdleSeconds()).start();
+
+    // Lobby WebSocket keepalive: ping every 25s so idle connections aren't dropped by an
+    // intermediary and dead sessions are pruned (the client ignores the ping).
+    final ScheduledExecutorService lobbyKeepalive =
+        Executors.newSingleThreadScheduledExecutor(
+            r -> {
+              final Thread t = new Thread(r, "lobby-keepalive");
+              t.setDaemon(true);
+              return t;
+            });
+    lobbyKeepalive.scheduleWithFixedDelay(lobbyBroadcaster::pingAll, 25, 25, TimeUnit.SECONDS);
 
     // Live lobby updates. The WS handshake carries the same session cookie; reject unauthenticated
     // or un-invited connections, otherwise register the client for broadcasts.

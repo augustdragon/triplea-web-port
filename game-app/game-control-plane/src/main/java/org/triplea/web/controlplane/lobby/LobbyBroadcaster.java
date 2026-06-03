@@ -43,6 +43,28 @@ public final class LobbyBroadcaster {
     }
   }
 
+  /**
+   * Keepalive: send a tiny {@code {type:"ping"}} to every session (the client ignores it) so idle
+   * connections don't get dropped by an intermediary, and prune any that have died — the send fails
+   * or the session is closed. Scheduled periodically by {@code ControlPlaneMain}.
+   */
+  public void pingAll() {
+    for (final WsContext ctx : sessions) {
+      if (!ctx.session.isOpen()) {
+        sessions.remove(ctx);
+        continue;
+      }
+      try {
+        ctx.send(new Ping("ping"));
+      } catch (final RuntimeException e) {
+        sessions.remove(ctx);
+      }
+    }
+  }
+
+  /** A no-op keepalive envelope; the client ignores any non-{@code "lobby"} message. */
+  private record Ping(String type) {}
+
   private LobbyState snapshot() {
     return new LobbyState("lobby", dao.listTables());
   }
