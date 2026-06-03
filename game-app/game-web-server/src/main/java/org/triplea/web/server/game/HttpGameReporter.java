@@ -47,8 +47,18 @@ final class HttpGameReporter implements GameReporter {
   }
 
   @Override
-  public void gameFinished() {
-    post(event("finished"));
+  public void gameFinished(final String reason, final @Nullable String winner) {
+    final JsonObject e = event("finished");
+    e.addProperty("reason", reason);
+    e.addProperty("winner", winner);
+    post(e);
+  }
+
+  @Override
+  public void seatResigned(final String power) {
+    final JsonObject e = event("resigned");
+    e.addProperty("power", power);
+    post(e);
   }
 
   private static JsonObject event(final String type) {

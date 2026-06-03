@@ -67,14 +67,32 @@ public final class GameReportDao {
         });
   }
 
-  /** The game finished on its own. */
-  public void markFinished(final UUID gameId) {
+  /** The game finished on its own — record why and (if any) the winner alongside the status. */
+  public void markFinished(final UUID gameId, final String reason, final String winner) {
     jdbi.useHandle(
         handle ->
             handle
                 .createUpdate(
-                    "UPDATE games SET status = 'finished', updated_at = now() WHERE id = :gid")
+                    "UPDATE games SET status = 'finished', end_reason = :reason, winner = :winner,"
+                        + " updated_at = now() WHERE id = :gid")
+                .bind("reason", reason)
+                .bind("winner", winner)
                 .bind("gid", gameId)
+                .execute());
+  }
+
+  /**
+   * A player conceded — mark the seat AI (clears the user so a reconnect routes to a spectator).
+   */
+  public void resignSeat(final UUID gameId, final String power) {
+    jdbi.useHandle(
+        handle ->
+            handle
+                .createUpdate(
+                    "UPDATE seats SET kind = 'ai', user_id = NULL, ready = false"
+                        + " WHERE game_id = :gid AND power_name = :power")
+                .bind("gid", gameId)
+                .bind("power", power)
                 .execute());
   }
 

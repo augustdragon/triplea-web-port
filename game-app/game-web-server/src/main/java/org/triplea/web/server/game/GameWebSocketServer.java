@@ -50,6 +50,7 @@ public final class GameWebSocketServer extends WebSocketServer {
   private volatile @Nullable String notesEnvelope;
   private volatile @Nullable String objectivesEnvelope;
   private volatile @Nullable String seatsEnvelope;
+  private volatile @Nullable String gameOverEnvelope;
 
   // Battle-result events are transient (one per completed battle); cache a bounded history so a
   // reconnecting client (page reload) sees the full log, not just battles after it reconnected.
@@ -87,6 +88,14 @@ public final class GameWebSocketServer extends WebSocketServer {
   /** Names of seats with a live controlling connection (for the waiting room / drop detection). */
   public Set<String> connectedSeats() {
     return new HashSet<>(connBySeat.keySet());
+  }
+
+  /**
+   * True when a seat is currently awaiting a human decision (a request is outstanding). Lets the
+   * progress watchdog tell a normal human turn apart from a hung engine step.
+   */
+  public boolean isDecisionPending() {
+    return pendingRequestEnvelope != null;
   }
 
   /** Called with a seat name when its controlling connection drops, so the plan can free it. */
@@ -157,10 +166,20 @@ public final class GameWebSocketServer extends WebSocketServer {
    */
   public void resetForNewGame() {
     latestState = null;
+    gameOverEnvelope = null;
     clearPendingRequest();
     synchronized (battleLog) {
       battleLog.clear();
     }
+  }
+
+  /**
+   * Broadcast (and cache) a {@code {type:"gameOver",...}} envelope — re-sent to clients on connect
+   * so a reconnecting/late client still sees the end screen.
+   */
+  public void publishGameOver(final String envelopeJson) {
+    gameOverEnvelope = envelopeJson;
+    broadcast(envelopeJson);
   }
 
   /** Wrap a state snapshot in a {@code state} envelope, store it for catch-up, and broadcast it. */
@@ -215,6 +234,8 @@ public final class GameWebSocketServer extends WebSocketServer {
     sendIfPresent(conn, latestState);
     sendIfPresent(conn, notesEnvelope);
     sendIfPresent(conn, objectivesEnvelope);
+    sendIfPresent(
+        conn, gameOverEnvelope); // a finished game still shows its end screen on reconnect
     for (final String battle : snapshotBattleLog()) {
       conn.send(battle); // replay the battle log so a reconnecting client's log isn't empty
     }

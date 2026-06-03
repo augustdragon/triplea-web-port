@@ -487,7 +487,17 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
   - [ ] **Deployment / presence / Web Push** — Docker Compose on the VM (control plane + Postgres + on-demand game containers);
       presence fed into the game process; **"your turn" Web Push** (the gap Lichess under-built; multi-day turns
       make it essential — a stalled seat blocks 3–5 players).
-  - [ ] **End-game: victory surfacing, end-reason, no round cap for human games (design 2026-06-03).** The engine
+  - [x] **End-game: victory surfacing, end-reason, no round cap for human games** ✅ (built + verified 2026-06-03).
+        `GameEndReason` recorded on loop exit; `{type:"gameOver", reason, winners, message}` WS envelope (cached +
+        re-sent on connect) + a client `GameOverScreen` that halts the reconnect loop; reason + winner persisted to
+        `games.end_reason`/`winner` (migration `V1.06.00`), reported on the `finished` event; `/connect` on a finished
+        game returns an end-summary instead of respawning. Human games run uncapped (`effectiveMaxRounds` =
+        MAX_VALUE when any seat is human; AI-only keeps the configured cap). Progress/hang **watchdog** (no progress +
+        no pending decision → `STUCK`) is the real guard; `STEP_SAFETY_LIMIT` kept as the failsafe. Verified e2e:
+        AI-only `--max-rounds=1` → `gameOver reason=ROUND_CAP`; a simulated `finished` report persisted
+        `VICTORY`/winner and `/connect` returned the end-summary. VICTORY path shares the same code (manual browser
+        check pending — hard to script a real win). (Original design notes below retained for reference.)
+        ~~The engine
         already DETECTS every end condition in `EndRoundDelegate` (VP, victory cities, economic, capital-loss,
         triggered victories), records the `winners`, and writes a victory message into history via `signalGameOver(...)`.
         **Confirmed (traced):** a victory DOES halt our loop — in-process (non-websocket) `signalGameOver` →
@@ -512,24 +522,19 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
           human turn (governed by the turn deadline, see concede/abandonment item); blocked **with no pending request**
           for > T, or the same step re-executing without the round/sequence advancing = an **engine hang/loop** → abort
           `STUCK`. (`STEP_SAFETY_LIMIT` can't catch an abandoned turn anyway — the loop is *parked* in `await`, not
-          iterating, so `steps` never increments.)
-        Prereq for the exit check ("a *full* game") and the post-game review session (Phase 5).
-  - [ ] **Concede + abandonment via one "seat → AI mid-game" primitive (design 2026-06-03; concede = resign-to-AI).**
-        The engine has **no** concede/defeat-while-others-continue, **no** AI hot-swap, and **no** turn timer — all
-        web-port-layer. Both features reduce to the same primitive: swap a *running* human seat to AI =
-        **final autosave → reconfigure that seat as AI in `SeatPlan` → resume from the save** (reuses `doResumeGame`
-        + autosave-per-step; `bridge.close()` unparks any decision the seat is parked on, and `WebPlayer` falls back to
-        engine defaults). Builds:
-        - **Concede (player-initiated):** `{type:"control", action:"concede"}` from the authenticated seat (client
-          confirm dialog) → that seat → AI; the game **continues** with AI running the resigned side and ends via the
-          normal victory conditions (recorded per-seat in history/DB). *Not* a whole-game end — chosen semantics is
-          resign-to-AI, so one player giving up doesn't end it for their allies.
-        - **Abandonment (timeout-initiated):** wire the unused `seats.turn_deadline_at` — set a deadline on entering a
-          human step; on expiry, notify ("your turn" Web Push later) then apply the same seat → AI substitution (or
-          pause first). This is the Phase 4 "abandoned seat caretaken by AI" exit-check requirement.
-        - Optional later: if **all** human seats have gone AI, offer a fast-resolve/auto-finish instead of watching AI
-          vs AI.
-        Depends on the end-game item (the `gameOver`/end-reason signal + review state).
+          iterating, so `steps` never increments.)~~
+  - [x] **Concede — resign-to-AI** ✅ (built + verified 2026-06-03). `{type:"control", action:"concede"}` from the
+        authenticated seat → `doResign`: stop session → `SeatPlan.release(seat)` → resume from the latest autosave with
+        the seat now AI (fresh start if nothing committed). The game **continues**; the conceder's client drops to
+        spectator (Concede button + confirm in `App.tsx`). The container reports `seatResigned` → control plane marks
+        the seat `kind=ai` (`GameReportDao.resignSeat`) so the conceder's reconnect returns no seat (spectator).
+        Verified e2e: alice concedes → her seat shows AI, the game keeps committing turns, her next `/connect` has no
+        seat. **Shares the "seat → AI mid-game" primitive** that abandonment will reuse.
+  - [ ] **Abandonment (turn-deadline → AI), reusing the concede primitive.** Wire the unused `seats.turn_deadline_at`:
+        set a deadline on entering a human step; on expiry notify ("your turn" Web Push later) then apply the same
+        `doResign`-style seat → AI substitution (or pause first). This is the Phase 4 "abandoned seat caretaken by AI"
+        exit-check requirement. Optional: if **all** human seats have gone AI, offer a fast-resolve/auto-finish instead
+        of watching AI vs AI.
 - [ ] **Exit check:** a private group plays a full Pacific 1940 game over the internet, browser-only, resumable
       across days, with an abandoned seat caretaken by AI, **ending with a winner announced**.
 - Related: 3g hotseat (pass-and-play on one machine) shares the seat-routing mechanism — falls out of P4.1.

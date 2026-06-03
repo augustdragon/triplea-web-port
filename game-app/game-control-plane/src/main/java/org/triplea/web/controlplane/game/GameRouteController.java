@@ -44,6 +44,12 @@ public final class GameRouteController {
    */
   public record ConnectResponse(String wsEndpoint, String ticket, String seat, boolean isHost) {}
 
+  /**
+   * Returned instead of a ws endpoint when the game is already over, so the client shows the end
+   * screen rather than re-spawning a container that would immediately re-end.
+   */
+  public record FinishedResponse(String status, String reason, String winner) {}
+
   private final LobbyDao lobbyDao;
   private final GameLauncher launcher;
   private final UserDao userDao;
@@ -74,6 +80,11 @@ public final class GameRouteController {
     }
     if ("lobby".equals(info.status())) {
       throw new ConflictResponse("Game has not been launched yet");
+    }
+    if ("finished".equals(info.status())) {
+      // Don't respawn a finished game — return its end summary so the client shows the end screen.
+      ctx.json(new FinishedResponse("finished", info.endReason(), info.winner()));
+      return;
     }
     if (info.wsEndpoint() != null) {
       ctx.json(response(gameId, info, user, info.wsEndpoint())); // container already running

@@ -56,10 +56,16 @@ import org.java_websocket.WebSocket;
  */
 @Slf4j
 public final class GameController {
-  private static final int STEP_SAFETY_LIMIT = 10_000;
+  private static final int STEP_SAFETY_LIMIT = 10_000; // last-resort failsafe for a spinning loop
   private static final Gson GSON = new Gson();
   private static final int AUTH_TIMEOUT_SECONDS = 15; // close a lobby connection that never auths
   private static final int WS_CLOSE_UNAUTHORIZED = 4401; // app-private close code
+  // Progress watchdog: if the loop makes no progress for this long AND no human decision is
+  // pending,
+  // the engine is hung (a blocked delegate never trips the step cap — it doesn't iterate). Generous
+  // so a slow AI turn is never mistaken for a hang.
+  private static final long HANG_TIMEOUT_MS = 5 * 60 * 1000L;
+  private static final long WATCHDOG_PERIOD_MS = 30_000L;
 
   private final Path gameXml;
   private final int maxRounds;
@@ -92,6 +98,14 @@ public final class GameController {
       Executors.newSingleThreadScheduledExecutor(
           r -> {
             final Thread t = new Thread(r, "web-game-auth-timeout");
+            t.setDaemon(true);
+            return t;
+          });
+  // Periodic progress watchdog for the running game loop (hang detection — see HANG_TIMEOUT_MS).
+  private final ScheduledExecutorService watchdog =
+      Executors.newSingleThreadScheduledExecutor(
+          r -> {
+            final Thread t = new Thread(r, "web-game-watchdog");
             t.setDaemon(true);
             return t;
           });
@@ -219,6 +233,17 @@ public final class GameController {
     if (action == null) {
       return;
     }
+    // Concede: a seated player resigns their OWN seat to AI mid-game; the game continues for the
+    // rest. Allowed in either mode — the seat comes from the connection's binding, not the client.
+    if ("concede".equals(action)) {
+      final String seat = server.seatOf(conn);
+      final SeatPlan p = plan;
+      if (seat != null && current != null && p != null && p.hasSeat(seat)) {
+        log.info("Seat {} conceded — resigning to AI", seat);
+        lifecycleExecutor.submit(() -> doResign(seat));
+      }
+      return;
+    }
     if (lobbyMode) {
       // Lobby games: seats are pre-assigned and ticket-bound (see handleAuth); the only control a
       // client may issue is the host starting the game. Claim/release/type/resume/newGame are
@@ -312,6 +337,34 @@ public final class GameController {
     publishSeats();
     savedGameInfo = null;
     log.info("Resumed game from save '{}'", slot);
+  }
+
+  /**
+   * Lifecycle thread: a player resigned {@code seat} — hand it to AI and keep playing. The engine
+   * has no hot-swap, so we reuse the proven machinery: stop the current game, release the seat (→
+   * AI on rebuild), and resume from the latest committed autosave (or restart fresh if nothing has
+   * committed yet). Other players' committed turns are preserved; the resigner's in-progress turn,
+   * if any, is discarded. The loop ends with {@code endReason == null}, so this is NOT reported as
+   * a game finish.
+   */
+  private synchronized void doResign(final String seat) {
+    final SeatPlan p = plan;
+    if (p == null || current == null || !p.hasSeat(seat)) {
+      return;
+    }
+    final Session old = current;
+    old.stop(); // alive=false + bridge.close() unparks the resigner's decision; no "finished"
+    // report
+    current = null;
+    p.release(seat); // owner cleared → buildPlayers makes this seat AI
+    final String slot = resumeSlot();
+    if (slot != null && saveStore.read(slot).isPresent()) {
+      doResumeGame(); // resume committed state with the seat now AI
+    } else {
+      doStartGame(); // nothing committed yet → restart fresh with the seat AI
+    }
+    reporter.seatResigned(seat); // mark the seat AI in the control plane → reconnect = spectator
+    log.info("Seat {} resigned to AI; game continues", seat);
   }
 
   /** Lifecycle thread: stop the running game and return to a fresh setup (keeping seat choices). */
@@ -504,6 +557,40 @@ public final class GameController {
     reporter.turnCommitted(data.getSequence().getRound(), power, step.getDisplayName(), slot);
   }
 
+  /**
+   * Classify why the run loop fell out naturally (loop already known to be alive with no forced
+   * reason). Victory wins over the round cap, which wins over the safety limit. Returns null if the
+   * loop exited for none of these (shouldn't happen while alive — treated as no report). Package-
+   * private + static for unit testing.
+   */
+  static @Nullable GameEndReason classifyNaturalEnd(
+      final boolean gameOver, final int round, final int effectiveMaxRounds, final int steps) {
+    if (gameOver) {
+      return GameEndReason.VICTORY;
+    }
+    if (round > effectiveMaxRounds) {
+      return GameEndReason.ROUND_CAP;
+    }
+    if (steps >= STEP_SAFETY_LIMIT) {
+      return GameEndReason.STUCK;
+    }
+    return null;
+  }
+
+  /** A short human-readable end-of-game line for the client banner. */
+  private static String endMessage(
+      final GameEndReason reason, final java.util.List<String> winners) {
+    return switch (reason) {
+      case VICTORY -> winners.isEmpty() ? "Game over." : String.join(" & ", winners) + " win!";
+      case CONCEDED -> "Game over — a side conceded.";
+      case ROUND_CAP -> "Game ended — round limit reached (no winner).";
+      case ABANDONED -> "Game ended — abandoned.";
+      case STUCK -> "Game ended unexpectedly (stuck).";
+      case ERROR -> "Game ended due to an error.";
+      case HOST_ENDED -> "The host ended the game.";
+    };
+  }
+
   /** A filesystem-safe save slot from the game name. */
   private static String slotFor(final @Nullable String gameName) {
     return gameName == null ? "autosave" : gameName.replaceAll("[^a-zA-Z0-9._-]", "_");
@@ -556,18 +643,32 @@ public final class GameController {
     private volatile boolean alive = true;
     private Thread thread;
     private ServerGame game;
+    // The round cap for THIS game: unbounded when any seat is human (a real game can run long);
+    // the configured maxRounds only for an AI-only run that no human will end.
+    private int effectiveMaxRounds = Integer.MAX_VALUE;
+    // Why the loop ended, when it ended on its own (null = a reset/resign, which doesn't "finish").
+    private volatile @Nullable GameEndReason endReason;
+    // Last time the loop committed a step — the progress watchdog's heartbeat.
+    private volatile long lastProgressAt = System.currentTimeMillis();
+    private volatile @Nullable java.util.concurrent.ScheduledFuture<?> watchdogFuture;
 
     void start(final GameData data, final SeatPlan seatPlan) {
+      effectiveMaxRounds = seatPlan.claimedSeatNames().isEmpty() ? maxRounds : Integer.MAX_VALUE;
       final Set<Player> players = seatPlan.buildPlayers(bridge);
       game = WebGameHost.launch(data, players, display);
       display.setGameData(game.getData()); // enables battle-by-id round/force lookups
       game.setStopGameOnDelegateExecutionStop(true);
+      lastProgressAt = System.currentTimeMillis();
       thread = new Thread(this::run, "web-game-loop");
       thread.setDaemon(true);
       thread.start();
+      watchdogFuture =
+          watchdog.scheduleWithFixedDelay(
+              this::checkProgress, WATCHDOG_PERIOD_MS, WATCHDOG_PERIOD_MS, TimeUnit.MILLISECONDS);
     }
 
     private void run() {
+      java.util.List<String> winners = java.util.List.of();
       try {
         // Resume a loaded game (runs the saved step) or, for a fresh game, set the resume flag and
         // start persistent delegates. Our loop steps via runNextStep(), so the engine's own
@@ -577,11 +678,12 @@ public final class GameController {
         publishStep(); // initial state — skipped if we are starting on a silent setup step
         int steps = 0;
         while (alive
+            && endReason == null
             && !game.isGameOver()
-            && game.getData().getSequence().getRound() <= maxRounds
+            && game.getData().getSequence().getRound() <= effectiveMaxRounds
             && steps < STEP_SAFETY_LIMIT) {
           game.runNextStep();
-          if (!alive) {
+          if (!alive || endReason != null) {
             break;
           }
           // Fast-forward the no-op setup steps (game init, 0-value bids) without surfacing them.
@@ -592,28 +694,97 @@ public final class GameController {
           steps++;
           Thread.sleep(stepDelayMs);
         }
+        // Classify a natural end (a reset/resign leaves alive=false and endReason null → no
+        // report).
+        if (alive && endReason == null) {
+          endReason =
+              classifyNaturalEnd(
+                  game.isGameOver(),
+                  game.getData().getSequence().getRound(),
+                  effectiveMaxRounds,
+                  steps);
+          if (endReason == GameEndReason.VICTORY) {
+            winners = winnerNames();
+          }
+        }
         log.info(
-            "Game loop ended: alive={} gameOver={} round={}",
+            "Game loop ended: alive={} reason={} round={}",
             alive,
-            game.isGameOver(),
+            endReason,
             game.getData().getSequence().getRound());
       } catch (final InterruptedException e) {
         Thread.currentThread().interrupt();
       } catch (final RuntimeException e) {
-        // A reset closes the bridge, which makes the parked decision throw — expected, not an
-        // error.
-        if (alive) {
+        // A reset/resign closes the bridge, making the parked decision throw — expected, not an
+        // error. A throw while still alive is a real game-loop error.
+        if (alive && endReason == null) {
           log.error("Game loop error", e);
+          endReason = GameEndReason.ERROR;
         } else {
-          log.info("Game loop stopped for a new game");
+          log.info("Game loop stopped for a new game / resign");
         }
       } finally {
+        cancelWatchdog();
         bridge.close();
-        // alive is still true only when the loop ended on its own (game over / round limit), not
-        // when a reset stopped it — report completion only in that natural-end case.
-        if (alive) {
-          reporter.gameFinished();
+        // Report + surface only an actual end (endReason set). A reset/resign leaves it null.
+        if (endReason != null) {
+          publishGameOver(endReason, winners);
+          reporter.gameFinished(
+              endReason.name(), winners.isEmpty() ? null : String.join(", ", winners));
         }
+      }
+    }
+
+    /** Winning power names from the engine's EndRoundDelegate, or empty if none/unavailable. */
+    private java.util.List<String> winnerNames() {
+      try {
+        return game.getData().getEndRoundDelegate().getWinners().stream()
+            .map(GamePlayer::getName)
+            .toList();
+      } catch (final RuntimeException e) {
+        return java.util.List.of();
+      }
+    }
+
+    /** Broadcast the end of the game so clients show an end screen (cached for late/reconnects). */
+    private void publishGameOver(final GameEndReason reason, final java.util.List<String> winners) {
+      final JsonObject env = new JsonObject();
+      env.addProperty("type", "gameOver");
+      env.addProperty("reason", reason.name());
+      env.add("winners", GSON.toJsonTree(winners));
+      env.addProperty("message", endMessage(reason, winners));
+      server.publishGameOver(GSON.toJson(env));
+    }
+
+    /**
+     * Progress watchdog (runs off the loop thread): if the loop has made no progress for {@link
+     * #HANG_TIMEOUT_MS} AND no human decision is pending, the engine is hung in a delegate (a
+     * blocked step never trips the step cap since it doesn't iterate) — abort with {@code STUCK}. A
+     * normal human turn has a pending decision and is left alone (the turn-deadline item governs
+     * it).
+     */
+    private void checkProgress() {
+      if (!alive || endReason != null) {
+        return;
+      }
+      if (System.currentTimeMillis() - lastProgressAt > HANG_TIMEOUT_MS
+          && !server.isDecisionPending()) {
+        log.error(
+            "Game loop made no progress for {}ms with no pending decision — aborting as STUCK",
+            HANG_TIMEOUT_MS);
+        endReason = GameEndReason.STUCK;
+        alive = false;
+        bridge.close(); // unpark the loop if it is blocked in the engine
+        if (thread != null) {
+          thread.interrupt();
+        }
+      }
+    }
+
+    private void cancelWatchdog() {
+      final java.util.concurrent.ScheduledFuture<?> f = watchdogFuture;
+      if (f != null) {
+        f.cancel(false);
       }
     }
 
@@ -622,6 +793,7 @@ public final class GameController {
       if (isSilentStep()) {
         return;
       }
+      lastProgressAt = System.currentTimeMillis(); // watchdog heartbeat: a step committed
       server.publishState(GSON.toJson(StateProjector.project(game.getData())));
       publishObjectives(game.getData());
       autosave(game.getData()); // flush after every committed step (glacial turn rate → cheap)

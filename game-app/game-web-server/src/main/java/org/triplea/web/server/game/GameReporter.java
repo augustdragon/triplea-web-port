@@ -20,6 +20,16 @@ interface GameReporter {
    */
   void turnCommitted(int round, @Nullable String power, String phase, String bytesRef);
 
-  /** The game finished on its own (game over or round limit) — not a reset. */
-  void gameFinished();
+  /**
+   * The game finished on its own — not a reset. {@code reason} is a {@link GameEndReason} name;
+   * {@code winner} is a comma-separated list of winning powers, or null when there is no winner
+   * (e.g. a round-cap or stuck end).
+   */
+  void gameFinished(String reason, @Nullable String winner);
+
+  /**
+   * A human player conceded {@code power} mid-game — it is now AI. Lets the control plane mark the
+   * seat AI so a reconnecting (former) player is routed back as a spectator, not to a now-AI seat.
+   */
+  void seatResigned(String power);
 }

@@ -27,6 +27,7 @@ import { Sidebar } from "./Sidebar";
 import { BottomDock, type DockTab } from "./BottomDock";
 import { SeatSelect } from "./SeatSelect";
 import { WaitingRoom } from "./WaitingRoom";
+import { GameOverScreen, type GameOverInfo } from "./GameOverScreen";
 import { RejoinPrompt } from "./RejoinPrompt";
 
 // Standalone fallback for the bare /game route (a manually-run game server). The lobby flow uses
@@ -90,6 +91,9 @@ export default function App() {
   const [spectating, setSpectating] = useState(false);
   // Lobby flow: whether we are the host (may start the game from the waiting room).
   const [isHost, setIsHost] = useState(false);
+  // Set when the game ends — drives the end screen and stops the reconnect loop.
+  const [gameOver, setGameOver] = useState<GameOverInfo | null>(null);
+  const gameOverRef = useRef(false);
   const recalledRef = useRef<string | null>(recalledSeat());
   const setupReclaimDone = useRef(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -118,7 +122,8 @@ export default function App() {
         | ({ type: "battle" } & BattleEvent)
         | { type: "notes"; html: string }
         | { type: "objectives"; items: ObjectiveItem[] }
-        | { type: "seats"; roster: SeatRoster };
+        | { type: "seats"; roster: SeatRoster }
+        | ({ type: "gameOver" } & GameOverInfo);
       if (env.type === "state") {
         setSnapshot(env.snapshot);
       } else if (env.type === "seats") {
@@ -132,6 +137,10 @@ export default function App() {
         setNotesHtml(env.html);
       } else if (env.type === "objectives") {
         setObjectives(env.items);
+      } else if (env.type === "gameOver") {
+        gameOverRef.current = true; // stop the reconnect loop — the game is finished
+        setRequest(null);
+        setGameOver({ reason: env.reason, winners: env.winners, message: env.message });
       }
     };
 
@@ -148,7 +157,7 @@ export default function App() {
       };
       ws.onmessage = onMessage;
       ws.onclose = () => {
-        if (cancelled) return;
+        if (cancelled || gameOverRef.current) return; // don't reconnect to a finished game
         setWsStatus("connecting…");
         // Re-run connect on every drop: a ticket is single-use, so a reconnect needs a FRESH one
         // (and this re-spawns the container if it was reaped while idle — lazy rehydration).
@@ -174,17 +183,30 @@ export default function App() {
           return;
         }
         const data = (await res.json()) as {
-          wsEndpoint: string;
-          ticket: string | null;
-          seat: string | null;
-          isHost: boolean;
+          wsEndpoint?: string;
+          ticket?: string | null;
+          seat?: string | null;
+          isHost?: boolean;
+          status?: string;
+          reason?: string;
+          winner?: string | null;
         };
+        // The game is already over — show the end screen instead of connecting.
+        if (data.status === "finished") {
+          gameOverRef.current = true;
+          setGameOver({
+            reason: data.reason ?? "",
+            winners: data.winner ? data.winner.split(", ") : [],
+            message: data.winner ? `${data.winner} win!` : "Game over.",
+          });
+          return;
+        }
         // Our identity comes from the control plane, not local storage: bind to the assigned seat,
         // or spectate if we hold none (e.g. a host who didn't take a seat).
         if (data.seat) setMySeat(data.seat);
         else setSpectating(true);
         setIsHost(!!data.isHost);
-        openWs(data.wsEndpoint, data.ticket);
+        openWs(data.wsEndpoint as string, data.ticket ?? null);
       } catch {
         setWsStatus("cannot reach control plane");
         retry = setTimeout(connect, 2000);
@@ -279,6 +301,22 @@ export default function App() {
   }
   function resumeGame() {
     sendControl({ action: "resumeGame" });
+  }
+  // Concede: resign our seat to AI; the game continues for everyone else. We drop to spectator.
+  function concede() {
+    if (!mySeat) return;
+    if (
+      !window.confirm(
+        `Concede ${mySeat}? Your seat is played by AI for the rest of the game — you can keep watching.`,
+      )
+    ) {
+      return;
+    }
+    sendControl({ action: "concede" });
+    setMySeat(null);
+    setSpectating(true);
+    setRequest(null);
+    forgetSeat();
   }
 
   // Politics: commit the staged set of declarations (possibly empty) and end the phase. The server
@@ -413,6 +451,13 @@ export default function App() {
     return <div style={{ color: "#ccc", padding: 16, fontFamily: "sans-serif" }}>Loading map…</div>;
   }
 
+  // Game over: announce the winner / reason and stop here (the reconnect loop is already halted).
+  if (gameOver) {
+    return (
+      <GameOverScreen info={gameOver} colors={geometry.playerColors} inLobbyFlow={!!gameId} />
+    );
+  }
+
   // Waiting room (lobby flow): seats are pre-assigned; show who's connected and let the host start.
   if (roster && roster.phase === "waiting") {
     return (
@@ -518,6 +563,27 @@ export default function App() {
                 ? `Seated as ${mySeat}`
                 : "Spectating"}
         </div>
+      )}
+      {mySeat && roster?.phase === "running" && (
+        <button
+          onClick={concede}
+          title="Resign your seat to AI; the game continues for everyone else"
+          style={{
+            position: "fixed",
+            top: 8,
+            right: SIDEBAR_WIDTH + 12,
+            background: "#322",
+            border: "1px solid #944",
+            color: "#d99",
+            padding: "4px 12px",
+            borderRadius: 14,
+            fontSize: 12,
+            cursor: "pointer",
+            zIndex: 20,
+          }}
+        >
+          Concede
+        </button>
       )}
       <Sidebar
         wsStatus={wsStatus}

@@ -225,16 +225,20 @@ public final class LobbyDao {
       String mapXml,
       String containerId,
       String wsEndpoint,
-      String saveRef) {}
+      String saveRef,
+      String endReason,
+      String winner) {}
 
-  /** Status, map, current container/endpoint, and the latest save's bytes_ref for rehydration. */
+  /**
+   * Status, map, current container/endpoint, latest save's bytes_ref, and end summary if finished.
+   */
   public Optional<ConnectInfo> connectInfo(final UUID gameId) {
     return jdbi.withHandle(
         handle ->
             handle
                 .createQuery(
                     "SELECT g.created_by, g.status, g.map_xml, g.container_id, g.ws_endpoint,"
-                        + " s.bytes_ref"
+                        + " g.end_reason, g.winner, s.bytes_ref"
                         + " FROM games g LEFT JOIN saves s ON s.id = g.current_save_id"
                         + " WHERE g.id = :gid")
                 .bind("gid", gameId)
@@ -246,7 +250,9 @@ public final class LobbyDao {
                             rs.getString("map_xml"),
                             rs.getString("container_id"),
                             rs.getString("ws_endpoint"),
-                            rs.getString("bytes_ref")))
+                            rs.getString("bytes_ref"),
+                            rs.getString("end_reason"),
+                            rs.getString("winner")))
                 .findOne());
   }
 

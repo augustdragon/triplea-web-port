@@ -19,7 +19,14 @@ import org.triplea.web.controlplane.orchestrator.GameReaper;
 public final class GameReportController {
 
   /** A reported event; only the fields relevant to its {@code type} are populated. */
-  public record Event(String type, Integer round, String power, String phase, String bytesRef) {}
+  public record Event(
+      String type,
+      Integer round,
+      String power,
+      String phase,
+      String bytesRef,
+      String reason,
+      String winner) {}
 
   private final GameReportDao dao;
   private final GameReaper reaper;
@@ -57,9 +64,11 @@ public final class GameReportController {
           dao.recordTurn(
               gameId, intOr(event.round(), 0), event.power(), event.phase(), event.bytesRef());
       case "finished" -> {
-        dao.markFinished(gameId);
+        dao.markFinished(gameId, event.reason(), event.winner());
         reaper.reapGame(gameId); // the game is over — stop its container
       }
+      case "resigned" -> dao.resignSeat(gameId, event.power()); // conceded seat is now AI
+
       default -> throw new BadRequestResponse("unknown event type: " + event.type());
     }
     ctx.status(204);

@@ -13,5 +13,8 @@ final class NoOpGameReporter implements GameReporter {
       final int round, final @Nullable String power, final String phase, final String bytesRef) {}
 
   @Override
-  public void gameFinished() {}
+  public void gameFinished(final String reason, final @Nullable String winner) {}
+
+  @Override
+  public void seatResigned(final String power) {}
 }
