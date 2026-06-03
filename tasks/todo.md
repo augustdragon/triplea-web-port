@@ -484,9 +484,24 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
           isn't caught by the auth-timeout (`conn.isOpen()` reads false on the container side). `waitForReady` (M5)
           only probes TCP. Add a WS ping/pong heartbeat + a real readiness handshake so the host's first connect to a
           new container can't hang. The browser's reconnect-on-close loop covers the common case today.
-  - [ ] **Deployment / presence / Web Push** — Docker Compose on the VM (control plane + Postgres + on-demand game containers);
-      presence fed into the game process; **"your turn" Web Push** (the gap Lichess under-built; multi-day turns
-      make it essential — a stalled seat blocks 3–5 players).
+  - [x] **WS heartbeat + readiness hardening** ✅ (2026-06-03). Game WS: `setConnectionLostTimeout(20s)` on the
+        org.java_websocket server → ping/pong + active close of dead/half-dead sockets (the M6 readiness-race fix —
+        the browser's reconnect loop then recovers). Lobby WS: a 25s keepalive ping that also prunes dead sessions.
+        Verified: idle game-WS connections survive the ping cycle (turn-timer harness held them 15–45s with no
+        regression); a lobby WS idle 28s stayed open + received a ping.
+  - [x] **Presence (connected seats → control plane)** ✅ (2026-06-03). The container reports its connected seat set
+        (`GameReporter.presence`, deduped, on every connect/disconnect via `publishSeats`) → CP writes `seats.connected`
+        (`GameReportDao.setPresence`), surfaced on `SeatView.connected` (a lobby presence dot) and **cleared on reap**.
+        The `IdleReaper` now **won't reap a game with a connected player** (`idleGameIds` excludes it). Foundation for
+        "your turn" Web Push (target only *absent* players). Verified e2e (`/tmp/pr-verify.mjs`): both seats →
+        `connected=true`; a disconnect flips that seat to `false` while the other stays connected.
+  - [ ] **Deployment + "your turn" Web Push (remaining Phase-4 tail).** Deployment: a control-plane Dockerfile + a full
+        Docker Compose (control plane + Postgres + on-demand game containers), serve the built SPA, **route the per-game
+        WS through the control plane** for a single `wss://` origin/TLS (containers bind random `ws://` ports today), and
+        wire **real Google/Discord OAuth** (pac4j — dev-login is prod-disabled). Needs a VM, a domain, and registered
+        OAuth apps. Web Push (VAPID): service worker + push subscription + send on a turn transition to the *disconnected*
+        seat-holder (uses presence above + the `turn` report's current power → `seats.user_id`). Push needs HTTPS, so it
+        follows deployment.
   - [x] **End-game: victory surfacing, end-reason, no round cap for human games** ✅ (built + verified 2026-06-03).
         `GameEndReason` recorded on loop exit; `{type:"gameOver", reason, winners, message}` WS envelope (cached +
         re-sent on connect) + a client `GameOverScreen` that halts the reconnect loop; reason + winner persisted to
@@ -571,6 +586,14 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
       retention is resource-heavy → gate as a **premium** feature; ties into the R2/S3 save-store seam already noted
       ("when we open up").
 - [ ] Run converter across more maps; fix feature gaps (relief blending, scroll-wrap, markers)
+- [ ] **Unit icon assets (render unit images, not text counts).** `MapCanvas` draws each stack as a centered count
+      badge + a text-only hover list; the desktop draws each unit type's PNG. The map's images
+      (`map/units/*.png`, plus `flags/`, relief `baseTiles/`) are **gitignored** (`.gitignore` line 18: `*.png`) —
+      like the desktop, maps and their art are distributed/downloaded separately, not committed. So this needs an
+      **asset pipeline**: export/serve the active map's unit images (keyed by unit type + owner) to the client
+      alongside the (also gitignored) `geometry.json` export, and have `MapCanvas` draw the icons in stacks. Shares
+      the converter/export work above (flags + relief blending come from the same gitignored PNGs). Keep the assets
+      out of git — regenerate/serve them from the source map.
 - [ ] Tech panel (politics done in 3e++); generalize politics beyond Pacific's free DoW actions (cost/dice/`actionAccept` paths)
 - [ ] Save/load via engine's existing `.tsvg` serialization (server-side)
 - [ ] **Bidding as a game setup option.** Bids are hardcoded to 0 today, so the game loop fast-forwards the
