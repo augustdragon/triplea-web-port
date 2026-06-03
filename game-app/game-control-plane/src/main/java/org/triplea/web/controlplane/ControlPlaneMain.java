@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.triplea.web.controlplane.auth.AllowList;
 import org.triplea.web.controlplane.auth.AuthFilter;
 import org.triplea.web.controlplane.auth.ConfigAllowList;
+import org.triplea.web.controlplane.auth.Identity;
 import org.triplea.web.controlplane.auth.JwtService;
 import org.triplea.web.controlplane.auth.LoginService;
 import org.triplea.web.controlplane.auth.SessionCookies;
@@ -15,6 +16,11 @@ import org.triplea.web.controlplane.http.DevLoginController;
 import org.triplea.web.controlplane.http.HealthController;
 import org.triplea.web.controlplane.http.MeController;
 import org.triplea.web.controlplane.json.GsonJsonMapper;
+import org.triplea.web.controlplane.lobby.LobbyBroadcaster;
+import org.triplea.web.controlplane.lobby.LobbyController;
+import org.triplea.web.controlplane.lobby.LobbyDao;
+import org.triplea.web.controlplane.orchestrator.GameLauncher;
+import org.triplea.web.controlplane.orchestrator.ProcessGameLauncher;
 import org.triplea.web.controlplane.user.UserDao;
 
 /**
@@ -46,9 +52,35 @@ public final class ControlPlaneMain {
 
     final Javalin app = Javalin.create(cfg -> cfg.jsonMapper(new GsonJsonMapper()));
 
+    final GameLauncher gameLauncher = new ProcessGameLauncher();
+    final LobbyDao lobbyDao = new LobbyDao(database.jdbi());
+    final LobbyBroadcaster lobbyBroadcaster = new LobbyBroadcaster(lobbyDao);
+
     new HealthController(database).register(app);
     app.before("/api/*", new AuthFilter(jwt, allowList));
     new MeController(userDao).register(app);
+    new LobbyController(lobbyDao, gameCatalog, userDao, gameLauncher, lobbyBroadcaster::broadcast)
+        .register(app);
+
+    // Live lobby updates. The WS handshake carries the same session cookie; reject unauthenticated
+    // or un-invited connections, otherwise register the client for broadcasts.
+    app.ws(
+        "/ws/lobby",
+        ws -> {
+          ws.onConnect(
+              ctx -> {
+                final String token = SessionCookies.read(ctx);
+                final Identity identity = token == null ? null : jwt.verify(token).orElse(null);
+                if (identity == null
+                    || !allowList.isAllowed(identity.provider(), identity.subject())) {
+                  ctx.closeSession();
+                  return;
+                }
+                lobbyBroadcaster.add(ctx);
+              });
+          ws.onClose(ctx -> lobbyBroadcaster.remove(ctx));
+          ws.onError(ctx -> lobbyBroadcaster.remove(ctx));
+        });
     app.post(
         "/api/logout",
         ctx -> {

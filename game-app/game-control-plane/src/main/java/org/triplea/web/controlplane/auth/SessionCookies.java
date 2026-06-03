@@ -3,6 +3,7 @@ package org.triplea.web.controlplane.auth;
 import io.javalin.http.Context;
 import io.javalin.http.Cookie;
 import io.javalin.http.SameSite;
+import io.javalin.websocket.WsContext;
 
 /**
  * Reads and writes the session cookie. Always httpOnly (never readable from JS, per the standards)
@@ -23,6 +24,11 @@ public final class SessionCookies {
 
   /** Read the raw token from the request cookie, or null if absent. */
   public static String read(final Context ctx) {
+    return ctx.cookie(NAME);
+  }
+
+  /** Read the raw token from a WebSocket handshake cookie, or null if absent. */
+  public static String read(final WsContext ctx) {
     return ctx.cookie(NAME);
   }
 

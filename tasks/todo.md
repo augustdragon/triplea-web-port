@@ -389,10 +389,15 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
           `GameXmlReader` (engine init + `GameParser` + `!optional` filter) + `GameCatalog` (built at startup
           from `CONTROL_PLANE_GAME_XML`, powers cached). Verified: Pacific 1940 2E → 5 playable powers
           `[Japanese, Americans, Chinese, British, ANZAC]`; Javalin still boots clean with game-core present.
-    - [ ] **M3a-lobby** — `GameDao`/`SeatDao`; REST: create-table (open seat per power), list, claim/release
-          (authenticated user), set ready, host-launch (creator-only + ready-up gate → `GameLauncher`). Needs a
-          `seats.ready` column migration; flip `ProcessGameLauncher` from throw→log. Verify via curl.
-    - [ ] **M3a-ws** — authenticated lobby WebSocket broadcasting table/seat/ready changes; verify 2 sessions live.
+    - [x] **M3a-lobby** ✅ — `LobbyDao` (JDBI) + `LobbyController`: `GET /api/catalog`, create-table (open seat per
+          power, turn order), list/get, claim/release/ready (ownership enforced in SQL), host-launch (creator-only +
+          ready-up gate: all human seats ready, ≥1 human → `GameLauncher`, status→active). Migration `V1.05`
+          (`seats.ready` + `seat_order`); `ProcessGameLauncher` now logs + returns a placeholder endpoint (real
+          spawn M4a). **Open seats become AI at launch** (explicit AI-marking deferred). Verified via curl: full
+          two-user flow incl. 409 on taken seat, 403 on not-yours/not-host, active table leaves lobby list.
+    - [x] **M3a-ws** ✅ — authenticated lobby WebSocket (`/ws/lobby`, same session cookie) broadcasting the table
+          list on connect + after every mutation (`LobbyBroadcaster`). Verified (node `ws`): snapshot + live
+          broadcast on create; unauthenticated connection closed with no data.
     - [ ] **M3b** — React multi-view (react-router: login→lobby→game; `App.tsx`→Game route; `/api` Vite proxy).
           Verify: two sessions form a table, ready-up, host-launch invokes `GameLauncher`.
   - [ ] **M4a** — Parameterize `:game-web-server` (`--game-id`/`--port`/`--save-ref`/`--control-plane-url`; `SaveStore`
