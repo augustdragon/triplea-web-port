@@ -20,4 +20,7 @@ final class NoOpGameReporter implements GameReporter {
 
   @Override
   public void turnDeadline(final @Nullable String power, final @Nullable Long deadlineEpoch) {}
+
+  @Override
+  public void presence(final java.util.List<String> connectedPowers) {}
 }

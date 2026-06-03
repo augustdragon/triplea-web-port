@@ -117,6 +117,19 @@ public final class GameReportDao {
                 .execute());
   }
 
+  /** Mark exactly {@code connectedPowers} as connected for the game (all others disconnected). */
+  public void setPresence(final UUID gameId, final List<String> connectedPowers) {
+    jdbi.useHandle(
+        handle ->
+            handle
+                .createUpdate(
+                    "UPDATE seats SET connected = (power_name = ANY(:powers))"
+                        + " WHERE game_id = :gid")
+                .bindArray("powers", String.class, connectedPowers.toArray(new String[0]))
+                .bind("gid", gameId)
+                .execute());
+  }
+
   /** The running container's id for a game, or empty if none is live. */
   public Optional<String> containerId(final UUID gameId) {
     return jdbi.withHandle(
@@ -128,25 +141,38 @@ public final class GameReportDao {
                 .findOne());
   }
 
-  /** Clear the container handle + endpoint after a reap, so the next connect respawns. */
+  /**
+   * Clear the container handle + endpoint after a reap, so the next connect respawns. Also clears
+   * presence — a reaped container has no live connections, so no seat is "connected" anymore.
+   */
   public void clearContainer(final UUID gameId) {
     jdbi.useHandle(
-        handle ->
-            handle
-                .createUpdate(
-                    "UPDATE games SET container_id = NULL, ws_endpoint = NULL WHERE id = :gid")
-                .bind("gid", gameId)
-                .execute());
+        handle -> {
+          handle
+              .createUpdate(
+                  "UPDATE games SET container_id = NULL, ws_endpoint = NULL WHERE id = :gid")
+              .bind("gid", gameId)
+              .execute();
+          handle
+              .createUpdate("UPDATE seats SET connected = false WHERE game_id = :gid")
+              .bind("gid", gameId)
+              .execute();
+        });
   }
 
-  /** Games with a live container that haven't committed a turn within the idle window. */
+  /**
+   * Games with a live container that haven't committed a turn within the idle window AND have no
+   * connected player — so we don't reap a game someone is actively watching/thinking in.
+   */
   public List<UUID> idleGameIds(final int idleSeconds) {
     return jdbi.withHandle(
         handle ->
             handle
                 .createQuery(
-                    "SELECT id FROM games WHERE container_id IS NOT NULL"
-                        + " AND updated_at < now() - (:secs * interval '1 second')")
+                    "SELECT g.id FROM games g WHERE g.container_id IS NOT NULL"
+                        + " AND g.updated_at < now() - (:secs * interval '1 second')"
+                        + " AND NOT EXISTS ("
+                        + "   SELECT 1 FROM seats s WHERE s.game_id = g.id AND s.connected)")
                 .bind("secs", idleSeconds)
                 .mapTo(UUID.class)
                 .list());

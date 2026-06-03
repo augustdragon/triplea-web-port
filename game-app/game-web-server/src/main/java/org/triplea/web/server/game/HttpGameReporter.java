@@ -69,6 +69,13 @@ final class HttpGameReporter implements GameReporter {
     post(e);
   }
 
+  @Override
+  public void presence(final java.util.List<String> connectedPowers) {
+    final JsonObject e = event("presence");
+    e.add("powers", GSON.toJsonTree(connectedPowers));
+    post(e);
+  }
+
   private static JsonObject event(final String type) {
     final JsonObject e = new JsonObject();
     e.addProperty("type", type);

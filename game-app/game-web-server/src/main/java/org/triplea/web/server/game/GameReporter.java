@@ -39,4 +39,10 @@ interface GameReporter {
    * container reap and is honored on rehydrate.
    */
   void turnDeadline(@Nullable String power, @Nullable Long deadlineEpoch);
+
+  /**
+   * Which seats currently have a live (human) connection. Persisted to {@code seats.connected} so
+   * the lobby can show presence and the reaper won't cull a game people are still watching.
+   */
+  void presence(java.util.List<String> connectedPowers);
 }

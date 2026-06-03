@@ -14,6 +14,7 @@ export interface SeatView {
   power: string;
   kind: "open" | "human" | "ai";
   ready: boolean;
+  connected: boolean;
   ownerName: string | null;
   ownerChatId: string | null;
 }

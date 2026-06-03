@@ -1,9 +1,15 @@
 package org.triplea.web.controlplane.lobby;
 
 /**
- * One seat in a lobby table: the power (nation), its kind (open/human/ai), ready state, and — when
- * claimed — the owner's display name and public handle. {@code ownerName}/{@code ownerChatId} are
- * null for open/AI seats.
+ * One seat in a lobby table: the power (nation), its kind (open/human/ai), ready state, whether the
+ * seat currently has a live connection ({@code connected}, from the running container's presence
+ * reports), and — when claimed — the owner's display name and public handle. {@code
+ * ownerName}/{@code ownerChatId} are null for open/AI seats.
  */
 public record SeatView(
-    String power, String kind, boolean ready, String ownerName, String ownerChatId) {}
+    String power,
+    String kind,
+    boolean ready,
+    boolean connected,
+    String ownerName,
+    String ownerChatId) {}

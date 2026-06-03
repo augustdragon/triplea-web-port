@@ -137,6 +137,8 @@ public final class GameController {
   // Seats that are human-driven (WebPlayer) in the running game — set at launch, empty in setup.
   // Lets the client offer rejoin on an unmanned human seat (whose decision is buffered) but not AI.
   private volatile Set<String> humanSeats = Set.of();
+  // Last presence (connected seats) reported to the control plane — to report only on change.
+  private volatile Set<String> lastPresence = Set.of();
 
   public GameController(
       final Path gameXml,
@@ -567,6 +569,20 @@ public final class GameController {
         "roster",
         GSON.toJsonTree(p.toRoster(phase, savedGameInfo, humanSeats, server.connectedSeats())));
     server.publishSeats(GSON.toJson(env));
+    reportPresenceIfChanged();
+  }
+
+  /**
+   * Report the set of connected seats to the control plane (→ {@code seats.connected}) — only when
+   * it changes, so the lobby sees presence and the reaper spares a game people are watching.
+   * publishSeats() is called on every connect/disconnect/bind, so this catches all presence shifts.
+   */
+  private void reportPresenceIfChanged() {
+    final Set<String> connected = server.connectedSeats();
+    if (!connected.equals(lastPresence)) {
+      lastPresence = connected;
+      reporter.presence(new java.util.ArrayList<>(connected));
+    }
   }
 
   /**

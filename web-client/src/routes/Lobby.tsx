@@ -192,6 +192,14 @@ function SeatRow({ table, seat, user }: { table: LobbyTable; seat: SeatView; use
   const mine = seat.ownerChatId === user.playerChatId;
   return (
     <li style={seatRow}>
+      {seat.kind === "human" && (
+        <span
+          title={seat.connected ? "connected" : "not connected"}
+          style={{ color: seat.connected ? "#6d6" : "#666", fontSize: 10 }}
+        >
+          ●
+        </span>
+      )}
       <span style={{ width: 100, fontWeight: 500 }}>{seat.power}</span>
       {seat.kind === "open" && (
         <button style={btn} onClick={() => act(claimSeat(table.id, seat.power))}>

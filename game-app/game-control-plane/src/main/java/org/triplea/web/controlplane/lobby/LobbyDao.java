@@ -68,7 +68,7 @@ public final class LobbyDao {
               groupSeats(
                   handle
                       .createQuery(
-                          "SELECT s.game_id, s.power_name, s.kind, s.ready,"
+                          "SELECT s.game_id, s.power_name, s.kind, s.ready, s.connected,"
                               + " ho.display_name AS owner_name, ho.player_chat_id AS owner_chat"
                               + " FROM seats s"
                               + " JOIN games g ON g.id = s.game_id AND g.status = 'lobby'"
@@ -105,7 +105,7 @@ public final class LobbyDao {
           final List<SeatView> seats =
               handle
                   .createQuery(
-                      "SELECT s.power_name, s.kind, s.ready,"
+                      "SELECT s.power_name, s.kind, s.ready, s.connected,"
                           + " ho.display_name AS owner_name, ho.player_chat_id AS owner_chat"
                           + " FROM seats s LEFT JOIN users ho ON ho.id = s.user_id"
                           + " WHERE s.game_id = :gid ORDER BY s.seat_order")
@@ -368,6 +368,7 @@ public final class LobbyDao {
         rs.getString("power_name"),
         rs.getString("kind"),
         rs.getBoolean("ready"),
+        rs.getBoolean("connected"),
         rs.getString("owner_name"),
         rs.getString("owner_chat"));
   }

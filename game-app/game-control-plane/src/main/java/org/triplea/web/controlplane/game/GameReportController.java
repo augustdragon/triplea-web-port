@@ -27,7 +27,8 @@ public final class GameReportController {
       String bytesRef,
       String reason,
       String winner,
-      Long deadlineEpoch) {}
+      Long deadlineEpoch,
+      java.util.List<String> powers) {}
 
   private final GameReportDao dao;
   private final GameReaper reaper;
@@ -72,6 +73,9 @@ public final class GameReportController {
       case "deadline" ->
           // The active seat's absolute turn deadline (null = cleared); others are cleared.
           dao.setTurnDeadline(gameId, event.power(), event.deadlineEpoch());
+      case "presence" ->
+          // Which seats currently have a live connection (for the lobby + reaper).
+          dao.setPresence(gameId, event.powers() == null ? java.util.List.of() : event.powers());
 
       default -> throw new BadRequestResponse("unknown event type: " + event.type());
     }
