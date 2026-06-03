@@ -487,12 +487,76 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
   - [ ] **Deployment / presence / Web Push** — Docker Compose on the VM (control plane + Postgres + on-demand game containers);
       presence fed into the game process; **"your turn" Web Push** (the gap Lichess under-built; multi-day turns
       make it essential — a stalled seat blocks 3–5 players).
+  - [ ] **End-game: victory surfacing, end-reason, no round cap for human games (design 2026-06-03).** The engine
+        already DETECTS every end condition in `EndRoundDelegate` (VP, victory cities, economic, capital-loss,
+        triggered victories), records the `winners`, and writes a victory message into history via `signalGameOver(...)`.
+        **Confirmed (traced):** a victory DOES halt our loop — in-process (non-websocket) `signalGameOver` →
+        `bridge.stopGameSequence()` → `delegateExecutionStopped` → next `runNextStep()` → `stopGame()` →
+        `isGameOver()` true → `Session.run` exits (we set `setStopGameOnDelegateExecutionStop(true)`). The winner is
+        recoverable live and from a save: `gameData.getEndRoundDelegate().getWinners()` + `.gameOver` (persisted in
+        `saveState`/`loadState`), with the reason text in history. **The gap is purely surfacing:** there's no
+        game-over/winner WS envelope — on end the container is reaped and the WS just closes, so the browser treats it
+        as a dropped connection; and a real victory is **indistinguishable** from the `maxRounds` cap (default 20) or
+        the 10k-step safety limit — all three call `reporter.gameFinished()` and the DB only flips `status=finished`
+        (no winner, no reason). Work:
+        - **Record an explicit `GameEndReason`** at loop exit / graceful end — `VICTORY`(+winners), `CONCEDED`,
+          `ABANDONED`, `ERROR`, `STUCK`, `ROUND_CAP` (AI-only), `HOST_ENDED` — report it on the `finished` event and
+          add `end_reason` + `winner` to `games`; push `{type:"gameOver", reason, winners, message}` and show an end
+          screen. (Answers "always know why a game ended, especially before victory.")
+        - **No round cap for games with a human seat** — run unbounded until victory/concede/host-end. Keep a
+          *configurable* cap only for AI-only demo/spectator runs (no human to end them). `GameController` already
+          knows the human seats.
+        - **Replace the blunt step cap as the primary guard with a progress/hang watchdog**, keeping
+          `STEP_SAFETY_LIMIT` (+ a wall-clock bound) as a last-resort failsafe (per user). Distinguish the two
+          "runs-forever" modes cheaply: loop blocked in `runNextStep` **with a decision request pending** = a normal
+          human turn (governed by the turn deadline, see concede/abandonment item); blocked **with no pending request**
+          for > T, or the same step re-executing without the round/sequence advancing = an **engine hang/loop** → abort
+          `STUCK`. (`STEP_SAFETY_LIMIT` can't catch an abandoned turn anyway — the loop is *parked* in `await`, not
+          iterating, so `steps` never increments.)
+        Prereq for the exit check ("a *full* game") and the post-game review session (Phase 5).
+  - [ ] **Concede + abandonment via one "seat → AI mid-game" primitive (design 2026-06-03; concede = resign-to-AI).**
+        The engine has **no** concede/defeat-while-others-continue, **no** AI hot-swap, and **no** turn timer — all
+        web-port-layer. Both features reduce to the same primitive: swap a *running* human seat to AI =
+        **final autosave → reconfigure that seat as AI in `SeatPlan` → resume from the save** (reuses `doResumeGame`
+        + autosave-per-step; `bridge.close()` unparks any decision the seat is parked on, and `WebPlayer` falls back to
+        engine defaults). Builds:
+        - **Concede (player-initiated):** `{type:"control", action:"concede"}` from the authenticated seat (client
+          confirm dialog) → that seat → AI; the game **continues** with AI running the resigned side and ends via the
+          normal victory conditions (recorded per-seat in history/DB). *Not* a whole-game end — chosen semantics is
+          resign-to-AI, so one player giving up doesn't end it for their allies.
+        - **Abandonment (timeout-initiated):** wire the unused `seats.turn_deadline_at` — set a deadline on entering a
+          human step; on expiry, notify ("your turn" Web Push later) then apply the same seat → AI substitution (or
+          pause first). This is the Phase 4 "abandoned seat caretaken by AI" exit-check requirement.
+        - Optional later: if **all** human seats have gone AI, offer a fast-resolve/auto-finish instead of watching AI
+          vs AI.
+        Depends on the end-game item (the `gameOver`/end-reason signal + review state).
 - [ ] **Exit check:** a private group plays a full Pacific 1940 game over the internet, browser-only, resumable
-      across days, with an abandoned seat caretaken by AI.
+      across days, with an abandoned seat caretaken by AI, **ending with a winner announced**.
 - Related: 3g hotseat (pass-and-play on one machine) shares the seat-routing mechanism — falls out of P4.1.
 - Deferred to "when we open up": moderation/ban/audit tooling (schema known, see spec §4/§10.4); R2/S3 save store.
 
 ### Phase 5 — Breadth & durability
+- [ ] **Action log / game history visible to all players (+ replay).** Give every player a live, textual feed of
+      what others are doing (purchases, moves, battles, politics, tech, placement) instead of inferring it from the
+      map. **Mostly a surfacing task — the engine already records this.** `game-core` writes a high-fidelity history
+      tree (`Round → Step → Event → EventChild`) with human-readable strings (delegates call
+      `getHistoryWriter().startEvent("Russia buy 5 infantry…")`), it is **already serialized in the save**
+      (`GameDataManager.forSaveGame()` → `withHistory=true`) and restored on load, and there's a ready-made text
+      exporter (`HistoryLog.printFullTurn()`). Work: on the server, project new history entries to a
+      `{type:"log", ...}` WS envelope as steps commit (cache + replay on connect, like the battle log); on the client,
+      a scrollable log/history panel. **Replay** falls out of the same data — the history is seekable (desktop
+      `HistoryPanel.gotoNode`), so a web replay steps through the saved history at any point. Overhead is modest (the
+      data already exists); cost is the WS fan-out + UI. Builds on the per-step publish already in
+      `GameController.Session.run`.
+- [ ] **Post-game review session (end-game lifecycle).** When a game ends, keep the table alive in a read-only
+      **review** state so players can read the full log / replay and discuss — rather than reaping immediately. The
+      **host** explicitly ends/closes the session → the game (and its save) is deleted/archived. Needs the
+      `{type:"gameOver"}` signal and a `review` status distinct from today's `finished`+immediate-reap (see the Phase 4
+      end-game item) so the `IdleReaper`/`GameReaper` don't tear the container down while players are still reviewing.
+- [ ] **Saved game history & export (premium).** Let players retain N completed games and export the game log/replay
+      (the engine's `HistoryLog` already renders history as text; saves already carry the full history). Storage +
+      retention is resource-heavy → gate as a **premium** feature; ties into the R2/S3 save-store seam already noted
+      ("when we open up").
 - [ ] Run converter across more maps; fix feature gaps (relief blending, scroll-wrap, markers)
 - [ ] Tech panel (politics done in 3e++); generalize politics beyond Pacific's free DoW actions (cost/dice/`actionAccept` paths)
 - [ ] Save/load via engine's existing `.tsvg` serialization (server-side)
