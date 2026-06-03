@@ -3,9 +3,12 @@ package org.triplea.web.server.game;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import games.strategy.engine.data.GameData;
+import games.strategy.engine.data.GamePlayer;
+import games.strategy.engine.data.GameStep;
 import games.strategy.engine.framework.GameDataManager;
 import games.strategy.engine.framework.ServerGame;
 import games.strategy.engine.player.Player;
+import games.strategy.triplea.delegate.BidPurchaseDelegate;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -412,14 +415,12 @@ public final class GameController {
 
     private void run() {
       try {
-        server.publishState(GSON.toJson(StateProjector.project(game.getData())));
-        publishObjectives(game.getData());
         // Resume a loaded game (runs the saved step) or, for a fresh game, set the resume flag and
         // start persistent delegates. Our loop steps via runNextStep(), so the engine's own
         // startGame() — which normally does this — never runs; we do it here instead.
         game.setUpGameForRunningSteps();
-        autosave(game.getData());
         reporter.gameStarted();
+        publishStep(); // initial state — skipped if we are starting on a silent setup step
         int steps = 0;
         while (alive
             && !game.isGameOver()
@@ -429,9 +430,11 @@ public final class GameController {
           if (!alive) {
             break;
           }
-          server.publishState(GSON.toJson(StateProjector.project(game.getData())));
-          publishObjectives(game.getData());
-          autosave(game.getData()); // flush after every committed step (glacial turn rate → cheap)
+          // Fast-forward the no-op setup steps (game init, 0-value bids) without surfacing them.
+          if (isSilentStep()) {
+            continue;
+          }
+          publishStep();
           steps++;
           Thread.sleep(stepDelayMs);
         }
@@ -458,6 +461,34 @@ public final class GameController {
           reporter.gameFinished();
         }
       }
+    }
+
+    /** Publish the current state + objectives and autosave — unless this is a silent setup step. */
+    private void publishStep() {
+      if (isSilentStep()) {
+        return;
+      }
+      server.publishState(GSON.toJson(StateProjector.project(game.getData())));
+      publishObjectives(game.getData());
+      autosave(game.getData()); // flush after every committed step (glacial turn rate → cheap)
+    }
+
+    /**
+     * Setup steps to run but not surface: game initialization, and a bid / bid-placement step whose
+     * player has no bid. Bidding is off by default (every bid is 0), so its steps are no-ops we
+     * fast-forward; a non-zero bid (once bidding becomes a setup option) is a real turn and is
+     * published normally.
+     */
+    private boolean isSilentStep() {
+      final GameStep step = game.getData().getSequence().getStep();
+      return switch (step.getDelegateName()) {
+        case "initDelegate" -> true;
+        case "bid", "placeBid" -> {
+          final GamePlayer player = step.getPlayerId();
+          yield player == null || !BidPurchaseDelegate.doesPlayerHaveBid(game.getData(), player);
+        }
+        default -> false;
+      };
     }
 
     void stop() {
