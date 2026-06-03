@@ -451,7 +451,14 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
           Verified end-to-end: finished → container reaped + status `finished`; played → reaped → reconnect
           **respawns and resumes from the save** (roster `savedGame={round 1, Combat}` via the shared volume); an
           idle setup game is swept and reaped.
-- [ ] **P4.5 — Hosting** — Docker Compose on the VM (control plane + Postgres + on-demand game containers);
+  - [ ] **M6 — Lobby↔container identity handoff (NEXT real work).** Today the lobby (control-plane auth = Alice)
+        and the game container's setup phase (old, trusted client-supplied name, auto-reclaimed from `localStorage`)
+        are two disconnected identity layers — so the game shows a stale browser name ("Gandalf"), not the
+        signed-in user, and seats are re-picked in the container. Wire them: pass the lobby's seat assignments +
+        identities to the container at spawn (a `--seats`/control-plane fetch), and authenticate the connecting
+        browser on the game WS (the JWT) so it binds to its pre-assigned seat — the "authenticated seat↔user
+        binding" deferred in M5. End state: launch → straight into the game as the signed-in user, in their seat,
+        no re-pick, no stale-storage surprises. (Subsumes the "active games list" so non-host players can enter.) — Docker Compose on the VM (control plane + Postgres + on-demand game containers);
       presence fed into the game process; **"your turn" Web Push** (the gap Lichess under-built; multi-day turns
       make it essential — a stalled seat blocks 3–5 players).
 - [ ] **Exit check:** a private group plays a full Pacific 1940 game over the internet, browser-only, resumable
@@ -463,6 +470,12 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
 - [ ] Run converter across more maps; fix feature gaps (relief blending, scroll-wrap, markers)
 - [ ] Tech panel (politics done in 3e++); generalize politics beyond Pacific's free DoW actions (cost/dice/`actionAccept` paths)
 - [ ] Save/load via engine's existing `.tsvg` serialization (server-side)
+- [ ] **Bidding as a game setup option.** Bids are hardcoded to 0 today, so the game loop fast-forwards the
+      no-op bid/`placeBid` steps (`GameController.isSilentStep`, conditioned on `BidPurchaseDelegate.doesPlayerHaveBid`).
+      Expose a per-power bid amount as a lobby/launch setup option (writes the `<power> bid` game property before
+      launch); a non-zero bid then runs and is surfaced normally with no further code change. Competitive A&A
+      balances sides this way (winner of the bid plays the weaker side with extra IPCs) — out of scope until we
+      support tournament-style play.
 - [ ] **Exit check:** a second, structurally different map plays end-to-end
 
 ## Notes / decisions
