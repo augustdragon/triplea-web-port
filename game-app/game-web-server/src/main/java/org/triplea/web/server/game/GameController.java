@@ -63,6 +63,8 @@ public final class GameController {
   // A save to resume from at the control plane's behest. Null → resume from this game's own slot
   // when an autosave exists there.
   private final @Nullable String saveRef;
+  // Reports lifecycle + per-turn progress to the control plane (no-op in standalone dev).
+  private final GameReporter reporter;
   // The map's objectives.properties (static per map); empty if the map has none.
   private final Properties objectivesProps;
 
@@ -95,7 +97,8 @@ public final class GameController {
       final GameWebSocketServer server,
       final SaveStore saveStore,
       final @Nullable String gameId,
-      final @Nullable String saveRef) {
+      final @Nullable String saveRef,
+      final GameReporter reporter) {
     this.gameXml = gameXml;
     this.maxRounds = maxRounds;
     this.stepDelayMs = stepDelayMs;
@@ -103,6 +106,7 @@ public final class GameController {
     this.saveStore = saveStore;
     this.gameId = gameId;
     this.saveRef = saveRef;
+    this.reporter = reporter;
     this.objectivesProps = loadObjectivesProperties(gameXml);
   }
 
@@ -329,7 +333,18 @@ public final class GameController {
     final String slot = saveSlot;
     if (slot != null) {
       saveStore.write(slot, data.toBytes());
+      reportTurn(data, slot);
     }
+  }
+
+  /**
+   * Tell the control plane a step committed: the round/power/phase and the save slot now holding
+   * it.
+   */
+  private void reportTurn(final GameData data, final String slot) {
+    final var step = data.getSequence().getStep();
+    final String power = step.getPlayerId() == null ? null : step.getPlayerId().getName();
+    reporter.turnCommitted(data.getSequence().getRound(), power, step.getDisplayName(), slot);
   }
 
   /** A filesystem-safe save slot from the game name. */
@@ -404,6 +419,7 @@ public final class GameController {
         // startGame() — which normally does this — never runs; we do it here instead.
         game.setUpGameForRunningSteps();
         autosave(game.getData());
+        reporter.gameStarted();
         int steps = 0;
         while (alive
             && !game.isGameOver()
@@ -436,6 +452,11 @@ public final class GameController {
         }
       } finally {
         bridge.close();
+        // alive is still true only when the loop ended on its own (game over / round limit), not
+        // when a reset stopped it — report completion only in that natural-end case.
+        if (alive) {
+          reporter.gameFinished();
+        }
       }
     }
 

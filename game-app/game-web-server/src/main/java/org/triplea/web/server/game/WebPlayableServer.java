@@ -54,6 +54,8 @@ public final class WebPlayableServer {
     final long stepDelayMs = (long) intFlag(flags, "step-delay-ms", 300);
     final String gameId = flags.get("game-id"); // null → save slot derived from the game name
     final String saveRef = flags.get("save-ref"); // null → resume from this game's own slot
+    final String controlPlaneUrl = flags.get("control-plane-url"); // null → no reporting
+    final String gameToken = flags.get("game-token"); // shared token authenticating reports
 
     final GameWebSocketServer server = new GameWebSocketServer(port);
     server.start();
@@ -61,7 +63,14 @@ public final class WebPlayableServer {
     // temp folder. The slot within it is the game id when spawned for a lobby game.
     final SaveStore saveStore =
         new SaveStore(Path.of(System.getProperty("user.home"), ".triplea-web", "saves"));
-    new GameController(gameXml, maxRounds, stepDelayMs, server, saveStore, gameId, saveRef).start();
+    // Report lifecycle/turn events to the control plane only when spawned for a lobby game.
+    final GameReporter reporter =
+        controlPlaneUrl != null && gameId != null
+            ? new HttpGameReporter(controlPlaneUrl, gameId, gameToken)
+            : new NoOpGameReporter();
+    new GameController(
+            gameXml, maxRounds, stepDelayMs, server, saveStore, gameId, saveRef, reporter)
+        .start();
     log.info(
         "Playable {} on :{} (game-id={}) — connect clients and claim seats",
         gameXml.getFileName(),
@@ -81,8 +90,8 @@ public final class WebPlayableServer {
   private static void usage(final String problem) {
     System.err.println("Error: " + problem);
     System.err.println(
-        "Usage: WebPlayableServer <gameXml> [--port=8080] [--max-rounds=20]"
-            + " [--step-delay-ms=300] [--game-id=<id>] [--save-ref=<slot>]");
+        "Usage: WebPlayableServer <gameXml> [--port=8080] [--max-rounds=20] [--step-delay-ms=300]"
+            + " [--game-id=<id>] [--save-ref=<slot>] [--control-plane-url=<url>] [--game-token=<t>]");
     System.exit(2);
   }
 }

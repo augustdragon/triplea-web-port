@@ -24,6 +24,8 @@ import java.util.Set;
  * @param allowList invited identities as {@code "provider:subject"} strings; access control v1.
  * @param gameXml path to the one map's game XML the lobby can host (optional; empty lobby if
  *     unset).
+ * @param gameToken shared token game containers present to the internal reporting endpoint
+ *     (optional; reports are rejected when unset). M5 replaces it with a per-game token.
  */
 public record ControlPlaneConfig(
     String dbUrl,
@@ -35,7 +37,8 @@ public record ControlPlaneConfig(
     String jwtSecret,
     int sessionTtlMinutes,
     Set<String> allowList,
-    String gameXml) {
+    String gameXml,
+    String gameToken) {
 
   private static final String DEFAULT_DB_URL = "jdbc:postgresql://localhost:5432/triplea_web";
   private static final String DEFAULT_DB_USER = "triplea_web";
@@ -98,6 +101,7 @@ public record ControlPlaneConfig(
     final int sessionTtlMinutes = parseTtl(env, problems);
     final Set<String> allowList = parseAllowList(env.getOrDefault("CONTROL_PLANE_ALLOWLIST", ""));
     final String gameXml = env.get("CONTROL_PLANE_GAME_XML");
+    final String gameToken = env.get("CONTROL_PLANE_GAME_TOKEN");
 
     if (!problems.isEmpty()) {
       throw new IllegalStateException(
@@ -113,7 +117,8 @@ public record ControlPlaneConfig(
         jwtSecret,
         sessionTtlMinutes,
         allowList,
-        gameXml);
+        gameXml,
+        gameToken);
   }
 
   private static int parsePort(final Map<String, String> env, final List<String> problems) {

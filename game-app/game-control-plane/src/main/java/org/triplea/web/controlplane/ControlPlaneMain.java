@@ -12,6 +12,8 @@ import org.triplea.web.controlplane.auth.SessionCookies;
 import org.triplea.web.controlplane.config.ControlPlaneConfig;
 import org.triplea.web.controlplane.db.Database;
 import org.triplea.web.controlplane.game.GameCatalog;
+import org.triplea.web.controlplane.game.GameReportController;
+import org.triplea.web.controlplane.game.GameReportDao;
 import org.triplea.web.controlplane.http.DevLoginController;
 import org.triplea.web.controlplane.http.HealthController;
 import org.triplea.web.controlplane.http.MeController;
@@ -61,6 +63,9 @@ public final class ControlPlaneMain {
     new MeController(userDao).register(app);
     new LobbyController(lobbyDao, gameCatalog, userDao, gameLauncher, lobbyBroadcaster::broadcast)
         .register(app);
+    // Service-to-service: game containers report lifecycle/turn events here (token-authenticated,
+    // outside /api/* so the user AuthFilter doesn't apply).
+    new GameReportController(new GameReportDao(database.jdbi()), config.gameToken()).register(app);
 
     // Live lobby updates. The WS handshake carries the same session cookie; reject unauthenticated
     // or un-invited connections, otherwise register the client for broadcasts.

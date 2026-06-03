@@ -411,8 +411,15 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
         (resume source via `resumeSlot()`). `--control-plane-url` lands in M4b. Verified headlessly: `--game-id=m4a-test`
         autosaves to the `m4a-test` slot, and restart detects `savedGame` from that slot + resumes to a live state
         snapshot. Updated runPlayable comment + manual test doc (positional → flags).
-  - [ ] **M4b** — Game container reports `game-started`/`turn-committed`/`game-finished` → control plane updates
-        `games`/`saves` in a tx (flush per committed turn). Hook: `GameController.autosave`. Verify: DB advances per step.
+  - [x] **M4b** ✅ — Game container reports lifecycle/turn events to the control plane. Game side:
+        `GameReporter` seam (`HttpGameReporter` via JDK `HttpClient`, fire-and-forget async, shared `--game-token`;
+        `NoOpGameReporter` in standalone dev), fired from `GameController` (`gameStarted`/`gameFinished` in the
+        loop, `turnCommitted{round,power,phase,bytesRef}` from `autosave`). Control plane: `GameReportController`
+        (`POST /internal/games/{id}/events`, token-auth, **outside `/api/*`** so the user filter doesn't apply) +
+        `GameReportDao` (insert `saves` row + advance `games` round/power/phase/current_save_id in a tx). Verified
+        end-to-end: a reporting container drove `games` to `round=1, Americans, Purchase Units` and inserted 25
+        `saves` rows; a wrong token → 401. (Single save slot per game → all `bytes_ref` point at the latest; older
+        `saves` rows are a history log, only the current is loadable until the store is versioned.)
   - [ ] **M5** — `DockerGameLauncher` (container per game via Docker API) + `IdleReaper` + `GET /api/games/:id/connect`
         (authorize, lazy-rehydrate from latest save, return `ws_endpoint`); client dials dynamic endpoint. Verify:
         full lobby→launch→play→kill→reconnect-rehydrate→idle-reap cycle.
