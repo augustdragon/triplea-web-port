@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
 import type {
   AirWarningRequest,
   BattleEvent,
@@ -27,9 +28,9 @@ import { BottomDock, type DockTab } from "./BottomDock";
 import { SeatSelect } from "./SeatSelect";
 import { RejoinPrompt } from "./RejoinPrompt";
 
-// The game WebSocket server (see :game-web-server:runSpectator / runPlayable). Same host as the
-// page, so it works over LAN/ZeroTier too.
-const WS_URL = `ws://${location.hostname}:8080`;
+// Standalone fallback for the bare /game route (a manually-run game server). The lobby flow uses
+// /game/:id, which fetches the real container endpoint from the control plane.
+const LEGACY_WS_URL = `ws://${location.hostname}:8080`;
 
 // Width of the fixed right sidebar; the bottom dock spans from the left edge to here.
 const SIDEBAR_WIDTH = 300;
@@ -89,6 +90,8 @@ export default function App() {
   const recalledRef = useRef<string | null>(recalledSeat());
   const setupReclaimDone = useRef(false);
   const wsRef = useRef<WebSocket | null>(null);
+  // /game/:id is the lobby flow (resolve the container endpoint); bare /game is standalone dev.
+  const { id: gameId } = useParams();
 
   useEffect(() => {
     fetch("/geometry.json")
@@ -101,12 +104,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const ws = new WebSocket(WS_URL);
-    wsRef.current = ws;
-    // Reclaim is handled by the roster-driven effect below (it knows the phase: auto in setup,
-    // confirm in running), so onopen just marks the connection live.
-    ws.onopen = () => setWsStatus("live");
-    ws.onmessage = (e) => {
+    let cancelled = false;
+    let socket: WebSocket | null = null;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+
+    const onMessage = (e: MessageEvent) => {
       const env = JSON.parse(e.data) as
         | { type: "state"; snapshot: StateSnapshot }
         | ({ type: "request" } & DecisionRequest)
@@ -129,10 +131,50 @@ export default function App() {
         setObjectives(env.items);
       }
     };
-    ws.onclose = () => setWsStatus("disconnected");
-    ws.onerror = () => setWsStatus("error — is a :game-web-server run task running?");
-    return () => ws.close();
-  }, []);
+
+    // Open (and keep retrying) a WebSocket to `url`. A lobby-spawned container takes ~10-40s to load
+    // its map, so early connects are refused — we retry the same endpoint until it serves.
+    const open = (url: string) => {
+      if (cancelled) return;
+      const ws = new WebSocket(url);
+      socket = ws;
+      wsRef.current = ws;
+      ws.onopen = () => setWsStatus("live");
+      ws.onmessage = onMessage;
+      ws.onclose = () => {
+        if (cancelled) return;
+        setWsStatus("connecting…");
+        retry = setTimeout(() => open(url), 2000);
+      };
+      ws.onerror = () => {}; // onclose follows and schedules the retry
+    };
+
+    void (async () => {
+      let url: string | null = LEGACY_WS_URL;
+      if (gameId) {
+        try {
+          const res = await fetch(`/api/games/${gameId}/connect`, { credentials: "include" });
+          if (!res.ok) {
+            setWsStatus(res.status === 401 ? "not signed in" : "cannot reach game");
+            return;
+          }
+          url = (await res.json()).wsEndpoint as string;
+        } catch {
+          setWsStatus("cannot reach control plane");
+          return;
+        }
+      }
+      if (url && !cancelled) {
+        open(url);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (retry) clearTimeout(retry);
+      socket?.close();
+    };
+  }, [gameId]);
 
   // When a decision arrives, surface it: jump to the Actions tab and expand the dock if collapsed.
   useEffect(() => {

@@ -15,6 +15,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <Route path="/login" element={<Login />} />
         <Route path="/lobby" element={<Lobby />} />
         <Route path="/game" element={<App />} />
+        <Route path="/game/:id" element={<App />} />
         <Route path="*" element={<Navigate to="/lobby" replace />} />
       </Routes>
     </BrowserRouter>

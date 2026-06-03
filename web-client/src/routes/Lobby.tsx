@@ -92,7 +92,19 @@ export function Lobby() {
 }
 
 function TableCard({ table, user }: { table: LobbyTable; user: User }) {
+  const navigate = useNavigate();
   const isHost = table.hostChatId === user.playerChatId;
+
+  async function launch() {
+    const res = await launchGame(table.id);
+    if (res.ok) {
+      navigate(`/game/${table.id}`); // into the game (it spawns + loads on connect)
+    } else {
+      const body = await res.text().catch(() => "");
+      window.alert(`Launch failed (HTTP ${res.status})${body ? ": " + body : ""}`);
+    }
+  }
+
   return (
     <div style={card}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
@@ -105,7 +117,7 @@ function TableCard({ table, user }: { table: LobbyTable; user: User }) {
         ))}
       </ul>
       {isHost && (
-        <button style={primaryBtn} onClick={() => act(launchGame(table.id))}>
+        <button style={primaryBtn} onClick={launch}>
           Launch game
         </button>
       )}

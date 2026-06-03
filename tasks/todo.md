@@ -435,8 +435,12 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
           if no live container, return `ws_endpoint`). `LobbyController.launch` now just flips to active (lazy
           spawn). Verified end-to-end through real Docker: launch → /connect spawns a container → drive it → it
           reports back via host-gateway → games row advances (round 1, Japanese) + 23 saves rows.
-    - [ ] **M5b-client** — `/game/:id` route fetches `/api/games/:id/connect` and dials the dynamic endpoint, with
-          **connection retry** (the container takes ~10-40s to load). Replaces `App.tsx`'s hardcoded `ws://:8080`.
+    - [x] **M5b-client** ✅ — `/game/:id` route: `App.tsx` resolves the container endpoint from
+          `/api/games/:id/connect` and dials it, **retrying every 2s** while the container loads (~10-40s); bare
+          `/game` keeps the `ws://:8080` standalone fallback. Lobby launch navigates the host to `/game/:id`.
+          Verified in a real (headless) browser: login → create → claim → ready → launch → `/game/:id` → the
+          container's setup screen renders over the dynamic endpoint. (Non-host players reaching a launched game —
+          an "active games" list — is a follow-up; M5b proves the host loop.)
     - [ ] **M5c** — Lazy rehydration (reconnect respawns from `current_save_id` via `--save-ref`) + reap on
           `game-finished` + `IdleReaper` (no connected seats). Verify the full launch→play→kill→rehydrate→reap cycle.
 - [ ] **P4.5 — Hosting** — Docker Compose on the VM (control plane + Postgres + on-demand game containers);
