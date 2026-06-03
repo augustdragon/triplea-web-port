@@ -420,9 +420,21 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
         end-to-end: a reporting container drove `games` to `round=1, Americans, Purchase Units` and inserted 25
         `saves` rows; a wrong token → 401. (Single save slot per game → all `bytes_ref` point at the latest; older
         `saves` rows are a history log, only the current is loadable until the store is versioned.)
-  - [ ] **M5** — `DockerGameLauncher` (container per game via Docker API) + `IdleReaper` + `GET /api/games/:id/connect`
-        (authorize, lazy-rehydrate from latest save, return `ws_endpoint`); client dials dynamic endpoint. Verify:
-        full lobby→launch→play→kill→reconnect-rehydrate→idle-reap cycle.
+  - [ ] **M5** — Orchestrator. **Decisions:** real Docker spawn now; lobby seats are advisory — the browser
+        re-selects in the container's existing setup phase (no game-WS auth changes). DockerGameLauncher via the
+        `docker` CLI; maps + saves mounted as volumes; control-plane URL reached from the container via host-gateway.
+    - [x] **M5a** ✅ — Game-container Docker image. `:game-web-server` gains the `application` plugin
+          (`installDist`, entrypoint `WebPlayableServer`); `Dockerfile` (FROM temurin:21-jre, COPY the dist) +
+          `.dockerignore`. Map dir + `~/.triplea-web/saves` mounted at runtime (image stays map-agnostic, 526 MB).
+          Verified: `docker run` starts a playable game reachable on the published port; `startGame` over the WS
+          works; the autosave persists to the shared volume. NB: Pacific takes ~10-40s to load before the WS serves
+          — M5b must wait for container readiness. (Logs: game-core `logback.xml` root=WARN suppresses INFO.)
+    - [ ] **M5b** — `DockerGameLauncher` (spawn container per game: `-p` published port, host-gateway
+          control-plane-url, shared save volume; record `container_id`/`ws_endpoint`) + `GameRouteController`
+          (`GET /api/games/:id/connect`: authorize via `seats`, lazy-spawn if no live container, wait for readiness,
+          return `ws_endpoint`). Client `Game` route fetches + dials the dynamic endpoint.
+    - [ ] **M5c** — Lazy rehydration (reconnect respawns from `current_save_id` via `--save-ref`) + reap on
+          `game-finished` + `IdleReaper` (no connected seats). Verify the full launch→play→kill→rehydrate→reap cycle.
 - [ ] **P4.5 — Hosting** — Docker Compose on the VM (control plane + Postgres + on-demand game containers);
       presence fed into the game process; **"your turn" Web Push** (the gap Lichess under-built; multi-day turns
       make it essential — a stalled seat blocks 3–5 players).

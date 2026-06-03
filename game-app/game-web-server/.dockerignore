@@ -1,0 +1,13 @@
+# Only the installDist output is needed in the image; keep the build context small.
+src
+*.gradle.kts
+.dockerignore
+Dockerfile
+build/classes
+build/generated
+build/libs
+build/reports
+build/resources
+build/test-results
+build/tmp
+build/distributions

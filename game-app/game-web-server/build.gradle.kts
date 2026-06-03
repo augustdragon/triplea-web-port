@@ -1,8 +1,15 @@
 plugins {
     id("triplea-java-library")
+    id("application")
 }
 
-description = "Web port backend: map-asset conversion and (later) the headless engine host for the React client."
+description = "Web port backend: map-asset conversion and the headless engine host for the React client."
+
+// The runnable distribution (installDist) packaged into the game-container Docker image. The
+// container's entrypoint is the multiplayer host; the other mains stay as the JavaExec tasks below.
+application {
+    mainClass.set("org.triplea.web.server.game.WebPlayableServer")
+}
 
 dependencies {
     // game-core gives us the engine's own geometry parser (PointFileReaderWriter) and, later,
