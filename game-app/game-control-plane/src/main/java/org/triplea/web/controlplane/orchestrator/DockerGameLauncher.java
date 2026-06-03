@@ -58,7 +58,8 @@ public final class DockerGameLauncher implements GameLauncher {
                 "--port=" + port,
                 "--game-id=" + spec.gameId(),
                 "--control-plane-url=" + callbackUrl,
-                "--game-token=" + (gameToken == null ? "" : gameToken)));
+                "--game-token=" + (gameToken == null ? "" : gameToken),
+                "--turn-limit-seconds=" + spec.turnLimitSeconds()));
     if (spec.saveRef() != null) {
       cmd.add("--save-ref=" + spec.saveRef());
     }

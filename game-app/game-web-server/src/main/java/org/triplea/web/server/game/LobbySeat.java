@@ -9,7 +9,11 @@ import javax.annotation.Nullable;
  * run as AI at launch.
  */
 record LobbySeat(
-    String powerName, String kind, @Nullable Long userId, @Nullable String displayName) {
+    String powerName,
+    String kind,
+    @Nullable Long userId,
+    @Nullable String displayName,
+    @Nullable Long turnDeadlineEpoch) {
 
   boolean isHuman() {
     return "human".equals(kind);

@@ -61,6 +61,14 @@ final class HttpGameReporter implements GameReporter {
     post(e);
   }
 
+  @Override
+  public void turnDeadline(final @Nullable String power, final @Nullable Long deadlineEpoch) {
+    final JsonObject e = event("deadline");
+    e.addProperty("power", power);
+    e.addProperty("deadlineEpoch", deadlineEpoch);
+    post(e);
+  }
+
   private static JsonObject event(final String type) {
     final JsonObject e = new JsonObject();
     e.addProperty("type", type);

@@ -31,17 +31,19 @@ public final class LobbyDao {
   }
 
   /** Create a lobby table: a games row plus one open seat per playable power, in turn order. */
-  public UUID createTable(final AvailableGame game, final long creatorUserId) {
+  public UUID createTable(
+      final AvailableGame game, final long creatorUserId, final int turnLimitSeconds) {
     return jdbi.inTransaction(
         handle -> {
           final UUID id =
               handle
                   .createUpdate(
-                      "INSERT INTO games (map_xml, edition, created_by)"
-                          + " VALUES (:mapXml, :name, :creator) RETURNING id")
+                      "INSERT INTO games (map_xml, edition, created_by, turn_limit_seconds)"
+                          + " VALUES (:mapXml, :name, :creator, :turnLimit) RETURNING id")
                   .bind("mapXml", game.mapXml())
                   .bind("name", game.name())
                   .bind("creator", creatorUserId)
+                  .bind("turnLimit", turnLimitSeconds)
                   .executeAndReturnGeneratedKeys("id")
                   .mapTo(UUID.class)
                   .one();
@@ -76,7 +78,7 @@ public final class LobbyDao {
                       .list());
           return handle
               .createQuery(
-                  "SELECT g.id, g.edition AS name, g.status,"
+                  "SELECT g.id, g.edition AS name, g.status, g.turn_limit_seconds,"
                       + " hg.display_name AS host_name, hg.player_chat_id AS host_chat"
                       + " FROM games g JOIN users hg ON hg.id = g.created_by"
                       + " WHERE g.status = 'lobby' ORDER BY g.created_at")
@@ -89,6 +91,7 @@ public final class LobbyDao {
                         rs.getString("status"),
                         rs.getString("host_name"),
                         rs.getString("host_chat"),
+                        rs.getInt("turn_limit_seconds"),
                         seatsByGame.getOrDefault(id, List.of()));
                   })
               .list();
@@ -111,7 +114,7 @@ public final class LobbyDao {
                   .list();
           return handle
               .createQuery(
-                  "SELECT g.id, g.edition AS name, g.status,"
+                  "SELECT g.id, g.edition AS name, g.status, g.turn_limit_seconds,"
                       + " hg.display_name AS host_name, hg.player_chat_id AS host_chat"
                       + " FROM games g JOIN users hg ON hg.id = g.created_by WHERE g.id = :gid")
               .bind("gid", gameId)
@@ -123,6 +126,7 @@ public final class LobbyDao {
                           rs.getString("status"),
                           rs.getString("host_name"),
                           rs.getString("host_chat"),
+                          rs.getInt("turn_limit_seconds"),
                           seats))
               .findOne();
         });
@@ -226,6 +230,7 @@ public final class LobbyDao {
       String containerId,
       String wsEndpoint,
       String saveRef,
+      int turnLimitSeconds,
       String endReason,
       String winner) {}
 
@@ -238,7 +243,7 @@ public final class LobbyDao {
             handle
                 .createQuery(
                     "SELECT g.created_by, g.status, g.map_xml, g.container_id, g.ws_endpoint,"
-                        + " g.end_reason, g.winner, s.bytes_ref"
+                        + " g.turn_limit_seconds, g.end_reason, g.winner, s.bytes_ref"
                         + " FROM games g LEFT JOIN saves s ON s.id = g.current_save_id"
                         + " WHERE g.id = :gid")
                 .bind("gid", gameId)
@@ -251,6 +256,7 @@ public final class LobbyDao {
                             rs.getString("container_id"),
                             rs.getString("ws_endpoint"),
                             rs.getString("bytes_ref"),
+                            rs.getInt("turn_limit_seconds"),
                             rs.getString("end_reason"),
                             rs.getString("winner")))
                 .findOne());
@@ -262,18 +268,22 @@ public final class LobbyDao {
         handle ->
             handle
                 .createQuery(
-                    "SELECT s.power_name, s.kind, s.user_id, u.display_name"
+                    "SELECT s.power_name, s.kind, s.user_id, u.display_name,"
+                        + " EXTRACT(EPOCH FROM s.turn_deadline_at)::bigint AS deadline_epoch"
                         + " FROM seats s LEFT JOIN users u ON u.id = s.user_id"
                         + " WHERE s.game_id = :gid ORDER BY s.seat_order")
                 .bind("gid", gameId)
                 .map(
                     (rs, ctx) -> {
                       final long uid = rs.getLong("user_id");
+                      final Long userId = rs.wasNull() ? null : uid;
+                      final long deadline = rs.getLong("deadline_epoch");
                       return new SeatAssignment(
                           rs.getString("power_name"),
                           rs.getString("kind"),
-                          rs.wasNull() ? null : uid,
-                          rs.getString("display_name"));
+                          userId,
+                          rs.getString("display_name"),
+                          rs.wasNull() ? null : deadline);
                     })
                 .list());
   }

@@ -65,7 +65,8 @@ public final class GameController {
   // the engine is hung (a blocked delegate never trips the step cap — it doesn't iterate). Generous
   // so a slow AI turn is never mistaken for a hang.
   private static final long HANG_TIMEOUT_MS = 5 * 60 * 1000L;
-  private static final long WATCHDOG_PERIOD_MS = 30_000L;
+  // Watchdog tick: also the turn-deadline check cadence, so takeover latency is at most this.
+  private static final long WATCHDOG_PERIOD_MS = 5_000L;
 
   private final Path gameXml;
   private final int maxRounds;
@@ -89,6 +90,11 @@ public final class GameController {
   private final boolean lobbyMode;
   private final @Nullable String gameToken; // verifies connect-tickets (HMAC key) in lobby mode
   private final @Nullable List<LobbySeat> lobbyAssignments;
+  // Host's per-turn timer (seconds; 0 = unlimited → no deadline ever set / no AI takeover).
+  private final int turnLimitSeconds;
+  // Per-seat absolute deadlines (epoch millis) seeded from the boot fetch, so a turn that was
+  // in-progress when the container was reaped keeps its original clock; consumed once each.
+  private final java.util.Map<String, Long> bootDeadlines = new ConcurrentHashMap<>();
   // Ticket gates (lobby mode): nonces already redeemed (single-use), and the connections that have
   // authenticated, with the subset that are the host (may start the game).
   private final Set<String> usedNonces = ConcurrentHashMap.newKeySet();
@@ -142,7 +148,8 @@ public final class GameController {
       final @Nullable String saveRef,
       final GameReporter reporter,
       final @Nullable String gameToken,
-      final @Nullable List<LobbySeat> lobbyAssignments) {
+      final @Nullable List<LobbySeat> lobbyAssignments,
+      final int turnLimitSeconds) {
     this.gameXml = gameXml;
     this.maxRounds = maxRounds;
     this.stepDelayMs = stepDelayMs;
@@ -154,8 +161,18 @@ public final class GameController {
     this.objectivesProps = loadObjectivesProperties(gameXml);
     this.gameToken = gameToken;
     this.lobbyAssignments = lobbyAssignments;
+    this.turnLimitSeconds = turnLimitSeconds;
     // Lobby mode needs the game id (save slot + ticket gameId match) and a token to verify tickets.
     this.lobbyMode = lobbyAssignments != null && gameId != null && gameToken != null;
+    // Seed each seat's absolute deadline from the boot fetch so a rehydrated in-progress turn keeps
+    // its original clock (consumed once, then fresh now+limit deadlines apply).
+    if (lobbyAssignments != null) {
+      for (final LobbySeat s : lobbyAssignments) {
+        if (s.turnDeadlineEpoch() != null) {
+          bootDeadlines.put(s.powerName(), s.turnDeadlineEpoch() * 1000L);
+        }
+      }
+    }
   }
 
   /** The save slot to READ when resuming: an explicit save-ref, else this game's own slot. */
@@ -240,7 +257,17 @@ public final class GameController {
       final SeatPlan p = plan;
       if (seat != null && current != null && p != null && p.hasSeat(seat)) {
         log.info("Seat {} conceded — resigning to AI", seat);
-        lifecycleExecutor.submit(() -> doResign(seat));
+        lifecycleExecutor.submit(() -> doSeatToAi(seat, true)); // permanent: clears DB ownership
+      }
+      return;
+    }
+    // Reclaim: a returning player takes their seat back from AI (after a turn-timer takeover). Only
+    // the seat's assigned owner — bound to it by their connect-ticket — may reclaim it.
+    if ("reclaim".equals(action)) {
+      final String seat = server.seatOf(conn);
+      final SeatPlan p = plan;
+      if (seat != null && current != null && p != null && p.hasSeat(seat)) {
+        lifecycleExecutor.submit(() -> doReclaim(seat));
       }
       return;
     }
@@ -340,21 +367,24 @@ public final class GameController {
   }
 
   /**
-   * Lifecycle thread: a player resigned {@code seat} — hand it to AI and keep playing. The engine
-   * has no hot-swap, so we reuse the proven machinery: stop the current game, release the seat (→
-   * AI on rebuild), and resume from the latest committed autosave (or restart fresh if nothing has
-   * committed yet). Other players' committed turns are preserved; the resigner's in-progress turn,
-   * if any, is discarded. The loop ends with {@code endReason == null}, so this is NOT reported as
-   * a game finish.
+   * Lifecycle thread: hand {@code seat} to AI and keep playing — the shared "seat → AI mid-game"
+   * primitive behind both concede and turn-timer takeover. The engine has no hot-swap, so we reuse
+   * the proven machinery: stop the current game, release the seat (→ AI on rebuild), and resume
+   * from the latest committed autosave (or restart fresh if nothing has committed yet). Other
+   * players' committed turns are preserved; the displaced seat's in-progress turn, if any, is
+   * discarded. The loop ends with {@code endReason == null}, so this is NOT reported as a game
+   * finish.
+   *
+   * @param permanent true for a concede (clears the seat's DB ownership → reconnect = spectator);
+   *     false for a timer takeover (DB ownership kept → the player can reclaim the seat on return).
    */
-  private synchronized void doResign(final String seat) {
+  private synchronized void doSeatToAi(final String seat, final boolean permanent) {
     final SeatPlan p = plan;
     if (p == null || current == null || !p.hasSeat(seat)) {
       return;
     }
     final Session old = current;
-    old.stop(); // alive=false + bridge.close() unparks the resigner's decision; no "finished"
-    // report
+    old.stop(); // alive=false + bridge.close() unparks the decision; no "finished" report
     current = null;
     p.release(seat); // owner cleared → buildPlayers makes this seat AI
     final String slot = resumeSlot();
@@ -363,8 +393,51 @@ public final class GameController {
     } else {
       doStartGame(); // nothing committed yet → restart fresh with the seat AI
     }
-    reporter.seatResigned(seat); // mark the seat AI in the control plane → reconnect = spectator
-    log.info("Seat {} resigned to AI; game continues", seat);
+    if (permanent) {
+      reporter.seatResigned(seat); // concede: mark AI in the control plane → reconnect = spectator
+    }
+    reporter.turnDeadline(null, null); // the displaced turn is over — clear any pending deadline
+    log.info("Seat {} → AI ({}); game continues", seat, permanent ? "conceded" : "timed out");
+  }
+
+  /**
+   * Lifecycle thread: a player reclaims {@code seat} from AI after a turn-timer takeover (the
+   * inverse of {@link #doSeatToAi}). The seat is re-owned by its lobby-assigned player and the game
+   * resumes with it human again; the reclaiming connection is already bound, so the seat's next
+   * decision routes to it. No-op if the seat is already human-owned.
+   */
+  private synchronized void doReclaim(final String seat) {
+    final SeatPlan p = plan;
+    if (p == null || current == null || !p.hasSeat(seat) || p.claimedSeatNames().contains(seat)) {
+      return; // unknown seat, no game, or already human-owned (nothing to reclaim)
+    }
+    final String displayName = assignedDisplayName(seat);
+    if (displayName == null) {
+      return; // not a lobby-assigned human seat
+    }
+    final Session old = current;
+    old.stop();
+    current = null;
+    p.claim(seat, displayName); // owner restored → buildPlayers makes it a WebPlayer again
+    final String slot = resumeSlot();
+    if (slot != null && saveStore.read(slot).isPresent()) {
+      doResumeGame();
+    } else {
+      doStartGame();
+    }
+    log.info("Seat {} reclaimed by {}; now human again", seat, displayName);
+  }
+
+  /** The lobby-assigned display name for a power, or null if it wasn't a human-assigned seat. */
+  private @Nullable String assignedDisplayName(final String seat) {
+    if (lobbyAssignments == null) {
+      return null;
+    }
+    return lobbyAssignments.stream()
+        .filter(a -> a.powerName().equals(seat) && a.displayName() != null)
+        .map(LobbySeat::displayName)
+        .findFirst()
+        .orElse(null);
   }
 
   /** Lifecycle thread: stop the running game and return to a fresh setup (keeping seat choices). */
@@ -651,6 +724,11 @@ public final class GameController {
     // Last time the loop committed a step — the progress watchdog's heartbeat.
     private volatile long lastProgressAt = System.currentTimeMillis();
     private volatile @Nullable java.util.concurrent.ScheduledFuture<?> watchdogFuture;
+    // Turn-timer state: the seat currently on the clock and its absolute deadline (epoch millis);
+    // takingOver guards the window between submitting a takeover and the old session winding down.
+    private volatile @Nullable String deadlineSeat;
+    private volatile long deadlineAtMs;
+    private volatile boolean takingOver;
 
     void start(final GameData data, final SeatPlan seatPlan) {
       effectiveMaxRounds = seatPlan.claimedSeatNames().isEmpty() ? maxRounds : Integer.MAX_VALUE;
@@ -778,6 +856,43 @@ public final class GameController {
         if (thread != null) {
           thread.interrupt();
         }
+        return;
+      }
+      manageTurnDeadline();
+    }
+
+    /**
+     * Host turn timer: keep the active human seat's absolute deadline current (durable in the
+     * control plane so it survives a reap), and when it elapses, hand the seat to AI (reclaimable).
+     * A fresh deadline is set per prompt ("days per move", the correspondence-clock norm); a turn
+     * that was in progress when the container was reaped keeps its original boot-fetched deadline.
+     * No-op when the timer is Unlimited.
+     */
+    private void manageTurnDeadline() {
+      if (turnLimitSeconds <= 0 || takingOver) {
+        return;
+      }
+      final String pending = server.isDecisionPending() ? server.pendingSeat() : null;
+      final boolean humanPending = pending != null && humanSeats.contains(pending);
+      if (!humanPending) {
+        if (deadlineSeat != null) { // AI turn / answered → no one on the clock
+          deadlineSeat = null;
+          reporter.turnDeadline(null, null);
+        }
+        return;
+      }
+      if (!pending.equals(deadlineSeat)) {
+        deadlineSeat = pending;
+        final Long boot = bootDeadlines.remove(pending); // original clock on a rehydrated turn
+        deadlineAtMs = boot != null ? boot : System.currentTimeMillis() + turnLimitSeconds * 1000L;
+        reporter.turnDeadline(pending, deadlineAtMs / 1000L);
+      }
+      if (System.currentTimeMillis() > deadlineAtMs) {
+        final String seat = deadlineSeat;
+        takingOver = true;
+        deadlineSeat = null;
+        log.info("Turn deadline elapsed for {} — AI takeover (reclaimable)", seat);
+        lifecycleExecutor.submit(() -> doSeatToAi(seat, false));
       }
     }
 

@@ -11,6 +11,8 @@ import {
   myGames,
   releaseSeat,
   setReady,
+  turnLimitLabel,
+  TURN_LIMIT_PRESETS,
 } from "../api/controlPlane";
 import type { CatalogEntry, LobbyTable, MyGame, SeatView, User } from "../api/controlPlane";
 import { useLobbySocket } from "../lobby/useLobbySocket";
@@ -35,6 +37,8 @@ export function Lobby() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [games, setGames] = useState<CatalogEntry[]>([]);
   const [mine, setMine] = useState<MyGame[]>([]);
+  // Host's chosen per-turn timer for a new table (seconds; default 3 days).
+  const [turnLimit, setTurnLimit] = useState<number>(3 * 24 * 60 * 60);
   const tables = useLobbySocket();
 
   useEffect(() => {
@@ -79,13 +83,36 @@ export function Lobby() {
         {games.length === 0 ? (
           <p style={muted}>No games configured (set CONTROL_PLANE_GAME_XML on the server).</p>
         ) : (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {games.map((g) => (
-              <button key={g.id} style={primaryBtn} onClick={() => act(createTable(g.id))}>
-                + {g.name}
-              </button>
-            ))}
-          </div>
+          <>
+            <label style={{ ...muted, display: "block", marginBottom: 8 }}>
+              Turn timer:{" "}
+              <select
+                value={turnLimit}
+                onChange={(e) => setTurnLimit(Number(e.target.value))}
+                style={{ ...btn, padding: "3px 6px" }}
+              >
+                {TURN_LIMIT_PRESETS.map((p) => (
+                  <option key={p.seconds} value={p.seconds}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>{" "}
+              <span title="When a seat's turn isn't taken in time, AI takes it over; the player can reclaim it on return.">
+                ⓘ
+              </span>
+            </label>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {games.map((g) => (
+                <button
+                  key={g.id}
+                  style={primaryBtn}
+                  onClick={() => act(createTable(g.id, turnLimit))}
+                >
+                  + {g.name}
+                </button>
+              ))}
+            </div>
+          </>
         )}
       </section>
 
@@ -143,7 +170,9 @@ function TableCard({ table, user }: { table: LobbyTable; user: User }) {
     <div style={card}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <span style={{ fontWeight: 600 }}>{table.name}</span>
-        <span style={muted}>host: {table.hostName}</span>
+        <span style={muted}>
+          host: {table.hostName} · ⏱ {turnLimitLabel(table.turnLimitSeconds)}
+        </span>
       </div>
       <ul style={{ listStyle: "none", padding: 0, margin: "8px 0" }}>
         {table.seats.map((s) => (

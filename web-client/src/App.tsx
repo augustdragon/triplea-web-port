@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { useParams } from "react-router-dom";
 import type {
   AirWarningRequest,
@@ -36,6 +37,18 @@ const LEGACY_WS_URL = `ws://${location.hostname}:8080`;
 
 // Width of the fixed right sidebar; the bottom dock spans from the left edge to here.
 const SIDEBAR_WIDTH = 300;
+
+// The fixed Concede / Reclaim pill in the top-right of the running game view.
+const seatActionBtn: CSSProperties = {
+  position: "fixed",
+  top: 8,
+  right: SIDEBAR_WIDTH + 12,
+  padding: "4px 12px",
+  borderRadius: 14,
+  fontSize: 12,
+  cursor: "pointer",
+  zIndex: 20,
+};
 
 // Seat memory: sessionStorage (per-tab) is primary — it keeps two tabs on distinct seats and
 // survives a tab reload; localStorage is the fallback that survives a full browser close, so
@@ -91,6 +104,9 @@ export default function App() {
   const [spectating, setSpectating] = useState(false);
   // Lobby flow: whether we are the host (may start the game from the waiting room).
   const [isHost, setIsHost] = useState(false);
+  // The seat the control plane assigned us (stable; stays ours through a turn-timer AI takeover so
+  // we can reclaim it). Distinct from `mySeat` (the seat we're actively driving).
+  const [assignedSeat, setAssignedSeat] = useState<string | null>(null);
   // Set when the game ends — drives the end screen and stops the reconnect loop.
   const [gameOver, setGameOver] = useState<GameOverInfo | null>(null);
   const gameOverRef = useRef(false);
@@ -203,8 +219,10 @@ export default function App() {
         }
         // Our identity comes from the control plane, not local storage: bind to the assigned seat,
         // or spectate if we hold none (e.g. a host who didn't take a seat).
-        if (data.seat) setMySeat(data.seat);
-        else setSpectating(true);
+        if (data.seat) {
+          setMySeat(data.seat);
+          setAssignedSeat(data.seat);
+        } else setSpectating(true);
         setIsHost(!!data.isHost);
         openWs(data.wsEndpoint as string, data.ticket ?? null);
       } catch {
@@ -302,6 +320,13 @@ export default function App() {
   function resumeGame() {
     sendControl({ action: "resumeGame" });
   }
+  // Reclaim our seat back from AI after a turn-timer takeover. We become the active player again.
+  function reclaim() {
+    if (!assignedSeat) return;
+    sendControl({ action: "reclaim" });
+    setMySeat(assignedSeat);
+    setSpectating(false);
+  }
   // Concede: resign our seat to AI; the game continues for everyone else. We drop to spectator.
   function concede() {
     if (!mySeat) return;
@@ -314,6 +339,7 @@ export default function App() {
     }
     sendControl({ action: "concede" });
     setMySeat(null);
+    setAssignedSeat(null); // concede is permanent — no reclaim (distinguishes it from a takeover)
     setSpectating(true);
     setRequest(null);
     forgetSeat();
@@ -509,6 +535,11 @@ export default function App() {
   // Whose turn it is when it isn't ours (no pending decision for our seat) — a "waiting" hint.
   const waitingFor =
     roster?.phase === "running" && !request ? (snapshot?.currentPlayer ?? null) : null;
+  // Our assigned seat is being played by AI (a turn-timer takeover) — offer to reclaim it.
+  const takenOver =
+    !!assignedSeat &&
+    roster?.phase === "running" &&
+    roster.seats.find((s) => s.name === assignedSeat)?.owner == null;
   const units = snapshot?.units ?? {};
   // The territories to outline during a move: the server's previewed route (when it matches the
   // current source/destination), else just the chosen source.
@@ -564,26 +595,25 @@ export default function App() {
                 : "Spectating"}
         </div>
       )}
-      {mySeat && roster?.phase === "running" && (
+      {takenOver ? (
         <button
-          onClick={concede}
-          title="Resign your seat to AI; the game continues for everyone else"
-          style={{
-            position: "fixed",
-            top: 8,
-            right: SIDEBAR_WIDTH + 12,
-            background: "#322",
-            border: "1px solid #944",
-            color: "#d99",
-            padding: "4px 12px",
-            borderRadius: 14,
-            fontSize: 12,
-            cursor: "pointer",
-            zIndex: 20,
-          }}
+          onClick={reclaim}
+          title="Take your seat back from AI — you'll drive it again on your next turn"
+          style={{ ...seatActionBtn, background: "#232", border: "1px solid #494", color: "#9d9" }}
         >
-          Concede
+          ⮌ Reclaim seat
         </button>
+      ) : (
+        mySeat &&
+        roster?.phase === "running" && (
+          <button
+            onClick={concede}
+            title="Resign your seat to AI; the game continues for everyone else"
+            style={{ ...seatActionBtn, background: "#322", border: "1px solid #944", color: "#d99" }}
+          >
+            Concede
+          </button>
+        )
       )}
       <Sidebar
         wsStatus={wsStatus}

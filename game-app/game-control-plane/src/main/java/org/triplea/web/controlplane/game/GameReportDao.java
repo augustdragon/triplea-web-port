@@ -96,6 +96,27 @@ public final class GameReportDao {
                 .execute());
   }
 
+  /**
+   * Set the absolute turn deadline (ISO-8601, or null to clear) for {@code power} and clear every
+   * other seat's — at most one seat is ever "on the clock". The container reports this so the
+   * deadline survives a container reap (it's read back from {@code seats.turn_deadline_at} on
+   * rehydrate). A null {@code power} clears all deadlines for the game.
+   */
+  public void setTurnDeadline(final UUID gameId, final String power, final Long deadlineEpoch) {
+    jdbi.useHandle(
+        handle ->
+            handle
+                .createUpdate(
+                    "UPDATE seats SET turn_deadline_at ="
+                        + " CASE WHEN power_name = :power THEN to_timestamp(:deadline)"
+                        + " ELSE NULL END"
+                        + " WHERE game_id = :gid")
+                .bind("power", power)
+                .bind("deadline", deadlineEpoch)
+                .bind("gid", gameId)
+                .execute());
+  }
+
   /** The running container's id for a game, or empty if none is live. */
   public Optional<String> containerId(final UUID gameId) {
     return jdbi.withHandle(

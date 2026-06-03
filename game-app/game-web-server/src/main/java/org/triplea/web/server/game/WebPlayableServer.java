@@ -54,6 +54,7 @@ public final class WebPlayableServer {
     final int port = intFlag(flags, "port", 8080);
     final int maxRounds = intFlag(flags, "max-rounds", 20);
     final long stepDelayMs = (long) intFlag(flags, "step-delay-ms", 300);
+    final int turnLimitSeconds = intFlag(flags, "turn-limit-seconds", 0); // 0 = unlimited
     final String gameId = flags.get("game-id"); // null → save slot derived from the game name
     final String saveRef = flags.get("save-ref"); // null → resume from this game's own slot
     final String controlPlaneUrl = flags.get("control-plane-url"); // null → no reporting
@@ -86,7 +87,8 @@ public final class WebPlayableServer {
             saveRef,
             reporter,
             gameToken,
-            assignments)
+            assignments,
+            turnLimitSeconds)
         .start();
     log.info(
         "Playable {} on :{} (game-id={}, mode={}, {} assigned seats)",

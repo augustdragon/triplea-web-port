@@ -32,4 +32,11 @@ interface GameReporter {
    * seat AI so a reconnecting (former) player is routed back as a spectator, not to a now-AI seat.
    */
   void seatResigned(String power);
+
+  /**
+   * The seat currently on the clock and its absolute deadline (epoch seconds), or {@code (null,
+   * null)} to clear. Persisted to {@code seats.turn_deadline_at} so the turn timer survives a
+   * container reap and is honored on rehydrate.
+   */
+  void turnDeadline(@Nullable String power, @Nullable Long deadlineEpoch);
 }

@@ -92,7 +92,9 @@ public final class GameRouteController {
     }
     // Lazy spawn: resume from the latest save if there is one (rehydration), else a fresh game.
     final LaunchedGame launched =
-        launcher.launch(new LaunchSpec(gameId.toString(), info.mapXml(), info.saveRef()));
+        launcher.launch(
+            new LaunchSpec(
+                gameId.toString(), info.mapXml(), info.saveRef(), info.turnLimitSeconds()));
     lobbyDao.setContainer(gameId, launched.handle(), launched.wsEndpoint());
     if (!waitForReady(launched.wsEndpoint())) {
       log.warn("Game {} container not reachable in time at {}", gameId, launched.wsEndpoint());

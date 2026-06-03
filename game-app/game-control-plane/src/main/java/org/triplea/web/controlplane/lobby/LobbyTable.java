@@ -14,4 +14,5 @@ public record LobbyTable(
     String status,
     String hostName,
     String hostChatId,
+    int turnLimitSeconds,
     List<SeatView> seats) {}

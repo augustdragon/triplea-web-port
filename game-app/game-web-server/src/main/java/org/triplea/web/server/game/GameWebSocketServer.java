@@ -98,6 +98,11 @@ public final class GameWebSocketServer extends WebSocketServer {
     return pendingRequestEnvelope != null;
   }
 
+  /** The seat currently awaiting a decision (the one "on the clock"), or null if none. */
+  public @Nullable String pendingSeat() {
+    return pendingRequestEnvelope == null ? null : pendingRequestSeat;
+  }
+
   /** Called with a seat name when its controlling connection drops, so the plan can free it. */
   public void setSeatVacatedHandler(final Consumer<String> handler) {
     this.seatVacatedHandler = handler;

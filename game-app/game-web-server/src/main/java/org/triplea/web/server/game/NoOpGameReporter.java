@@ -17,4 +17,7 @@ final class NoOpGameReporter implements GameReporter {
 
   @Override
   public void seatResigned(final String power) {}
+
+  @Override
+  public void turnDeadline(final @Nullable String power, final @Nullable Long deadlineEpoch) {}
 }

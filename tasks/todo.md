@@ -530,11 +530,19 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
         the seat `kind=ai` (`GameReportDao.resignSeat`) so the conceder's reconnect returns no seat (spectator).
         Verified e2e: alice concedes → her seat shows AI, the game keeps committing turns, her next `/connect` has no
         seat. **Shares the "seat → AI mid-game" primitive** that abandonment will reuse.
-  - [ ] **Abandonment (turn-deadline → AI), reusing the concede primitive.** Wire the unused `seats.turn_deadline_at`:
-        set a deadline on entering a human step; on expiry notify ("your turn" Web Push later) then apply the same
-        `doResign`-style seat → AI substitution (or pause first). This is the Phase 4 "abandoned seat caretaken by AI"
-        exit-check requirement. Optional: if **all** human seats have gone AI, offer a fast-resolve/auto-finish instead
-        of watching AI vs AI.
+  - [x] **Turn timers + abandonment (AI takeover, reclaimable)** ✅ (built + verified 2026-06-03). Research-grounded
+        (BGA/Chess.com/Lichess/OGS): the **host picks a per-turn timer** at table creation from presets
+        (`Unlimited · 30 min · 1 hr · 1/2/3/5/7/14 days`, default 3 days → `games.turn_limit_seconds`, migration
+        `V1.07.00`). The deadline is **durable & absolute** (`seats.turn_deadline_at`, set/cleared by the container via
+        a `deadline` report; read back on (re)boot) so a correspondence clock survives a container reap. The container
+        watchdog (now ~5s cadence, doubling as the hang/`STUCK` guard) sets the active human seat's deadline per prompt
+        ("days-per-move"), and on expiry hands the seat to AI via the shared `doSeatToAi(seat, permanent=false)`
+        primitive — **reclaimable**: the takeover keeps DB ownership, so the player's `/connect` still returns their
+        seat and a **Reclaim** button (when their seat shows AI in the running roster) swaps it back. `Unlimited`
+        (0) never sets a deadline. Verified e2e (`/tmp/tt-verify.mjs`): 5s timer → AI takeover → `/connect` still
+        returns the seat → reclaim restores it human; `Unlimited` → no takeover. **v1 is lazy** (enforced on container
+        liveness/boot). Follow-ups: reserve time-bank (Fischer/BGA), vacation/quiet-hours, a **proactive CP sweep**
+        that wakes idle overdue games to advance them (pairs with Web Push), and a client **countdown** display.
 - [ ] **Exit check:** a private group plays a full Pacific 1940 game over the internet, browser-only, resumable
       across days, with an abandoned seat caretaken by AI, **ending with a winner announced**.
 - Related: 3g hotseat (pass-and-play on one machine) shares the seat-routing mechanism — falls out of P4.1.

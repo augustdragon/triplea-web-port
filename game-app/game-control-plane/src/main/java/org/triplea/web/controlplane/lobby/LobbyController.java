@@ -34,7 +34,8 @@ public final class LobbyController {
   /** Catalog entry as the client sees it (no server-side map path). */
   public record CatalogEntry(String id, String name, List<String> playablePowers) {}
 
-  public record CreateTableRequest(String gameId) {}
+  /** {@code turnLimitSeconds} is the host's per-turn timer (0 = unlimited); clamped server-side. */
+  public record CreateTableRequest(String gameId, Integer turnLimitSeconds) {}
 
   public record ReadyRequest(boolean ready) {}
 
@@ -83,7 +84,7 @@ public final class LobbyController {
     }
     final AvailableGame game =
         catalog.get(req.gameId()).orElseThrow(() -> new BadRequestResponse("Unknown gameId"));
-    final UUID id = dao.createTable(game, user.id());
+    final UUID id = dao.createTable(game, user.id(), clampTurnLimit(req.turnLimitSeconds()));
     onChange.onLobbyChanged();
     ctx.status(201).json(dao.getTable(id).orElseThrow());
   }
@@ -158,6 +159,14 @@ public final class LobbyController {
     }
     onChange.onLobbyChanged();
     ctx.json(dao.getTable(id).orElseThrow());
+  }
+
+  /** Clamp the host's turn limit to [0, 30 days]; null/negative → 0 (unlimited). */
+  private static int clampTurnLimit(final Integer seconds) {
+    if (seconds == null || seconds <= 0) {
+      return 0;
+    }
+    return Math.min(seconds, 30 * 24 * 60 * 60); // 30-day ceiling
   }
 
   private User currentUser(final Context ctx) {

@@ -26,7 +26,8 @@ public final class GameReportController {
       String phase,
       String bytesRef,
       String reason,
-      String winner) {}
+      String winner,
+      Long deadlineEpoch) {}
 
   private final GameReportDao dao;
   private final GameReaper reaper;
@@ -68,6 +69,9 @@ public final class GameReportController {
         reaper.reapGame(gameId); // the game is over — stop its container
       }
       case "resigned" -> dao.resignSeat(gameId, event.power()); // conceded seat is now AI
+      case "deadline" ->
+          // The active seat's absolute turn deadline (null = cleared); others are cleared.
+          dao.setTurnDeadline(gameId, event.power(), event.deadlineEpoch());
 
       default -> throw new BadRequestResponse("unknown event type: " + event.type());
     }

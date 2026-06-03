@@ -9,8 +9,11 @@ import org.jetbrains.annotations.Nullable;
  */
 public interface GameLauncher {
 
-  /** What to launch: the game id, the map XML path, and an optional save to resume from. */
-  record LaunchSpec(String gameId, String mapXml, @Nullable String saveRef) {}
+  /**
+   * What to launch: the game id, the map XML path, an optional save to resume from, and the host's
+   * per-turn timer in seconds (0 = unlimited).
+   */
+  record LaunchSpec(String gameId, String mapXml, @Nullable String saveRef, int turnLimitSeconds) {}
 
   /** A launched game: a handle for reaping (the container id) and where browsers reach it. */
   record LaunchedGame(String handle, String wsEndpoint) {}

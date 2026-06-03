@@ -24,6 +24,7 @@ export interface LobbyTable {
   status: string;
   hostName: string;
   hostChatId: string;
+  turnLimitSeconds: number;
   seats: SeatView[];
 }
 
@@ -75,8 +76,29 @@ export async function myGames(): Promise<MyGame[]> {
   return res.ok ? ((await res.json()) as MyGame[]) : [];
 }
 
-export async function createTable(gameId: string): Promise<Response> {
-  return req("/games", { method: "POST", body: JSON.stringify({ gameId }) });
+export async function createTable(
+  gameId: string,
+  turnLimitSeconds: number,
+): Promise<Response> {
+  return req("/games", { method: "POST", body: JSON.stringify({ gameId, turnLimitSeconds }) });
+}
+
+/** Turn-timer presets the host picks from (seconds; 0 = unlimited). */
+export const TURN_LIMIT_PRESETS: { label: string; seconds: number }[] = [
+  { label: "Unlimited", seconds: 0 },
+  { label: "30 min", seconds: 30 * 60 },
+  { label: "1 hour", seconds: 60 * 60 },
+  { label: "1 day", seconds: 24 * 60 * 60 },
+  { label: "2 days", seconds: 2 * 24 * 60 * 60 },
+  { label: "3 days", seconds: 3 * 24 * 60 * 60 },
+  { label: "5 days", seconds: 5 * 24 * 60 * 60 },
+  { label: "7 days", seconds: 7 * 24 * 60 * 60 },
+  { label: "14 days", seconds: 14 * 24 * 60 * 60 },
+];
+
+/** Render a turn-limit value (seconds) as its preset label, for display. */
+export function turnLimitLabel(seconds: number): string {
+  return TURN_LIMIT_PRESETS.find((p) => p.seconds === seconds)?.label ?? `${seconds}s`;
 }
 
 export async function claimSeat(gameId: string, power: string): Promise<Response> {
