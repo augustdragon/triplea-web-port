@@ -196,6 +196,17 @@ apparatus is deferred** — it is *not* v1 work. We keep the upstream moderation
 **documented future transplant** (see §4 / §10.4) so opening the platform up later is a
 known, low-risk addition, not a redesign. Build it when we add public signup, not before.
 
+**Admin console (service-owner operations, deferred — `admin` role).** Distinct from the
+moderation apparatus above: the `admin` role gates an operator UI for the *server owner*, not a
+tool for policing abusive players. It surfaces what the control plane already owns —
+**all games** (list/inspect, force-reap, delete, jump into state, container + save status),
+**all players** (allow-list invite/revoke, last-login, presence, seat reassign / AI-takeover),
+and **service settings** (idle-reap threshold, launch defaults, allow-list — today all env-only
+via `CONTROL_PLANE_*`). Backed by the existing `games`/`seats`/`users` tables: mostly reads +
+lifecycle actions, **no new game-state**. Useful from day one for a private group (unlike
+moderation, which waits for public signup). Builds on M6's authenticated identity layer. Tracked
+in `tasks/todo.md` (Phase 5).
+
 ---
 
 ## 6. Game lifecycle, persistence & resume

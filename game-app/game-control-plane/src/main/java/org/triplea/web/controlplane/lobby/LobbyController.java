@@ -58,6 +58,8 @@ public final class LobbyController {
     app.get("/api/catalog", this::listCatalog);
     app.post("/api/games", this::createTable);
     app.get("/api/games", this::listTables);
+    // Distinct path (not /api/games/mine) so it can't be captured by the /api/games/{id} param.
+    app.get("/api/my-games", this::listMyGames);
     app.get("/api/games/{id}", this::getTable);
     app.post("/api/games/{id}/seats/{power}/claim", this::claimSeat);
     app.post("/api/games/{id}/seats/{power}/release", this::releaseSeat);
@@ -94,6 +96,11 @@ public final class LobbyController {
   private void getTable(final Context ctx) {
     currentUser(ctx);
     ctx.json(dao.getTable(parseId(ctx)).orElseThrow(() -> new NotFoundResponse("No such table")));
+  }
+
+  /** Games the caller hosts or holds a seat in — so a non-host player can enter a launched game. */
+  private void listMyGames(final Context ctx) {
+    ctx.json(dao.gamesForUser(currentUser(ctx).id()));
   }
 
   private void claimSeat(final Context ctx) {

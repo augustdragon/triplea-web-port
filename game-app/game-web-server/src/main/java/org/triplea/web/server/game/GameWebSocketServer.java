@@ -4,8 +4,10 @@ import java.net.InetSocketAddress;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -65,6 +67,7 @@ public final class GameWebSocketServer extends WebSocketServer {
 
   private volatile @Nullable BiConsumer<WebSocket, String> inboundHandler;
   private volatile @Nullable Consumer<String> seatVacatedHandler;
+  private volatile @Nullable Consumer<WebSocket> connectHandler;
 
   public GameWebSocketServer(final int port) {
     super(new InetSocketAddress(port));
@@ -74,6 +77,16 @@ public final class GameWebSocketServer extends WebSocketServer {
   /** Routes raw inbound client messages here as {@code (connection, message)}. */
   public void setInboundHandler(final BiConsumer<WebSocket, String> handler) {
     this.inboundHandler = handler;
+  }
+
+  /** Called when a connection opens, after the cached envelopes are sent (for auth gating). */
+  public void setConnectHandler(final Consumer<WebSocket> handler) {
+    this.connectHandler = handler;
+  }
+
+  /** Names of seats with a live controlling connection (for the waiting room / drop detection). */
+  public Set<String> connectedSeats() {
+    return new HashSet<>(connBySeat.keySet());
   }
 
   /** Called with a seat name when its controlling connection drops, so the plan can free it. */
@@ -207,6 +220,10 @@ public final class GameWebSocketServer extends WebSocketServer {
     }
     // No decision request here: the connection has not claimed a seat yet. bindSeat() replays any
     // outstanding request once it claims one.
+    final Consumer<WebSocket> onConnect = connectHandler;
+    if (onConnect != null) {
+      onConnect.accept(conn); // lobby mode arms an auth timeout for this connection
+    }
   }
 
   private static void sendIfPresent(final WebSocket conn, final @Nullable String message) {

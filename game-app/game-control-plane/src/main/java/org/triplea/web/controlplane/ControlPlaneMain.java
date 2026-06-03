@@ -15,6 +15,7 @@ import org.triplea.web.controlplane.game.GameCatalog;
 import org.triplea.web.controlplane.game.GameReportController;
 import org.triplea.web.controlplane.game.GameReportDao;
 import org.triplea.web.controlplane.game.GameRouteController;
+import org.triplea.web.controlplane.game.InternalSeatsController;
 import org.triplea.web.controlplane.http.DevLoginController;
 import org.triplea.web.controlplane.http.HealthController;
 import org.triplea.web.controlplane.http.MeController;
@@ -65,14 +66,17 @@ public final class ControlPlaneMain {
     app.before("/api/*", new AuthFilter(jwt, allowList));
     new MeController(userDao).register(app);
     new LobbyController(lobbyDao, gameCatalog, userDao, lobbyBroadcaster::broadcast).register(app);
-    // Lazy spawn + route the browser to a launched game's container.
-    new GameRouteController(lobbyDao, gameLauncher, userDao).register(app);
-    // Service-to-service: game containers report lifecycle/turn events here (token-authenticated,
-    // outside /api/* so the user AuthFilter doesn't apply). Reaping (on game-finish and on idle)
-    // frees containers — their state stays on disk, and the next connect respawns from the save.
+    // Lazy spawn + route the browser to a launched game's container; mint the connect-ticket that
+    // proves the caller's seat to the container (signed with the shared game token it also holds).
+    new GameRouteController(lobbyDao, gameLauncher, userDao, config.gameToken()).register(app);
+    // Service-to-service (outside /api/* so the user AuthFilter doesn't apply; game-token auth):
+    // containers report lifecycle/turn events, and fetch their seat→identity assignments at boot.
+    // Reaping (on game-finish and on idle) frees containers — their state stays on disk, and the
+    // next connect respawns from the save.
     final GameReportDao gameReportDao = new GameReportDao(database.jdbi());
     final GameReaper gameReaper = new GameReaper(gameLauncher, gameReportDao);
     new GameReportController(gameReportDao, gameReaper, config.gameToken()).register(app);
+    new InternalSeatsController(lobbyDao, config.gameToken()).register(app);
     new IdleReaper(gameReportDao, gameReaper, config.gameIdleSeconds()).start();
 
     // Live lobby updates. The WS handshake carries the same session cookie; reject unauthenticated

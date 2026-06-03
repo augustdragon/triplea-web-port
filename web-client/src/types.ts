@@ -268,12 +268,15 @@ export interface SeatInfo {
   optional: boolean;
   /** Human-driven (a WebPlayer) in the running game — only such seats are rejoinable mid-game. */
   human: boolean;
+  /** A live connection currently controls this seat (drives the lobby waiting room + drop hints). */
+  connected: boolean;
   alliances: string[];
 }
 
 /**
- * The seat-assignment roster, broadcast as {type:"seats", roster}. `phase` is "setup" (assigning
- * seats, no game yet → the client shows the seat-select screen) or "running" (the game UI shows).
+ * The seat-assignment roster, broadcast as {type:"seats", roster}. `phase` is "setup" (standalone
+ * hotseat: claim seats by name → seat-select screen), "waiting" (a lobby game whose seats are
+ * pre-assigned, awaiting player connections → the waiting room), or "running" (the game UI shows).
  * `aiTypes` is the catalog of selectable AI labels for the per-seat dropdown.
  */
 /** A resumable autosave for this game (round + current step), or null if none exists. */

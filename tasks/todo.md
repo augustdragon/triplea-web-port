@@ -459,14 +459,32 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
           `bid`/`placeBid` steps without publishing, so a fresh game opens on the first power's real turn. Conditioned
           on `BidPurchaseDelegate.doesPlayerHaveBid`, so a real bid still shows — see the Phase 5 "bidding as a setup
           option" item. Verified: first surfaced phase is `Japanese | japanesePolitics`, no bid steps. (`053fa8abd`)
-  - [ ] **M6 — Lobby↔container identity handoff (NEXT real work).** Today the lobby (control-plane auth = Alice)
-        and the game container's setup phase (old, trusted client-supplied name, auto-reclaimed from `localStorage`)
-        are two disconnected identity layers — so the game shows a stale browser name ("Gandalf"), not the
-        signed-in user, and seats are re-picked in the container. Wire them: pass the lobby's seat assignments +
-        identities to the container at spawn (a `--seats`/control-plane fetch), and authenticate the connecting
-        browser on the game WS (the JWT) so it binds to its pre-assigned seat — the "authenticated seat↔user
-        binding" deferred in M5. End state: launch → straight into the game as the signed-in user, in their seat,
-        no re-pick, no stale-storage surprises. (Subsumes the "active games list" so non-host players can enter.) — Docker Compose on the VM (control plane + Postgres + on-demand game containers);
+  - [x] **M6 — Lobby↔container identity handoff** ✅ (session 2026-06-03). Wired the lobby's authenticated seat
+        assignments to the container and made the game-WS seat binding authenticated, replacing the old trusted
+        client-supplied-name claim flow for lobby games. Pieces:
+        - **M6a (control plane):** `ConnectTicket` (HMAC-SHA256 over a JSON payload, JDK-only, signed with the
+          shared game token); internal `GET /internal/games/{id}/seats` (game-token auth, `InternalSeatsController`);
+          `/api/games/{id}/connect` now returns `{wsEndpoint, ticket, seat, isHost}` (`LobbyDao.seatForUser` +
+          `created_by`); `GET /api/my-games` (`LobbyDao.gamesForUser`) for non-host entry. **Route gotcha:** had to
+          use `/api/my-games`, not `/api/games/mine` — the latter is captured by the `/api/games/{id}` param route.
+        - **M6b (container):** `LobbySeatClient` fetches the roster at boot; `SeatPlan.applyAssignments` pre-seats
+          humans by display name; new `waiting` phase + per-seat `connected` flag; auto-start when all human seats
+          connect (or host starts).
+        - **M6c (container):** first-message `{type:"auth", ticket}` verified by HMAC (`ConnectTicket` mirror),
+          single-use nonce, gameId match, ~15s auth-timeout close; `bindSeat` on success (reconnect resumes the
+          pending decision); claim-by-name disabled in lobby mode. Standalone `/game` hotseat untouched.
+        - **M6d (client):** sends the ticket as the first WS message (re-fetches a fresh one on every reconnect —
+          tickets are single-use); drops the `localStorage` name for lobby games; `WaitingRoom` UI with connected
+          flags + host Start; "Your games in progress" list from `/api/my-games`.
+        - **Verified e2e** (`/tmp/m6-verify.mjs`, two users alice+bob): launch → roster fetch → both auth with
+          tickets → waiting 2/2 → auto-start to **round 1 | Japanese | japanesePolitics**; tampered/replayed/no-auth
+          tickets all rejected (close 4401); bob enters via my-games. 13/13 checks pass.
+        - **Follow-up (not M6):** a freshly-spawned container's WS read path isn't immediately stable — the first
+          connection(s) can have inbound messages silently dropped before `onStart` settles, and a half-dead socket
+          isn't caught by the auth-timeout (`conn.isOpen()` reads false on the container side). `waitForReady` (M5)
+          only probes TCP. Add a WS ping/pong heartbeat + a real readiness handshake so the host's first connect to a
+          new container can't hang. The browser's reconnect-on-close loop covers the common case today.
+  - [ ] **Deployment / presence / Web Push** — Docker Compose on the VM (control plane + Postgres + on-demand game containers);
       presence fed into the game process; **"your turn" Web Push** (the gap Lichess under-built; multi-day turns
       make it essential — a stalled seat blocks 3–5 players).
 - [ ] **Exit check:** a private group plays a full Pacific 1940 game over the internet, browser-only, resumable
@@ -484,6 +502,15 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
       launch); a non-zero bid then runs and is surfaced normally with no further code change. Competitive A&A
       balances sides this way (winner of the bid plays the weaker side with extra IPCs) — out of scope until we
       support tournament-style play.
+- [ ] **Admin console (service-owner operations).** A control-plane-only UI for the server owner to view and
+      manage the whole service: **all games** (list/inspect/force-reap/delete, jump into any game's state, see
+      container + save status), **all players** (the allow-list — invite/revoke, last-login, current presence,
+      reassign/AI-take-over a seat), and **service settings** (idle-reap threshold, launch defaults, allow-list
+      management — today these are env vars: `CONTROL_PLANE_*`). Gate behind the `admin` role (the `role` column
+      already planned in `PHASE-4-MULTIPLAYER.md`); back it with the existing `games`/`seats`/`users` tables — no
+      new game-state, mostly read + lifecycle actions over data the control plane already owns. Distinct from the
+      deferred **moderation/ban/audit** tooling (line 475): that polices abusive players "when we open up"; this is
+      operator tooling useful from day one for a private group. Build on top of M6's authenticated identity layer.
 - [ ] **Exit check:** a second, structurally different map plays end-to-end
 
 ## Notes / decisions

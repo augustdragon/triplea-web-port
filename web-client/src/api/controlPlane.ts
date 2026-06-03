@@ -33,6 +33,15 @@ export interface CatalogEntry {
   playablePowers: string[];
 }
 
+/** A game the signed-in user can enter (hosts or holds a seat in), across any joinable status. */
+export interface MyGame {
+  id: string;
+  name: string;
+  status: string;
+  seat: string | null;
+  isHost: boolean;
+}
+
 function req(path: string, init: RequestInit = {}): Promise<Response> {
   return fetch("/api" + path, {
     credentials: "include",
@@ -58,6 +67,12 @@ export async function logout(): Promise<Response> {
 export async function catalog(): Promise<CatalogEntry[]> {
   const res = await req("/catalog");
   return res.ok ? ((await res.json()) as CatalogEntry[]) : [];
+}
+
+/** Games the signed-in user hosts or holds a seat in — lets a non-host enter a launched game. */
+export async function myGames(): Promise<MyGame[]> {
+  const res = await req("/my-games");
+  return res.ok ? ((await res.json()) as MyGame[]) : [];
 }
 
 export async function createTable(gameId: string): Promise<Response> {

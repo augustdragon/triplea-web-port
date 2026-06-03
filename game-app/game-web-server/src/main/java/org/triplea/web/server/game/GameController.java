@@ -14,11 +14,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.WebSocket;
@@ -54,6 +58,8 @@ import org.java_websocket.WebSocket;
 public final class GameController {
   private static final int STEP_SAFETY_LIMIT = 10_000;
   private static final Gson GSON = new Gson();
+  private static final int AUTH_TIMEOUT_SECONDS = 15; // close a lobby connection that never auths
+  private static final int WS_CLOSE_UNAUTHORIZED = 4401; // app-private close code
 
   private final Path gameXml;
   private final int maxRounds;
@@ -70,6 +76,25 @@ public final class GameController {
   private final GameReporter reporter;
   // The map's objectives.properties (static per map); empty if the map has none.
   private final Properties objectivesProps;
+
+  // Lobby mode: seats are pre-assigned from the control plane's authenticated roster and the game
+  // WS requires a connect-ticket. Off in standalone dev, where seats are claimed by name
+  // in-browser.
+  private final boolean lobbyMode;
+  private final @Nullable String gameToken; // verifies connect-tickets (HMAC key) in lobby mode
+  private final @Nullable List<LobbySeat> lobbyAssignments;
+  // Ticket gates (lobby mode): nonces already redeemed (single-use), and the connections that have
+  // authenticated, with the subset that are the host (may start the game).
+  private final Set<String> usedNonces = ConcurrentHashMap.newKeySet();
+  private final Set<WebSocket> authedConns = ConcurrentHashMap.newKeySet();
+  private final Set<WebSocket> hostConns = ConcurrentHashMap.newKeySet();
+  private final ScheduledExecutorService authTimeout =
+      Executors.newSingleThreadScheduledExecutor(
+          r -> {
+            final Thread t = new Thread(r, "web-game-auth-timeout");
+            t.setDaemon(true);
+            return t;
+          });
 
   // Launches and resets run on a single thread so they're serialized and never block a WS thread.
   private final ExecutorService lifecycleExecutor =
@@ -101,7 +126,9 @@ public final class GameController {
       final SaveStore saveStore,
       final @Nullable String gameId,
       final @Nullable String saveRef,
-      final GameReporter reporter) {
+      final GameReporter reporter,
+      final @Nullable String gameToken,
+      final @Nullable List<LobbySeat> lobbyAssignments) {
     this.gameXml = gameXml;
     this.maxRounds = maxRounds;
     this.stepDelayMs = stepDelayMs;
@@ -111,6 +138,10 @@ public final class GameController {
     this.saveRef = saveRef;
     this.reporter = reporter;
     this.objectivesProps = loadObjectivesProperties(gameXml);
+    this.gameToken = gameToken;
+    this.lobbyAssignments = lobbyAssignments;
+    // Lobby mode needs the game id (save slot + ticket gameId match) and a token to verify tickets.
+    this.lobbyMode = lobbyAssignments != null && gameId != null && gameToken != null;
   }
 
   /** The save slot to READ when resuming: an explicit save-ref, else this game's own slot. */
@@ -122,6 +153,9 @@ public final class GameController {
   public void start() {
     server.setInboundHandler(this::onClientMessage);
     server.setSeatVacatedHandler(this::onSeatVacated);
+    if (lobbyMode) {
+      server.setConnectHandler(this::armAuthTimeout); // close a connection that never authenticates
+    }
     enterSetup(null);
   }
 
@@ -132,6 +166,10 @@ public final class GameController {
     if (prior != null) {
       newPlan.carryOver(prior);
     }
+    if (lobbyMode) {
+      // Pre-assign seats from the lobby's authenticated roster (overrides any carry-over).
+      newPlan.applyAssignments(lobbyAssignments);
+    }
     gameData = data;
     plan = newPlan;
     // The save slot is the control-plane game id when spawned for a lobby game (isolates each
@@ -139,12 +177,15 @@ public final class GameController {
     saveSlot = gameId != null ? gameId : slotFor(data.getGameName());
     savedGameInfo = peekSave(resumeSlot()); // offer a resume option if an autosave exists
     humanSeats = Set.of(); // no running game yet
-    phase = "setup";
+    // Lobby games open into a "waiting room" (seats assigned, awaiting connections); standalone
+    // hotseat opens into "setup" (claim seats by name in-browser).
+    phase = lobbyMode ? "waiting" : "setup";
     server.resetForNewGame();
     publishSeats();
     publishNotes();
     log.info(
-        "Setup phase: {} ({} seats)",
+        "{} phase: {} ({} seats)",
+        phase,
         gameXml.getFileName(),
         newPlan.toRoster(phase).seats().size());
   }
@@ -156,6 +197,10 @@ public final class GameController {
    */
   private void onClientMessage(final WebSocket conn, final String message) {
     final JsonObject msg = tryParse(message);
+    if (msg != null && "auth".equals(optString(msg, "type"))) {
+      handleAuth(conn, msg);
+      return;
+    }
     if (msg != null && "control".equals(optString(msg, "type"))) {
       handleControl(conn, msg);
       return;
@@ -172,6 +217,17 @@ public final class GameController {
   private synchronized void handleControl(final WebSocket conn, final JsonObject msg) {
     final String action = optString(msg, "action");
     if (action == null) {
+      return;
+    }
+    if (lobbyMode) {
+      // Lobby games: seats are pre-assigned and ticket-bound (see handleAuth); the only control a
+      // client may issue is the host starting the game. Claim/release/type/resume/newGame are
+      // standalone-only.
+      if ("startGame".equals(action) && hostConns.contains(conn)) {
+        lifecycleExecutor.submit(this::doLobbyStart);
+      } else if (!"startGame".equals(action)) {
+        log.debug("Ignoring '{}' in lobby mode (seats are pre-assigned)", action);
+      }
       return;
     }
     switch (action) {
@@ -269,13 +325,109 @@ public final class GameController {
     log.info("Returned to setup ({})", gameXml.getFileName());
   }
 
-  /** WebSocket thread (via the server): a seat's controlling connection dropped — free the seat. */
+  /**
+   * WebSocket thread (via the server): a seat's controlling connection dropped. In standalone setup
+   * the seat is freed for re-claim; in a lobby game the seat stays assigned to its user (who may
+   * reconnect with a fresh ticket) — we only re-publish so the roster's connected flag updates.
+   */
   private synchronized void onSeatVacated(final String seat) {
     final SeatPlan p = plan;
-    if (p != null) {
-      p.release(seat);
-      publishSeats();
+    if (p == null) {
+      return;
     }
+    if (!lobbyMode) {
+      p.release(seat);
+    } else {
+      pruneClosedConns();
+    }
+    publishSeats();
+  }
+
+  /**
+   * WebSocket thread: a connection presented a connect-ticket. Verify it (HMAC, expiry, this game's
+   * id, single-use nonce), then bind it to its assigned seat — replaying any pending decision, so a
+   * mid-game reconnect resumes. An invalid/expired/replayed ticket closes the connection.
+   */
+  private synchronized void handleAuth(final WebSocket conn, final JsonObject msg) {
+    if (!lobbyMode) {
+      return; // standalone hotseat has no tickets
+    }
+    pruneClosedConns();
+    final Optional<ConnectTicket.Payload> verified =
+        ConnectTicket.verify(optString(msg, "ticket"), gameToken);
+    if (verified.isEmpty()) {
+      closeUnauthorized(conn);
+      return;
+    }
+    final ConnectTicket.Payload p = verified.get();
+    if (!gameId.equals(p.gameId()) || !usedNonces.add(p.nonce())) {
+      closeUnauthorized(conn); // wrong game, or a replayed ticket
+      return;
+    }
+    authedConns.add(conn);
+    if (p.isHost()) {
+      hostConns.add(conn);
+    }
+    final String seat = p.seat();
+    final SeatPlan sp = plan;
+    if (seat != null && sp != null && sp.hasSeat(seat)) {
+      server.bindSeat(conn, seat); // route this seat's decisions here (replays any pending)
+      log.info("Seat {} bound to {} via ticket", seat, p.displayName());
+    }
+    publishSeats();
+    maybeAutoStart();
+  }
+
+  /** Lobby mode: arm a timer that closes a connection which never presents a valid ticket. */
+  private void armAuthTimeout(final WebSocket conn) {
+    authTimeout.schedule(
+        () -> {
+          if (conn.isOpen() && !authedConns.contains(conn)) {
+            log.info("Closing unauthenticated connection {}", conn.getRemoteSocketAddress());
+            closeUnauthorized(conn);
+          }
+        },
+        AUTH_TIMEOUT_SECONDS,
+        TimeUnit.SECONDS);
+  }
+
+  /**
+   * Lobby mode: start once every assigned human seat has a live connection (or the host starts
+   * early). Runs on the lifecycle thread; {@link #doStartGame}/{@link #doResumeGame} guard against
+   * a double start, so multiple triggers are harmless.
+   */
+  private void maybeAutoStart() {
+    if (!lobbyMode || current != null) {
+      return;
+    }
+    final SeatPlan p = plan;
+    if (p == null) {
+      return;
+    }
+    final Set<String> humans = p.humanSeatNames();
+    if (!humans.isEmpty() && server.connectedSeats().containsAll(humans)) {
+      lifecycleExecutor.submit(this::doLobbyStart);
+    }
+  }
+
+  /** Lobby mode: resume from the save if this game has one, else start fresh. */
+  private synchronized void doLobbyStart() {
+    if (savedGameInfo != null) {
+      doResumeGame();
+    } else {
+      doStartGame();
+    }
+  }
+
+  private void closeUnauthorized(final WebSocket conn) {
+    authedConns.remove(conn);
+    hostConns.remove(conn);
+    conn.close(WS_CLOSE_UNAUTHORIZED, "Authentication required");
+  }
+
+  private void pruneClosedConns() {
+    authedConns.removeIf(c -> !c.isOpen());
+    hostConns.removeIf(c -> !c.isOpen());
   }
 
   private void publishSeats() {
@@ -285,7 +437,9 @@ public final class GameController {
     }
     final JsonObject env = new JsonObject();
     env.addProperty("type", "seats");
-    env.add("roster", GSON.toJsonTree(p.toRoster(phase, savedGameInfo, humanSeats)));
+    env.add(
+        "roster",
+        GSON.toJsonTree(p.toRoster(phase, savedGameInfo, humanSeats, server.connectedSeats())));
     server.publishSeats(GSON.toJson(env));
   }
 

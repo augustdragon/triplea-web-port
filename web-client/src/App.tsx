@@ -26,6 +26,7 @@ import { PlacePanel } from "./PlacePanel";
 import { Sidebar } from "./Sidebar";
 import { BottomDock, type DockTab } from "./BottomDock";
 import { SeatSelect } from "./SeatSelect";
+import { WaitingRoom } from "./WaitingRoom";
 import { RejoinPrompt } from "./RejoinPrompt";
 
 // Standalone fallback for the bare /game route (a manually-run game server). The lobby flow uses
@@ -87,6 +88,8 @@ export default function App() {
     () => sessionStorage.getItem("name") ?? localStorage.getItem("name") ?? "",
   );
   const [spectating, setSpectating] = useState(false);
+  // Lobby flow: whether we are the host (may start the game from the waiting room).
+  const [isHost, setIsHost] = useState(false);
   const recalledRef = useRef<string | null>(recalledSeat());
   const setupReclaimDone = useRef(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -132,42 +135,63 @@ export default function App() {
       }
     };
 
-    // Open (and keep retrying) a WebSocket to `url`. A lobby-spawned container takes ~10-40s to load
-    // its map, so early connects are refused — we retry the same endpoint until it serves.
-    const open = (url: string) => {
+    // Open a WebSocket and, in the lobby flow, authenticate with the connect-ticket as the FIRST
+    // message — proving our seat so the container binds it (no claim, no client-supplied name).
+    const openWs = (url: string, ticket: string | null) => {
       if (cancelled) return;
       const ws = new WebSocket(url);
       socket = ws;
       wsRef.current = ws;
-      ws.onopen = () => setWsStatus("live");
+      ws.onopen = () => {
+        setWsStatus("live");
+        if (ticket) ws.send(JSON.stringify({ type: "auth", ticket }));
+      };
       ws.onmessage = onMessage;
       ws.onclose = () => {
         if (cancelled) return;
         setWsStatus("connecting…");
-        retry = setTimeout(() => open(url), 2000);
+        // Re-run connect on every drop: a ticket is single-use, so a reconnect needs a FRESH one
+        // (and this re-spawns the container if it was reaped while idle — lazy rehydration).
+        retry = setTimeout(connect, 2000);
       };
       ws.onerror = () => {}; // onclose follows and schedules the retry
     };
 
-    void (async () => {
-      let url: string | null = LEGACY_WS_URL;
-      if (gameId) {
-        try {
-          const res = await fetch(`/api/games/${gameId}/connect`, { credentials: "include" });
-          if (!res.ok) {
-            setWsStatus(res.status === 401 ? "not signed in" : "cannot reach game");
-            return;
-          }
-          url = (await res.json()).wsEndpoint as string;
-        } catch {
-          setWsStatus("cannot reach control plane");
+    // Resolve where to connect. Standalone (bare /game): a fixed local endpoint. Lobby (/game/:id):
+    // ask the control plane, which authorizes us, (re)spawns the container, and mints a ticket.
+    const connect = async () => {
+      if (cancelled) return;
+      if (!gameId) {
+        openWs(LEGACY_WS_URL, null);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/games/${gameId}/connect`, { credentials: "include" });
+        if (!res.ok) {
+          // 401/403/404 won't fix themselves; surface and stop. Transient errors retry below.
+          setWsStatus(res.status === 401 ? "not signed in" : "cannot reach game");
+          if (res.status >= 500) retry = setTimeout(connect, 2000);
           return;
         }
+        const data = (await res.json()) as {
+          wsEndpoint: string;
+          ticket: string | null;
+          seat: string | null;
+          isHost: boolean;
+        };
+        // Our identity comes from the control plane, not local storage: bind to the assigned seat,
+        // or spectate if we hold none (e.g. a host who didn't take a seat).
+        if (data.seat) setMySeat(data.seat);
+        else setSpectating(true);
+        setIsHost(!!data.isHost);
+        openWs(data.wsEndpoint, data.ticket);
+      } catch {
+        setWsStatus("cannot reach control plane");
+        retry = setTimeout(connect, 2000);
       }
-      if (url && !cancelled) {
-        open(url);
-      }
-    })();
+    };
+
+    void connect();
 
     return () => {
       cancelled = true;
@@ -387,6 +411,19 @@ export default function App() {
   }
   if (!geometry) {
     return <div style={{ color: "#ccc", padding: 16, fontFamily: "sans-serif" }}>Loading map…</div>;
+  }
+
+  // Waiting room (lobby flow): seats are pre-assigned; show who's connected and let the host start.
+  if (roster && roster.phase === "waiting") {
+    return (
+      <WaitingRoom
+        roster={roster}
+        mySeat={mySeat}
+        isHost={isHost}
+        colors={geometry.playerColors}
+        onStart={startGame}
+      />
+    );
   }
 
   // Setup phase: choose seats before the game starts (unless the user opted to just watch).

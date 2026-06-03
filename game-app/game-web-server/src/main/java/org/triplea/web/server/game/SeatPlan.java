@@ -93,6 +93,25 @@ final class SeatPlan {
     }
   }
 
+  /**
+   * Pre-assign seats from the lobby's authenticated roster: each {@code human} seat is owned by its
+   * claimer's display name (becomes a {@link WebPlayer} at launch, even before the browser
+   * connects); AI/open seats are left open and run as their AI type. Replaces the claim-by-name
+   * setup flow for a lobby-launched game.
+   */
+  void applyAssignments(final List<LobbySeat> assignments) {
+    for (final LobbySeat a : assignments) {
+      if (a.isHuman() && a.displayName() != null) {
+        claim(a.powerName(), a.displayName());
+      }
+    }
+  }
+
+  /** Names of seats assigned to a human (owner set) — the seats a waiting room must fill. */
+  Set<String> humanSeatNames() {
+    return claimedSeatNames();
+  }
+
   /** Set the AI type label a seat runs as if not human-claimed at launch. */
   boolean setAiType(final String seat, final String label) {
     final SeatState s = seats.get(seat);
@@ -142,21 +161,31 @@ final class SeatPlan {
   }
 
   SeatRoster toRoster(final String phase) {
-    return toRoster(phase, null, Set.of());
+    return toRoster(phase, null, Set.of(), Set.of());
   }
 
   SeatRoster toRoster(final String phase, final @Nullable SeatRoster.SavedGame savedGame) {
-    return toRoster(phase, savedGame, Set.of());
+    return toRoster(phase, savedGame, Set.of(), Set.of());
+  }
+
+  SeatRoster toRoster(
+      final String phase,
+      final @Nullable SeatRoster.SavedGame savedGame,
+      final Set<String> humanSeats) {
+    return toRoster(phase, savedGame, humanSeats, Set.of());
   }
 
   /**
    * @param humanSeats names of seats that are human-driven in the running game (empty in setup), so
    *     the client knows which open seats are rejoinable.
+   * @param connectedSeats names of seats with a live controlling connection — drives the waiting
+   *     room's "connected" indicator and surfaces a dropped player mid-game.
    */
   SeatRoster toRoster(
       final String phase,
       final @Nullable SeatRoster.SavedGame savedGame,
-      final Set<String> humanSeats) {
+      final Set<String> humanSeats,
+      final Set<String> connectedSeats) {
     final List<SeatRoster.Seat> list = new ArrayList<>();
     for (final Map.Entry<String, SeatState> e : seats.entrySet()) {
       final SeatState s = e.getValue();
@@ -175,6 +204,7 @@ final class SeatPlan {
               s.canDisable,
               s.optional,
               humanSeats.contains(e.getKey()),
+              connectedSeats.contains(e.getKey()),
               s.alliances));
     }
     return new SeatRoster(phase, gameName, list, aiLabels, savedGame);

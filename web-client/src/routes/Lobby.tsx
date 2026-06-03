@@ -8,10 +8,11 @@ import {
   launchGame,
   logout,
   me,
+  myGames,
   releaseSeat,
   setReady,
 } from "../api/controlPlane";
-import type { CatalogEntry, LobbyTable, SeatView, User } from "../api/controlPlane";
+import type { CatalogEntry, LobbyTable, MyGame, SeatView, User } from "../api/controlPlane";
 import { useLobbySocket } from "../lobby/useLobbySocket";
 
 /** Run an action and surface a server rejection (409/403/…) inline rather than failing silently. */
@@ -33,6 +34,7 @@ export function Lobby() {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [games, setGames] = useState<CatalogEntry[]>([]);
+  const [mine, setMine] = useState<MyGame[]>([]);
   const tables = useLobbySocket();
 
   useEffect(() => {
@@ -41,6 +43,14 @@ export function Lobby() {
   useEffect(() => {
     catalog().then(setGames);
   }, []);
+  // Refresh "my games" on every lobby change (launching flips a table from open → active, so it
+  // leaves the open list and appears here for non-host players to enter).
+  useEffect(() => {
+    myGames().then(setMine);
+  }, [tables]);
+
+  // Launched games the user is in (lobby tables already appear under "Open tables").
+  const launched = mine.filter((g) => g.status !== "lobby");
 
   if (user === undefined) {
     return <div style={page}>Loading…</div>;
@@ -78,6 +88,30 @@ export function Lobby() {
           </div>
         )}
       </section>
+
+      {launched.length > 0 && (
+        <section style={{ marginBottom: 20 }}>
+          <h2 style={h2}>Your games in progress</h2>
+          {launched.map((g) => (
+            <div key={g.id} style={card}>
+              <div
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+              >
+                <span>
+                  <span style={{ fontWeight: 600 }}>{g.name}</span>{" "}
+                  <span style={muted}>
+                    · {g.status}
+                    {g.seat ? ` · you play ${g.seat}` : g.isHost ? " · host" : ""}
+                  </span>
+                </span>
+                <button style={primaryBtn} onClick={() => navigate(`/game/${g.id}`)}>
+                  Enter
+                </button>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
 
       <section>
         <h2 style={h2}>Open tables</h2>

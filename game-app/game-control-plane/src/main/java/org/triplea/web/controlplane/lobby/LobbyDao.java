@@ -220,7 +220,12 @@ public final class LobbyDao {
 
   /** What the route controller needs to connect a browser to a game (or spawn its container). */
   public record ConnectInfo(
-      String status, String mapXml, String containerId, String wsEndpoint, String saveRef) {}
+      long createdBy,
+      String status,
+      String mapXml,
+      String containerId,
+      String wsEndpoint,
+      String saveRef) {}
 
   /** Status, map, current container/endpoint, and the latest save's bytes_ref for rehydration. */
   public Optional<ConnectInfo> connectInfo(final UUID gameId) {
@@ -228,19 +233,89 @@ public final class LobbyDao {
         handle ->
             handle
                 .createQuery(
-                    "SELECT g.status, g.map_xml, g.container_id, g.ws_endpoint, s.bytes_ref"
+                    "SELECT g.created_by, g.status, g.map_xml, g.container_id, g.ws_endpoint,"
+                        + " s.bytes_ref"
                         + " FROM games g LEFT JOIN saves s ON s.id = g.current_save_id"
                         + " WHERE g.id = :gid")
                 .bind("gid", gameId)
                 .map(
                     (rs, ctx) ->
                         new ConnectInfo(
+                            rs.getLong("created_by"),
                             rs.getString("status"),
                             rs.getString("map_xml"),
                             rs.getString("container_id"),
                             rs.getString("ws_endpoint"),
                             rs.getString("bytes_ref")))
                 .findOne());
+  }
+
+  /** The full seat→assignment list a launched container fetches to build its seat plan. */
+  public List<SeatAssignment> seatAssignments(final UUID gameId) {
+    return jdbi.withHandle(
+        handle ->
+            handle
+                .createQuery(
+                    "SELECT s.power_name, s.kind, s.user_id, u.display_name"
+                        + " FROM seats s LEFT JOIN users u ON u.id = s.user_id"
+                        + " WHERE s.game_id = :gid ORDER BY s.seat_order")
+                .bind("gid", gameId)
+                .map(
+                    (rs, ctx) -> {
+                      final long uid = rs.getLong("user_id");
+                      return new SeatAssignment(
+                          rs.getString("power_name"),
+                          rs.getString("kind"),
+                          rs.wasNull() ? null : uid,
+                          rs.getString("display_name"));
+                    })
+                .list());
+  }
+
+  /** The power the user holds in this game (first by turn order), if any. */
+  public Optional<String> seatForUser(final UUID gameId, final long userId) {
+    return jdbi.withHandle(
+        handle ->
+            handle
+                .createQuery(
+                    "SELECT power_name FROM seats WHERE game_id = :gid AND user_id = :uid"
+                        + " ORDER BY seat_order LIMIT 1")
+                .bind("gid", gameId)
+                .bind("uid", userId)
+                .mapTo(String.class)
+                .findFirst());
+  }
+
+  /** A game the user can enter: id, edition name, status, the user's seat (if any), host flag. */
+  public record MyGame(String id, String name, String status, String seat, boolean isHost) {}
+
+  /** Games the user hosts or holds a seat in, still joinable (lobby/active/paused). */
+  public List<MyGame> gamesForUser(final long userId) {
+    return jdbi.withHandle(
+        handle ->
+            handle
+                .createQuery(
+                    "SELECT g.id, g.edition AS name, g.status,"
+                        + " (SELECT s2.power_name FROM seats s2"
+                        + "    WHERE s2.game_id = g.id AND s2.user_id = :uid"
+                        + "    ORDER BY s2.seat_order LIMIT 1) AS seat,"
+                        + " (g.created_by = :uid) AS is_host"
+                        + " FROM games g"
+                        + " WHERE g.status IN ('lobby', 'active', 'paused')"
+                        + "   AND (g.created_by = :uid"
+                        + "        OR EXISTS (SELECT 1 FROM seats s"
+                        + "                     WHERE s.game_id = g.id AND s.user_id = :uid))"
+                        + " ORDER BY g.created_at")
+                .bind("uid", userId)
+                .map(
+                    (rs, ctx) ->
+                        new MyGame(
+                            rs.getObject("id", UUID.class).toString(),
+                            rs.getString("name"),
+                            rs.getString("status"),
+                            rs.getString("seat"),
+                            rs.getBoolean("is_host")))
+                .list());
   }
 
   /** True if the user holds a seat in the game or created it — i.e., may connect. */

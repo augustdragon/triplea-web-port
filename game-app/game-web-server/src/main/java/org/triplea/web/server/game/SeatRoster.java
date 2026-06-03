@@ -10,8 +10,10 @@ import javax.annotation.Nullable;
  * if it is not human-claimed at launch. {@code aiTypes} is the catalog of selectable AI labels for
  * the per-seat dropdown.
  *
- * <p>{@code phase} is {@code "setup"} (assigning seats, no game yet) or {@code "running"} (the game
- * has launched) — the client switches between the seat-select screen and the game UI on it.
+ * <p>{@code phase} is {@code "setup"} (standalone hotseat: assigning seats, no game yet), {@code
+ * "waiting"} (a lobby-launched game whose seats are pre-assigned, waiting for players to connect),
+ * or {@code "running"} (the game has launched) — the client switches between the seat-select /
+ * waiting-room / game UI on it.
  */
 public record SeatRoster(
     String phase,
@@ -37,6 +39,8 @@ public record SeatRoster(
    *     — i.e. it was claimed at launch. Only such seats are rejoinable mid-game (an open {@code
    *     human} seat means its player dropped and its decision is buffered); AI seats are not.
    *     Always {@code false} in the setup phase.
+   * @param connected whether a live connection currently controls this seat — drives the lobby
+   *     waiting room ("2/3 connected") and surfaces a dropped player mid-game.
    * @param alliances the alliance groups this seat belongs to (for client grouping).
    */
   public record Seat(
@@ -47,5 +51,6 @@ public record SeatRoster(
       boolean canDisable,
       boolean optional,
       boolean human,
+      boolean connected,
       List<String> alliances) {}
 }

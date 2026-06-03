@@ -2,8 +2,10 @@ package org.triplea.web.server.game;
 
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -63,19 +65,36 @@ public final class WebPlayableServer {
     // temp folder. The slot within it is the game id when spawned for a lobby game.
     final SaveStore saveStore =
         new SaveStore(Path.of(System.getProperty("user.home"), ".triplea-web", "saves"));
-    // Report lifecycle/turn events to the control plane only when spawned for a lobby game.
+    // A lobby-launched game has a control plane to talk to, a game id, and a shared token: report
+    // lifecycle/turn events, and fetch the authenticated seat→identity assignments to pre-seat the
+    // game. Standalone dev has none of these — seats are claimed by name in-browser.
+    final boolean lobbyMode =
+        controlPlaneUrl != null && gameId != null && gameToken != null && !gameToken.isBlank();
     final GameReporter reporter =
-        controlPlaneUrl != null && gameId != null
+        lobbyMode
             ? new HttpGameReporter(controlPlaneUrl, gameId, gameToken)
             : new NoOpGameReporter();
+    final List<LobbySeat> assignments =
+        lobbyMode ? new LobbySeatClient(controlPlaneUrl, gameId, gameToken).fetch() : null;
     new GameController(
-            gameXml, maxRounds, stepDelayMs, server, saveStore, gameId, saveRef, reporter)
+            gameXml,
+            maxRounds,
+            stepDelayMs,
+            server,
+            saveStore,
+            gameId,
+            saveRef,
+            reporter,
+            gameToken,
+            assignments)
         .start();
     log.info(
-        "Playable {} on :{} (game-id={}) — connect clients and claim seats",
+        "Playable {} on :{} (game-id={}, mode={}, {} assigned seats)",
         gameXml.getFileName(),
         port,
-        gameId == null ? "<by-name>" : gameId);
+        gameId == null ? "<by-name>" : gameId,
+        lobbyMode ? "lobby" : "standalone",
+        assignments == null ? 0 : countHumans(assignments));
 
     // The game runs on the controller's loop thread and the WebSocket server on its own; keep the
     // process alive here so the socket stays up across setup/running/reset to serve state.
@@ -85,6 +104,10 @@ public final class WebPlayableServer {
   private static int intFlag(final Map<String, String> flags, final String key, final int dflt) {
     final String value = flags.get(key);
     return value == null ? dflt : Integer.parseInt(value);
+  }
+
+  private static long countHumans(final @Nullable List<LobbySeat> assignments) {
+    return assignments == null ? 0 : assignments.stream().filter(LobbySeat::isHuman).count();
   }
 
   private static void usage(final String problem) {
