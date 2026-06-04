@@ -11,3 +11,4 @@ blob-report
 
 # Generated map data — produce locally with the :game-web-server:exportGeometry Gradle task.
 public/geometry.json
+tsconfig.tsbuildinfo
