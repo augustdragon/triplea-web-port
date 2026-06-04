@@ -5,20 +5,28 @@
 # to the control plane on :7000. The per-game WebSocket is `/game/*/ws`, which the control plane
 # proxies on to each game's internal localhost port — so no game port is ever exposed.
 #
-# Set DOMAIN and SPA_ROOT in the environment (or edit them in place), e.g. via Caddy's env file:
-#   DOMAIN=triplea.example.com
-#   SPA_ROOT=/opt/triplea-web/web-client/dist
+# Replace `triplea.example.com` and the `root` path with your values.
+#
+# IMPORTANT: the `handle` blocks are load-bearing — do NOT flatten this into a bare
+# `reverse_proxy @backend` + `try_files`. Caddy runs `try_files` (a rewrite) before `reverse_proxy`
+# in its fixed directive order, so a flat config rewrites `/api/...` to `/index.html` before the proxy
+# matcher runs, and every API/WS call silently falls through to the SPA. Mutually-exclusive `handle`
+# blocks keep `try_files` scoped to non-API paths.
 
-{$DOMAIN} {
+triplea.example.com {
 	encode gzip
 
 	# API + lobby WS + per-game WS proxy → the control plane. WebSocket upgrades pass through.
 	@backend path /api/* /ws/lobby /game/*/ws
-	reverse_proxy @backend localhost:7000
+	handle @backend {
+		reverse_proxy localhost:7000
+	}
 
 	# Everything else is the single-page app; unknown routes fall back to index.html so client-side
 	# routing (/login, /lobby, /game/:id) works on a hard refresh.
-	root * {$SPA_ROOT}
-	try_files {path} /index.html
-	file_server
+	handle {
+		root * /opt/triplea-web/web-client/dist
+		try_files {path} /index.html
+		file_server
+	}
 }

@@ -508,7 +508,14 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
         SPA, reverse-proxies `/api/*` `/ws/lobby` `/game/*/ws` → `:7000`. Artifacts: `deploy/triplea-control-plane.service`,
         `deploy/control-plane.env.example`, runbook `docs/web-port/DEPLOY.md`. Verified e2e via `/tmp/px-build-run.sh`:
         **both** launchers pass the full lobby flow through the proxy pipe (auth→roster→running→state); process mode
-        confirmed 1 child JVM, 0 Docker containers, heap respects `-Xmx`. On-box manual run is the user's step.
+        confirmed 1 child JVM, 0 Docker containers, heap respects `-Xmx`.
+        **LIVE 2026-06-04** at **https://triplea.prototypeandpray.com** (Hostinger KVM2, Ubuntu 26.04 LTS, PG 18). Full
+        on-box run done: Flyway applied all 8 migrations, Caddy got a Let's Encrypt cert, and a real Pacific 1940 2e game
+        **launched and played over the public internet** (process launcher spawned the child JVM; WSS proxy carried play).
+        Runbook fixes found live (now in `DEPLOY.md`): Caddy needs **`handle` blocks** (flat `reverse_proxy`+`try_files`
+        rewrites `/api/*`→`index.html` before the proxy runs); `useradd` must omit `-m`; clone needs `git checkout web-port`
+        (default branch is `main`); geometry.json is generated via `:game-web-server:exportGeometry` into `dist/`; git ops
+        on `/opt/triplea-web` must be `sudo -u triplea git`. More user testing to follow.
   - [ ] **Real Google/Discord OAuth (Phase-4 tail).** Switch `CONTROL_PLANE_PROFILE=prod` + `DEV_LOGIN=false`; register
         OAuth apps; set client id/secret + callback (the `LoginService` seam is provider-agnostic; prod profile marks
         cookies Secure). Replaces dev-login for a public audience.
