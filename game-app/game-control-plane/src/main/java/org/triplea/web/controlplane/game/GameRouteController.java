@@ -102,13 +102,22 @@ public final class GameRouteController {
     ctx.json(response(gameId, info, user, launched.wsEndpoint()));
   }
 
-  /** Resolve the caller's seat + host flag and mint a connect-ticket for the game's WebSocket. */
+  /**
+   * Resolve the caller's seat + host flag and mint a connect-ticket. The returned {@code
+   * wsEndpoint} is a **same-origin path** (the control plane proxies it to the game's internal
+   * localhost port), not a direct host:port — so the browser dials {@code
+   * wss://<this-origin>/game/{id}/ws} and per- game ports stay off the internet. ({@code
+   * containerWsEndpoint} is unused here; the proxy reads the internal endpoint from the DB.)
+   */
   private ConnectResponse response(
-      final UUID gameId, final ConnectInfo info, final User user, final String wsEndpoint) {
+      final UUID gameId,
+      final ConnectInfo info,
+      final User user,
+      final String containerWsEndpoint) {
     final String seat = lobbyDao.seatForUser(gameId, user.id()).orElse(null);
     final boolean isHost = info.createdBy() == user.id();
     final String ticket = mintTicket(gameId, user, seat, isHost);
-    return new ConnectResponse(wsEndpoint, ticket, seat, isHost);
+    return new ConnectResponse("/game/" + gameId + "/ws", ticket, seat, isHost);
   }
 
   /** Sign a single-use, short-lived ticket binding this user to its seat, or null if unsignable. */

@@ -1,6 +1,7 @@
 package org.triplea.web.controlplane;
 
 import io.javalin.Javalin;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -18,6 +19,7 @@ import org.triplea.web.controlplane.game.GameCatalog;
 import org.triplea.web.controlplane.game.GameReportController;
 import org.triplea.web.controlplane.game.GameReportDao;
 import org.triplea.web.controlplane.game.GameRouteController;
+import org.triplea.web.controlplane.game.GameWsProxy;
 import org.triplea.web.controlplane.game.InternalSeatsController;
 import org.triplea.web.controlplane.http.DevLoginController;
 import org.triplea.web.controlplane.http.HealthController;
@@ -30,6 +32,7 @@ import org.triplea.web.controlplane.orchestrator.DockerGameLauncher;
 import org.triplea.web.controlplane.orchestrator.GameLauncher;
 import org.triplea.web.controlplane.orchestrator.GameReaper;
 import org.triplea.web.controlplane.orchestrator.IdleReaper;
+import org.triplea.web.controlplane.orchestrator.ProcessGameLauncher;
 import org.triplea.web.controlplane.user.UserDao;
 
 /**
@@ -61,7 +64,10 @@ public final class ControlPlaneMain {
 
     final Javalin app = Javalin.create(cfg -> cfg.jsonMapper(new GsonJsonMapper()));
 
-    final GameLauncher gameLauncher = new DockerGameLauncher(config);
+    final GameLauncher gameLauncher =
+        "process".equals(config.launcher())
+            ? new ProcessGameLauncher(config)
+            : new DockerGameLauncher(config);
     final LobbyDao lobbyDao = new LobbyDao(database.jdbi());
     final LobbyBroadcaster lobbyBroadcaster = new LobbyBroadcaster(lobbyDao);
 
@@ -111,6 +117,67 @@ public final class ControlPlaneMain {
               });
           ws.onClose(ctx -> lobbyBroadcaster.remove(ctx));
           ws.onError(ctx -> lobbyBroadcaster.remove(ctx));
+        });
+
+    // Per-game WebSocket proxy: the browser dials this same-origin path (behind TLS), and the
+    // control
+    // plane pipes it to the game's internal ws://localhost:<port>. Keeps per-game ports off the
+    // internet so one domain/cert covers everything. Authorize the session here (cookie → JWT →
+    // seat/host membership); the browser's connect-ticket is forwarded to the game and verified
+    // there.
+    app.ws(
+        "/game/{id}/ws",
+        ws -> {
+          ws.onConnect(
+              ctx -> {
+                final String token = SessionCookies.read(ctx);
+                final Identity identity = token == null ? null : jwt.verify(token).orElse(null);
+                if (identity == null
+                    || !allowList.isAllowed(identity.provider(), identity.subject())) {
+                  ctx.closeSession();
+                  return;
+                }
+                final UUID gameId;
+                try {
+                  gameId = UUID.fromString(ctx.pathParam("id"));
+                } catch (final IllegalArgumentException e) {
+                  ctx.closeSession();
+                  return;
+                }
+                final var user = userDao.findByIdentity(identity).orElse(null);
+                final var info = lobbyDao.connectInfo(gameId).orElse(null);
+                if (user == null
+                    || !lobbyDao.isUserInGame(gameId, user.id())
+                    || info == null
+                    || info.wsEndpoint() == null) {
+                  ctx.closeSession();
+                  return;
+                }
+                final GameWsProxy proxy = new GameWsProxy(ctx, info.wsEndpoint());
+                ctx.attribute("proxy", proxy);
+                proxy.connectUpstream();
+              });
+          ws.onMessage(
+              ctx -> {
+                final GameWsProxy proxy = ctx.attribute("proxy");
+                if (proxy != null) {
+                  proxy.toUpstream(ctx.message());
+                }
+              });
+          ws.onClose(
+              ctx -> {
+                final GameWsProxy proxy = ctx.attribute("proxy");
+                if (proxy != null) {
+                  proxy.close();
+                }
+              });
+          ws.onError(
+              ctx -> {
+                final GameWsProxy proxy = ctx.attribute("proxy");
+                if (proxy != null) {
+                  proxy.close();
+                }
+              });
         });
     app.post(
         "/api/logout",

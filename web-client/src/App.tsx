@@ -224,7 +224,13 @@ export default function App() {
           setAssignedSeat(data.seat);
         } else setSpectating(true);
         setIsHost(!!data.isHost);
-        openWs(data.wsEndpoint as string, data.ticket ?? null);
+        // The control plane returns a same-origin PATH (e.g. /game/<id>/ws); the control plane
+        // proxies it to the game's internal port, so one origin/cert covers every game.
+        const endpoint = data.wsEndpoint as string;
+        const wsUrl = endpoint.startsWith("/")
+          ? `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${endpoint}`
+          : endpoint;
+        openWs(wsUrl, data.ticket ?? null);
       } catch {
         setWsStatus("cannot reach control plane");
         retry = setTimeout(connect, 2000);

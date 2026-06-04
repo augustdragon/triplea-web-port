@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -50,7 +51,11 @@ public record ControlPlaneConfig(
     String saveVolume,
     String gameCallbackUrl,
     String gameWsHost,
-    int gameIdleSeconds) {
+    int gameIdleSeconds,
+    String launcher,
+    String gameBin,
+    String gameHeap,
+    String publicUrl) {
 
   private static final String DEFAULT_DB_URL = "jdbc:postgresql://localhost:5432/triplea_web";
   private static final String DEFAULT_DB_USER = "triplea_web";
@@ -123,6 +128,25 @@ public record ControlPlaneConfig(
     final String gameWsHost = env.getOrDefault("CONTROL_PLANE_GAME_WS_HOST", "localhost");
     final int gameIdleSeconds = parseIdleSeconds(env, problems);
 
+    // How game JVMs are spawned: "docker" (one container per game, the default) or "process" (a
+    // child JVM per game — no Docker daemon/image; the Docker-free single-VM deploy).
+    final String launcher =
+        env.getOrDefault("CONTROL_PLANE_LAUNCHER", "docker").trim().toLowerCase(Locale.ROOT);
+    if (!launcher.equals("docker") && !launcher.equals("process")) {
+      problems.add(
+          "CONTROL_PLANE_LAUNCHER (must be 'docker' or 'process', was '" + launcher + "')");
+    }
+    // Process launcher only: the game-web-server installDist launcher script, and the heap cap per
+    // child JVM (an uncapped JVM defaults its max heap to ~25% of host RAM).
+    final String gameBin = env.get("CONTROL_PLANE_GAME_BIN");
+    if (launcher.equals("process") && isBlank(gameBin)) {
+      problems.add("CONTROL_PLANE_GAME_BIN (required when CONTROL_PLANE_LAUNCHER=process)");
+    }
+    final String gameHeap = env.getOrDefault("CONTROL_PLANE_GAME_HEAP", "-Xmx512m");
+    // Public base URL (https://your-domain) — for OAuth callbacks/absolute links later; optional
+    // now.
+    final String publicUrl = env.getOrDefault("CONTROL_PLANE_PUBLIC_URL", "");
+
     if (!problems.isEmpty()) {
       throw new IllegalStateException(
           "Invalid control-plane configuration: " + String.join("; ", problems));
@@ -143,7 +167,11 @@ public record ControlPlaneConfig(
         saveVolume,
         gameCallbackUrl,
         gameWsHost,
-        gameIdleSeconds);
+        gameIdleSeconds,
+        launcher,
+        gameBin,
+        gameHeap,
+        publicUrl);
   }
 
   private static int parseIdleSeconds(final Map<String, String> env, final List<String> problems) {
