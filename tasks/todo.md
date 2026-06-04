@@ -496,7 +496,9 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
         "your turn" Web Push (target only *absent* players). Verified e2e (`/tmp/pr-verify.mjs`): both seats →
         `connected=true`; a disconnect flips that seat to `false` while the other stays connected.
   - [x] **Deployment v1 (single VM, Docker-free, single HTTPS origin)** ✅ (built + verified 2026-06-03). Scoped to the
-        always-on Oracle Always-Free ARM box + dev-login (allow-list) over HTTPS — the lighter path than the original
+        always-on single VM (Hostinger KVM2: 2 vCPU / 8 GB / 100 GB NVMe, x86, month-to-month to validate before
+        committing; Oracle Always-Free and Hetzner ARM were earlier targets but neither had ARM capacity available)
+        + dev-login (allow-list) over HTTPS — the lighter path than the original
         Docker-Compose idea. Pieces: **`ProcessGameLauncher`** (`CONTROL_PLANE_LAUNCHER=process`) spawns one child JVM
         per game (no Docker daemon/image; handle=PID; `reap`=`destroyForcibly`; `-Xmx` cap via `GAME_WEB_SERVER_OPTS` is
         the resource knob) — default stays `docker` so dev/e2e harnesses are unchanged. **Single origin**: the per-game WS

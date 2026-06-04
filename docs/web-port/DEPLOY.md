@@ -1,7 +1,8 @@
 # Deploying the web port (single VM, Docker-free)
 
-This is the runbook for hosting the web port on **one Linux VM** (Ubuntu 22.04 ARM64 — e.g. Oracle
-Always-Free Ampere A1 — or any x86 box). It uses the **process launcher** (one child JVM per game,
+This is the runbook for hosting the web port on **one Linux VM** (Ubuntu 24.04+ LTS, x86_64 — e.g. a
+Hostinger **KVM2** (2 vCPU / 8 GB / 100 GB NVMe) — or any other VPS, ARM or x86; the build is arch-independent).
+It uses the **process launcher** (one child JVM per game,
 no Docker) and a **single HTTPS origin**: Caddy serves the SPA and reverse-proxies the API and both
 WebSockets to the control plane; the control plane proxies each per-game WebSocket to that game's
 internal localhost port, so **no game port faces the internet**.
@@ -14,18 +15,19 @@ Artifacts referenced below live in [`../../deploy/`](../../deploy/): `Caddyfile`
 
 ## 0. Prerequisites (provisioning)
 
-- A VM with a public IP, **ports 22/80/443 open** in *both* the cloud firewall **and** the host
-  firewall (on Oracle, the Ubuntu image's iptables also blocks 80/443 by default — open them with
-  `iptables -I INPUT ... --dport 80/443 -j ACCEPT && netfilter-persistent save`).
+- A VM with a **public IPv4** (Hostinger KVM plans include a dedicated IPv4). The Ubuntu image does
+  **not** pre-load a firewall (ufw is installed but inactive), so 80/443 are reachable out of the box.
+  To lock it down, open inbound **22/80/443** (TCP) in Hostinger's hPanel firewall (or `ufw allow`),
+  and deny the rest — no host-side `iptables` dance needed.
 - A **domain/subdomain** with an **A record → the VM's public IP** (DNS-only / grey-cloud if behind
   Cloudflare, so Caddy's cert challenge and WebSockets work).
-- SSH access as a sudo user.
+- Root/SSH access (Hostinger provides root via SSH key or password in hPanel at create time).
 
 ## 1. Install software
 
 ```bash
 sudo apt update
-sudo apt install -y openjdk-21-jdk postgresql git
+sudo apt install -y openjdk-21-jdk postgresql git unzip
 # Node 22 (for the SPA build)
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt install -y nodejs
@@ -40,16 +42,29 @@ java -version   # confirm 21
 ## 2. Get the code and the map
 
 ```bash
-sudo useradd -r -m -d /opt/triplea-web -s /usr/sbin/nologin triplea || true
+# Service account — NO -m: let git create /opt/triplea-web (a pre-created home breaks the clone).
+sudo useradd -r -d /opt/triplea-web -s /usr/sbin/nologin triplea || true
+
+# Clone the fork and switch to the web-port branch (the default branch is `main`, which does NOT
+# contain the web-port code). Public repo → plain HTTPS, no credentials needed.
 sudo git clone https://github.com/augustdragon/triplea-web-port.git /opt/triplea-web
+sudo git -C /opt/triplea-web checkout web-port
+
+# Fetch the map (not vendored — map art is gitignored, matching the desktop). The games XML is what
+# CONTROL_PLANE_GAME_XML points at: /opt/triplea-web/maps/world_war_ii_pacific-master/map/games/…
+sudo mkdir -p /opt/triplea-web/maps
+curl -fsSL https://github.com/triplea-maps/world_war_ii_pacific/archive/refs/heads/master.zip -o /tmp/wwiipac.zip
+sudo unzip -q /tmp/wwiipac.zip -d /opt/triplea-web/maps    # → maps/world_war_ii_pacific-master/
+
 sudo chown -R triplea:triplea /opt/triplea-web
-# Put the map where CONTROL_PLANE_GAME_XML points (the games XML must be reachable on disk):
-#   /opt/triplea-web/maps/world_war_ii_pacific-master/map/games/ww2pac40_2nd_edition.xml
 ```
 
-(The map art — `*.png` under `units/`, `flags/`, `baseTiles/` — is gitignored, matching the desktop;
-the geometry export the client needs is regenerated/served separately. See the unit-icon roadmap
-item. For now the client renders unit counts, not icons, so only the game XML is required to *play*.)
+Notes:
+- For a build *byte-identical* to one you tested locally, `scp`/`rsync` your local map folder to
+  `/opt/triplea-web/maps/` instead of the `curl` above (the upstream `master` can drift).
+- The geometry export the client needs is regenerated/served separately (see the unit-icon roadmap
+  item). For now the client renders unit counts, not icons, so only the game XML is required to *play*.
+- `unzip` may need installing: `sudo apt install -y unzip`.
 
 ## 3. Build (on the box — JVM dists are arch-independent)
 

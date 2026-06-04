@@ -1,55 +1,91 @@
-# TripleA: Open Source Strategy Game Engine
+# TripleA Web Port
 
-![Game Board Screenshot](https://user-images.githubusercontent.com/12397753/36015523-a4e28a24-0d23-11e8-84c0-c4bd0ee19ce0.png)
+A **browser-based, server-authoritative port of [TripleA](https://github.com/triplea-game/triplea)** —
+the open-source Axis & Allies–style strategy engine. This fork replaces TripleA's desktop Java/Swing
+client and custom-socket networking with a **React single-page app over WebSocket + JSON** and a Java
+**control plane** for accounts, lobby, and per-game orchestration — while **reusing the `game-core`
+engine completely unchanged.**
 
-## About TripleA
+> **Status: work in progress / experimental.** The engine, web client, multiplayer control plane,
+> reconnect/async play, turn timers, and reclaimable AI takeover are working; a single-VM deployment
+> (Docker-free) is being stood up. This is a personal project, not an official TripleA release.
 
-TripleA is a fan-created, open-source strategy and board game engine that brings Axis and Allies-style gameplay to life. Launched in 2002, TripleA offers:
+## Why this exists
 
-- Community-created maps
-- Well-developed AI for single-player experiences
-- Active lobby for live multiplayer games
-- Diverse scenarios ranging from World War II to fantasy realms
+The TripleA *engine* is excellent — ~68K lines of faithful wargame rules and ~295 community maps. The
+*delivery* is the friction: it must be installed, multiplayer is self-serve or play-by-email, and it's
+desktop-bound. A&A games run for hours to days across time zones and devices, so this fork keeps the
+engine and replaces **only the transport and the client** — adding the operational niceties a modern
+board-game service provides: accounts, a lobby, **resumable asynchronous games**, host-set **turn
+timers**, and **AI cover for absent players**, all from a link in the browser with nothing to install.
 
-## Key Features
+Full rationale: [`docs/web-port/WHY-WEB-PORT.md`](docs/web-port/WHY-WEB-PORT.md).
 
-- **Historical Scenarios**: Recreate pivotal moments in history, such as:
-  - The Axis push towards Moscow in WWII
-  - Napoleon's march across Europe
-  - Rome's conquest of the Carthaginian Empire
-- **Fantasy Realms**: Dive into imaginary worlds, like Sauron's conquest of Middle Earth
-- **Customizable Gameplay**: Enjoy a wide variety of community-created maps and scenarios
+## What's the same vs. what's new
 
-![Europe Scenario](https://user-images.githubusercontent.com/12397753/132109225-71e6c02d-425e-4b8d-9537-7ac66baebbfd.jpeg)
+**Identical to desktop TripleA** (because `game-core` is reused unmodified — a hard rule): the rules,
+turn sequence, combat, politics, tech, economy, the AI opponents, the maps, the dice/RNG, and the
+victory conditions. A move that's legal on the desktop is legal here, adjudicated by the same code.
+This is fidelity, not a re-balance.
 
-![Middle Earth Scenario](https://user-images.githubusercontent.com/12397753/132109223-14a0aa2e-a950-4a5e-9937-3c4b52211cd9.jpeg)
+**New in the web port:**
 
-## Getting Started
+| Aspect | Desktop TripleA | Web port |
+|---|---|---|
+| Client | Java/Swing desktop app (installed) | **React in the browser**, over **WebSocket + JSON** |
+| Networking | Custom sockets / `@RemoteActionCode` RPC | `WebPlayer` / `WebDecisionBridge` over WebSocket+JSON; engine untouched |
+| Hosting | Self-hosted lobby/bots, or PBEM/PBF | **Control plane** (accounts, lobby, orchestration) + **one isolated JVM per active game** |
+| Identity | Lobby accounts | **OAuth login + invite allow-list**; each game seat is **cryptographically bound** to the signed-in account |
+| Game state | Local save files / PBEM mailbox | **Postgres-backed**, autosaved after every committed step; **resumes on reconnect** by re-spawning a game process from the latest save |
+| Absent players | Handled manually by the host | **Host-set turn timer → automatic, reclaimable AI takeover** |
+| Game end | Shown in-client | **Surfaced + recorded** (winner + reason); plus a **concede** option |
 
-### Download
-Get the latest version of TripleA from our official website:
-[Download TripleA](http://triplea-game.org/download/)
+Architecture in one line: the unchanged engine runs in a **per-game process**; a **control plane**
+authenticates players, runs the lobby, spawns/reaps games, and proxies each game's WebSocket so the
+whole app is a single HTTPS origin.
 
-### Community and Support
-- [Forums: Discussion, Questions & Help](https://forums.triplea-game.org/category/10/help-questions)
-- [Bug Tracker](https://github.com/triplea-game/triplea/issues/new)
+## Repository layout
 
-## Contributing
+This fork keeps the entire upstream TripleA tree (engine, maps tooling, build) and adds:
 
-We welcome contributions from the community! Whether you're a developer, designer, or enthusiast, there are many ways to help improve TripleA:
+- **`game-app/game-web-server/`** — the per-game container: hosts one `game-core` game and bridges it to the browser (`WebPlayer` / `WebDecisionBridge`).
+- **`game-app/game-control-plane/`** — accounts, lobby, orchestration (Javalin + JDBI + Postgres + Flyway).
+- **`web-client/`** — the React SPA (Vite + TypeScript).
+- **`deploy/`** — deployment artifacts (Caddyfile, systemd unit, env template).
+- **`docs/web-port/`** — fork docs (see below).
 
-- [How to Contribute to TripleA](/docs/contribute.md)
-- [Developer Setup Guide](/docs/development/README.md)
+## Documentation
+
+| Doc | What it covers |
+|-----|----------------|
+| [`docs/web-port/CHARTER.md`](docs/web-port/CHARTER.md) | Source of truth: what the fork is and the rules that govern it |
+| [`docs/web-port/WHY-WEB-PORT.md`](docs/web-port/WHY-WEB-PORT.md) | Why it exists, how it differs, the improvements, what's left |
+| [`docs/web-port/design.md`](docs/web-port/design.md) | Living architecture spec |
+| [`docs/web-port/DEPLOY.md`](docs/web-port/DEPLOY.md) | Single-VM, Docker-free deployment runbook |
+| [`tasks/todo.md`](tasks/todo.md) | Current milestones and status |
+
+The root [`AGENTS.md`](AGENTS.md) and nested `AGENTS.md` files document the underlying engine and
+Java/build conventions; they predate the fork but remain accurate for the engine.
+
+## Relationship to upstream TripleA
+
+This is an independent fork of [`triplea-game/triplea`](https://github.com/triplea-game/triplea),
+created to explore a browser-hosted delivery of the engine. **All credit for the game engine, rules,
+AI, and maps belongs to the TripleA project and its community.** This fork does not modify the engine
+and is not affiliated with or endorsed by the upstream project. For the official desktop game, see
+[triplea-game.org](http://triplea-game.org/download/) and the
+[upstream repository](https://github.com/triplea-game/triplea).
 
 ## License
 
-TripleA is open-source software licensed under the GNU General Public License v3.0.
-
-[![TripleA license](https://img.shields.io/github/license/triplea-game/triplea.svg?style=flat-square)](https://github.com/triplea-game/triplea/blob/master/LICENSE)
+Like upstream TripleA, this project is licensed under the **GNU General Public License v3.0** — see
+[`LICENSE`](LICENSE).
 
 ### Additional Permissions
 
-Under GNU GPL version 3 section 7, we grant additional permission to convey the resulting work when combining or linking the Program with the following libraries (or modified versions of these libraries):
+Under GNU GPL version 3 section 7, we grant additional permission to convey the resulting work when
+combining or linking the Program with the following libraries (or modified versions of these
+libraries):
 
 | Library | Group ID | Artifact ID | SPDX License ID |
 |:--------|:---------|:------------|:----------------|
@@ -57,10 +93,5 @@ Under GNU GPL version 3 section 7, we grant additional permission to convey the 
 
 ## Acknowledgments
 
-### YourKit Profiler
-
-[![YourKit logo](https://www.yourkit.com/images/yklogo.png)](https://www.yourkit.com)
-
-YourKit supports open source projects with innovative and intelligent tools for monitoring and profiling Java and .NET applications. YourKit is the creator of [YourKit Java Profiler](https://www.yourkit.com/java/profiler/), [YourKit .NET Profiler](https://www.yourkit.com/.net/profiler/), and [YourKit YouMonitor](https://www.yourkit.com/youmonitor/).
-
-We're grateful to YourKit for granting the TripleA development project an open source license for YourKit Java Profiler.
+The [TripleA project](https://github.com/triplea-game/triplea) and its contributors and map-makers,
+whose engine and content make this port possible.
