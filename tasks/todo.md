@@ -532,6 +532,22 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
         AI-only `--max-rounds=1` → `gameOver reason=ROUND_CAP`; a simulated `finished` report persisted
         `VICTORY`/winner and `/connect` returned the end-summary. VICTORY path shares the same code (manual browser
         check pending — hard to script a real win). (Original design notes below retained for reference.)
+  - [x] **Host-side victory detection** ✅ (built + verified 2026-06-04; **corrects a wrong assumption above**). User
+        testing exposed it: a met victory condition (Pacific 1940 2e, Japan ≥6-of-8 trigger VCs + Japan) **never ended
+        the game** — it ran to the round cap with no winner. Root-caused (full trail in `docs/web-port/VICTORY-FIX-PLAN.md`):
+        the engine's `EndRoundDelegate` *evaluates* the trigger condition as satisfied, but `TriggerAttachment.triggerVictory`
+        only calls `signalGameOver` `if (victoryMessage != null)`, and that message is resolved via the bridge's
+        `ResourceLoader` — which our host sets **empty** (`WebLaunchAction`), so the message is null and victory silently
+        never fires. (So the earlier "victory DOES halt our loop" note was wrong — it was never tested with a real win;
+        reproduced in pure `game-core` via `TriggeredVictoryFiringTest`.) **Fix (Fix A, engine unmodified):** detect
+        victory ourselves in the host. `HostVictoryDetector` (run each round boundary in `GameController.run()`) unions
+        **direct-mode** winners (`getEndRoundDelegate().getWinners()` — economic/VP/victory-cities/capital) with
+        **triggered-mode** winners found by replaying the engine's own generic `collectForAllTriggersMatching` +
+        `collectTestsForAllTriggers` via a read-only proxy bridge (`GameDataDelegateBridge`); winners = beneficiary's
+        alliance; **map-general (no hardcoded territories)** so Europe/Pacific/Global 1940 all work; **fail-closed**.
+        Verified: `HostVictoryDetectorTest` + the engine-constraint test pass; an all-AI Pacific game now ends
+        `VICTORY at round 14 — winners: [Japanese]`. **Follow-up:** uncap conceded (formerly-human) games so they have
+        the rounds to *reach* a win (deferred concede-recap fix).
         ~~The engine
         already DETECTS every end condition in `EndRoundDelegate` (VP, victory cities, economic, capital-loss,
         triggered victories), records the `winners`, and writes a victory message into history via `signalGameOver(...)`.

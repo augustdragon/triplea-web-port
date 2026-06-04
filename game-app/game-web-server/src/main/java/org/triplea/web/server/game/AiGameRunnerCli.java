@@ -1,13 +1,16 @@
 package org.triplea.web.server.game;
 
+import games.strategy.engine.data.GamePlayer;
 import games.strategy.engine.framework.ServerGame;
 import games.strategy.engine.framework.startup.ui.PlayerTypes;
 import games.strategy.triplea.ui.display.HeadlessDisplay;
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * Runs an AI game in-process and prints step progression — a smoke check that the web server can
- * drive the engine. Usage: {@code AiGameRunnerCli <gameXml> [maxRounds]}.
+ * drive the engine, including host-side victory detection. Usage: {@code AiGameRunnerCli <gameXml>
+ * [maxRounds]}.
  */
 public final class AiGameRunnerCli {
   private static final int STEP_SAFETY_LIMIT = 5000;
@@ -28,6 +31,8 @@ public final class AiGameRunnerCli {
     game.setStopGameOnDelegateExecutionStop(true);
 
     int steps = 0;
+    int lastRound = 0;
+    List<String> winners = List.of();
     while (!game.isGameOver()
         && game.getData().getSequence().getRound() <= maxRounds
         && steps < STEP_SAFETY_LIMIT) {
@@ -35,11 +40,24 @@ public final class AiGameRunnerCli {
       System.out.printf("round=%d step=%s%n", sequence.getRound(), sequence.getStep().getName());
       game.runNextStep();
       steps++;
+      // At each round boundary, run the same host-side victory detection the real game loop uses.
+      final int round = game.getData().getSequence().getRound();
+      if (round != lastRound) {
+        lastRound = round;
+        winners =
+            HostVictoryDetector.detectWinners(game.getData()).stream()
+                .map(GamePlayer::getName)
+                .toList();
+        if (!winners.isEmpty()) {
+          System.out.println("VICTORY detected at round " + round + " — winners: " + winners);
+          break;
+        }
+      }
     }
 
     System.out.printf(
-        "Done. gameOver=%s round=%d steps=%d%n",
-        game.isGameOver(), game.getData().getSequence().getRound(), steps);
+        "Done. gameOver=%s winners=%s round=%d steps=%d%n",
+        game.isGameOver(), winners, game.getData().getSequence().getRound(), steps);
     game.stopGame();
   }
 }

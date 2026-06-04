@@ -771,6 +771,7 @@ public final class GameController {
         reporter.gameStarted();
         publishStep(); // initial state — skipped if we are starting on a silent setup step
         int steps = 0;
+        int lastVictoryCheckRound = 0;
         while (alive
             && endReason == null
             && !game.isGameOver()
@@ -786,6 +787,23 @@ public final class GameController {
           }
           publishStep();
           steps++;
+          // Host-side victory detection: the engine's triggered-victory firing is gated on a UI
+          // notification resource our headless host doesn't provide, so it silently no-ops (the
+          // condition IS evaluated as met — see HostVictoryDetector / VICTORY-FIX-PLAN.md). Detect it
+          // ourselves at each round boundary (the engine's own victory cadence) and end the game.
+          final int currentRound = game.getData().getSequence().getRound();
+          if (currentRound != lastVictoryCheckRound) {
+            lastVictoryCheckRound = currentRound;
+            final java.util.List<String> detected =
+                HostVictoryDetector.detectWinners(game.getData()).stream()
+                    .map(games.strategy.engine.data.GamePlayer::getName)
+                    .toList();
+            if (!detected.isEmpty()) {
+              winners = detected;
+              endReason = GameEndReason.VICTORY;
+              break;
+            }
+          }
           Thread.sleep(stepDelayMs);
         }
         // Classify a natural end (a reset/resign leaves alive=false and endReason null → no
