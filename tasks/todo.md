@@ -594,6 +594,17 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
         returns the seat → reclaim restores it human; `Unlimited` → no takeover. **v1 is lazy** (enforced on container
         liveness/boot). Follow-ups: reserve time-bank (Fischer/BGA), vacation/quiet-hours, a **proactive CP sweep**
         that wakes idle overdue games to advance them (pairs with Web Push), and a client **countdown** display.
+  - [x] **BUGFIX (2026-06-04): human seats instantly surrendered to AI on turn one.** Live on the Hostinger box: a
+        human-claimed seat (correct in the DB) was played by AI the whole game, running unattended to a victory.
+        Root cause was NOT the seat handoff but a JDBC `wasNull()` ordering bug in `LobbyDao.seatAssignments`:
+        `rs.wasNull()` for `deadline_epoch` was read **after** `getString("display_name")`, so for a human seat
+        (non-null display name) a NULL `turn_deadline_at` mis-mapped to `0` (epoch 1970). The container loaded that as
+        `bootDeadlines[seat]=0` → an already-expired turn → instant `doSeatToAi(seat, false)` on the first prompt. The
+        `"AI takeover"` log is `INFO`, suppressed by game-core's `root level="warn"`, which hid the evidence for hours.
+        Fix: extracted `LobbyDao.mapSeatAssignment`, reading each nullable numeric's `wasNull()` immediately after its
+        getter; added `LobbyDaoSeatMappingTest` (Mockito ResultSet that models JDBC's last-read `wasNull()` — proven to
+        fail on the old ordering). Read-path only; no data migration. **Follow-up: raise the game container's log level
+        so an `AI takeover` is never invisible.** **Redeploy needed** for the box (control plane rebuild + restart).
 - [ ] **Exit check:** a private group plays a full Pacific 1940 game over the internet, browser-only, resumable
       across days, with an abandoned seat caretaken by AI, **ending with a winner announced**.
 - Related: 3g hotseat (pass-and-play on one machine) shares the seat-routing mechanism — falls out of P4.1.

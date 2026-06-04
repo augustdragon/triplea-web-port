@@ -1,5 +1,7 @@
 package org.triplea.web.controlplane.lobby;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -273,19 +275,27 @@ public final class LobbyDao {
                         + " FROM seats s LEFT JOIN users u ON u.id = s.user_id"
                         + " WHERE s.game_id = :gid ORDER BY s.seat_order")
                 .bind("gid", gameId)
-                .map(
-                    (rs, ctx) -> {
-                      final long uid = rs.getLong("user_id");
-                      final Long userId = rs.wasNull() ? null : uid;
-                      final long deadline = rs.getLong("deadline_epoch");
-                      return new SeatAssignment(
-                          rs.getString("power_name"),
-                          rs.getString("kind"),
-                          userId,
-                          rs.getString("display_name"),
-                          rs.wasNull() ? null : deadline);
-                    })
+                .map((rs, ctx) -> mapSeatAssignment(rs))
                 .list());
+  }
+
+  /**
+   * Map one seat row. Each nullable numeric's {@link ResultSet#wasNull()} MUST be read immediately
+   * after its own getter — {@code wasNull()} reflects only the most recently read column. Reading
+   * another column (e.g. {@code display_name}) between {@code getLong("deadline_epoch")} and its
+   * null-check silently mis-reads a NULL deadline as 0 (epoch 1970); a game container then treats
+   * that as an already-expired turn and instantly hands the human seat to AI. So {@code
+   * deadline_epoch} is read last, with its {@code wasNull()} immediately after.
+   */
+  static SeatAssignment mapSeatAssignment(final ResultSet rs) throws SQLException {
+    final long uid = rs.getLong("user_id");
+    final Long userId = rs.wasNull() ? null : uid;
+    final String powerName = rs.getString("power_name");
+    final String kind = rs.getString("kind");
+    final String displayName = rs.getString("display_name");
+    final long deadline = rs.getLong("deadline_epoch");
+    final Long turnDeadlineEpoch = rs.wasNull() ? null : deadline;
+    return new SeatAssignment(powerName, kind, userId, displayName, turnDeadlineEpoch);
   }
 
   /** The power the user holds in this game (first by turn order), if any. */
