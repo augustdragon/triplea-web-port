@@ -1,0 +1,24 @@
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!--
+      Logging config for the per-game container (the headless engine host). We select this file
+      explicitly via -Dlogback.configurationFile (see applicationDefaultJvmArgs in build.gradle.kts)
+      because the engine (game-core) ships its own logback.xml with root=WARN, which also silenced
+      THIS service's lifecycle INFO logs — game launch, seat assignment, and the turn-deadline AI
+      takeover. A human seat once surrendered to AI in production with no journal trace, because the
+      "AI takeover" line is INFO and was swallowed by the engine's WARN root.
+
+      So: the web-port host (org.triplea.web.server.*) logs at INFO; the engine stays at WARN to
+      avoid flooding the journal with per-step game noise.
+    -->
+    <logger name="org.triplea.web.server" level="info"/>
+
+    <root level="warn">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

@@ -603,8 +603,15 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
         `"AI takeover"` log is `INFO`, suppressed by game-core's `root level="warn"`, which hid the evidence for hours.
         Fix: extracted `LobbyDao.mapSeatAssignment`, reading each nullable numeric's `wasNull()` immediately after its
         getter; added `LobbyDaoSeatMappingTest` (Mockito ResultSet that models JDBC's last-read `wasNull()` — proven to
-        fail on the old ordering). Read-path only; no data migration. **Follow-up: raise the game container's log level
-        so an `AI takeover` is never invisible.** **Redeploy needed** for the box (control plane rebuild + restart).
+        fail on the old ordering). Read-path only; no data migration. **Redeploy needed** for the box (control plane
+        rebuild + restart).
+  - [x] **Observability (2026-06-04): game container now logs at INFO.** The `AI takeover` line (and `Game launched`,
+        seat-assignment, `Playable … N assigned seats`) is `INFO` and was swallowed by game-core's `root level="warn"`,
+        hiding the takeover for hours. Fix without touching the engine: ship `game-web-server-logback.xml` (our package
+        `org.triplea.web.server` at INFO, engine stays WARN to avoid per-step flooding) and select it via
+        `-Dlogback.configurationFile` baked into `applicationDefaultJvmArgs`. Verified: launcher bakes the arg, config
+        is in the jar, and logback debug shows `org.triplea.web.server → INFO, ROOT → WARN`. **Redeploy** (game-web-server
+        installDist) for the box to pick it up.
 - [ ] **Exit check:** a private group plays a full Pacific 1940 game over the internet, browser-only, resumable
       across days, with an abandoned seat caretaken by AI, **ending with a winner announced**.
 - Related: 3g hotseat (pass-and-play on one machine) shares the seat-routing mechanism — falls out of P4.1.

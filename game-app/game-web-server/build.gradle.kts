@@ -9,6 +9,11 @@ description = "Web port backend: map-asset conversion and the headless engine ho
 // container's entrypoint is the multiplayer host; the other mains stay as the JavaExec tasks below.
 application {
     mainClass.set("org.triplea.web.server.game.WebPlayableServer")
+    // Select this module's logback config (resolved as a classpath resource from its jar). The
+    // engine ships logback.xml with root=WARN, which also hid this host's lifecycle INFO — including
+    // the turn-deadline "AI takeover" line, which once made a wrongly-surrendered seat invisible in
+    // the journal. game-web-server-logback.xml keeps the engine at WARN but logs our host at INFO.
+    applicationDefaultJvmArgs = listOf("-Dlogback.configurationFile=game-web-server-logback.xml")
 }
 
 dependencies {
