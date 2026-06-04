@@ -789,7 +789,8 @@ public final class GameController {
           steps++;
           // Host-side victory detection: the engine's triggered-victory firing is gated on a UI
           // notification resource our headless host doesn't provide, so it silently no-ops (the
-          // condition IS evaluated as met — see HostVictoryDetector / VICTORY-FIX-PLAN.md). Detect it
+          // condition IS evaluated as met — see HostVictoryDetector / VICTORY-FIX-PLAN.md). Detect
+          // it
           // ourselves at each round boundary (the engine's own victory cadence) and end the game.
           final int currentRound = game.getData().getSequence().getRound();
           if (currentRound != lastVictoryCheckRound) {

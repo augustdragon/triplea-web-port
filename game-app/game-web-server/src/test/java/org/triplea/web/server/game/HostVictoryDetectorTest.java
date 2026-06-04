@@ -31,9 +31,11 @@ class HostVictoryDetectorTest {
   @Test
   void detectsTriggeredAlliedOwnershipVictory() {
     final GamePlayer germans = germans(gameData);
-    // conditionAttachmentAxisVictory1: German alliance owns {United Kingdom, Russia, Germany, Japan}.
+    // conditionAttachmentAxisVictory1: German alliance owns {United Kingdom, Russia, Germany,
+    // Japan}.
     for (final String territoryName : List.of("United Kingdom", "Russia", "Germany", "Japan")) {
-      gameData.performChange(ChangeFactory.changeOwner(territory(territoryName, gameData), germans));
+      gameData.performChange(
+          ChangeFactory.changeOwner(territory(territoryName, gameData), germans));
     }
 
     final List<GamePlayer> winners = HostVictoryDetector.detectWinners(gameData);

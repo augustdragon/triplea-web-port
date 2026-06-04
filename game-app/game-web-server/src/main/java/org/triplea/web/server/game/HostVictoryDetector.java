@@ -16,8 +16,8 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Detects an end-of-game victory from the live {@link GameData}, so the web host can end the game
  * itself. This exists because the engine's triggered-victory firing is gated on a UI notification
- * resource our headless host doesn't provide (see docs/web-port/VICTORY-FIX-PLAN.md); the *condition*
- * evaluation is correct, only the *acting* is gated.
+ * resource our headless host doesn't provide (see docs/web-port/VICTORY-FIX-PLAN.md); the
+ * *condition* evaluation is correct, only the *acting* is gated.
  *
  * <p>Map-general: it reads whatever victory the loaded map defines (no hardcoded territories/sides)
  * and reuses the engine's own evaluation. Fail-closed: anything that can't be evaluated headless is
@@ -41,8 +41,8 @@ final class HostVictoryDetector {
   /**
    * Victory modes the engine signals directly in {@code EndRoundDelegate.start()} (economic, VP,
    * victory-cities, capital capture) — these are not resource-loader-gated, so the delegate already
-   * recorded the winners. Reading them here also covers the case where the engine signalled game-over
-   * but our custom step loop didn't auto-stop.
+   * recorded the winners. Reading them here also covers the case where the engine signalled
+   * game-over but our custom step loop didn't auto-stop.
    */
   private static Set<GamePlayer> directModeWinners(final GameData data) {
     try {
@@ -90,9 +90,9 @@ final class HostVictoryDetector {
   }
 
   /**
-   * Winners for a satisfied victory trigger = the alliance of its beneficiary (the player the trigger
-   * is attached to). {@code TriggerAttachment.getPlayers()} is private, so the alliance is used — it's
-   * map-general and sufficient for surfacing which side won.
+   * Winners for a satisfied victory trigger = the alliance of its beneficiary (the player the
+   * trigger is attached to). {@code TriggerAttachment.getPlayers()} is private, so the alliance is
+   * used — it's map-general and sufficient for surfacing which side won.
    */
   private static Set<GamePlayer> beneficiaryAlliance(
       final GameData data, final TriggerAttachment trigger) {

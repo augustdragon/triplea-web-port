@@ -6,20 +6,21 @@ import java.lang.reflect.Proxy;
 import java.util.Optional;
 
 /**
- * Factory for a read-only {@link IDelegateBridge} that exposes only {@link IDelegateBridge#getData()}
- * (and an intentionally empty {@link IDelegateBridge#getResourceLoader()}), throwing {@link
- * UnsupportedOperationException} on everything else.
+ * Factory for a read-only {@link IDelegateBridge} that exposes only {@link
+ * IDelegateBridge#getData()} (and an intentionally empty {@link
+ * IDelegateBridge#getResourceLoader()}), throwing {@link UnsupportedOperationException} on
+ * everything else.
  *
  * <p>Used by {@link HostVictoryDetector} to reuse the engine's own condition evaluator ({@code
  * TriggerAttachment.collectTestsForAllTriggers}) headless: for ownership/VP victory conditions that
  * evaluator only reads {@code bridge.getData()}. If a condition ever needs more (e.g. a dice {@code
- * chance} condition, which victory triggers don't use), the thrown exception is caught by the detector
- * and the trigger is treated as unevaluable — fail-closed, never a spurious win.
+ * chance} condition, which victory triggers don't use), the thrown exception is caught by the
+ * detector and the trigger is treated as unevaluable — fail-closed, never a spurious win.
  *
- * <p>Implemented as a dynamic proxy on purpose: {@code IDelegateBridge.sendMessage(WebSocketMessage)}
- * references a type from an unrelated lobby module, and a directly-implemented class would force the
- * game container to depend on it just to throw. The proxy dispatches by method name and never names
- * that type.
+ * <p>Implemented as a dynamic proxy on purpose: {@code
+ * IDelegateBridge.sendMessage(WebSocketMessage)} references a type from an unrelated lobby module,
+ * and a directly-implemented class would force the game container to depend on it just to throw.
+ * The proxy dispatches by method name and never names that type.
  *
  * <p>{@code getResourceLoader()} returns empty deliberately — we are NOT taking the engine's
  * notification-message victory path (the one a headless host can't satisfy); we detect and end the
