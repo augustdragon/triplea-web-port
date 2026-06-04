@@ -1,0 +1,24 @@
+# Caddy config for the single-origin web-port deployment.
+#
+# Caddy is the only thing on ports 80/443. It terminates TLS (automatic Let's Encrypt cert for the
+# domain), serves the built React SPA as static files, and reverse-proxies the API + both WebSockets
+# to the control plane on :7000. The per-game WebSocket is `/game/*/ws`, which the control plane
+# proxies on to each game's internal localhost port — so no game port is ever exposed.
+#
+# Set DOMAIN and SPA_ROOT in the environment (or edit them in place), e.g. via Caddy's env file:
+#   DOMAIN=triplea.example.com
+#   SPA_ROOT=/opt/triplea-web/web-client/dist
+
+{$DOMAIN} {
+	encode gzip
+
+	# API + lobby WS + per-game WS proxy → the control plane. WebSocket upgrades pass through.
+	@backend path /api/* /ws/lobby /game/*/ws
+	reverse_proxy @backend localhost:7000
+
+	# Everything else is the single-page app; unknown routes fall back to index.html so client-side
+	# routing (/login, /lobby, /game/:id) works on a hard refresh.
+	root * {$SPA_ROOT}
+	try_files {path} /index.html
+	file_server
+}

@@ -1,0 +1,27 @@
+# systemd unit for the web-port control plane (Docker-free).
+# Install to /etc/systemd/system/triplea-control-plane.service, then:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now triplea-control-plane
+#
+# The control plane spawns one child JVM per active game (the process launcher), so the child games
+# are in this service's cgroup; stopping the service stops the control plane (the child games keep
+# running as orphans and are picked up again on the next connect, or reap them with the app).
+
+[Unit]
+Description=TripleA web-port control plane
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=triplea
+WorkingDirectory=/opt/triplea-web
+EnvironmentFile=/etc/triplea-web/control-plane.env
+ExecStart=/opt/triplea-web/game-app/game-control-plane/build/install/game-control-plane/bin/game-control-plane
+Restart=on-failure
+RestartSec=5
+# The launcher script finds `java` on PATH (apt openjdk-21 installs it via update-alternatives). If
+# you installed a JDK elsewhere, set JAVA_HOME here, e.g.:
+#   Environment=JAVA_HOME=/usr/lib/jvm/java-21-openjdk-arm64
+
+[Install]
+WantedBy=multi-user.target

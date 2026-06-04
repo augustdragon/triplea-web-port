@@ -495,13 +495,24 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
         The `IdleReaper` now **won't reap a game with a connected player** (`idleGameIds` excludes it). Foundation for
         "your turn" Web Push (target only *absent* players). Verified e2e (`/tmp/pr-verify.mjs`): both seats →
         `connected=true`; a disconnect flips that seat to `false` while the other stays connected.
-  - [ ] **Deployment + "your turn" Web Push (remaining Phase-4 tail).** Deployment: a control-plane Dockerfile + a full
-        Docker Compose (control plane + Postgres + on-demand game containers), serve the built SPA, **route the per-game
-        WS through the control plane** for a single `wss://` origin/TLS (containers bind random `ws://` ports today), and
-        wire **real Google/Discord OAuth** (pac4j — dev-login is prod-disabled). Needs a VM, a domain, and registered
-        OAuth apps. Web Push (VAPID): service worker + push subscription + send on a turn transition to the *disconnected*
-        seat-holder (uses presence above + the `turn` report's current power → `seats.user_id`). Push needs HTTPS, so it
-        follows deployment.
+  - [x] **Deployment v1 (single VM, Docker-free, single HTTPS origin)** ✅ (built + verified 2026-06-03). Scoped to the
+        always-on Oracle Always-Free ARM box + dev-login (allow-list) over HTTPS — the lighter path than the original
+        Docker-Compose idea. Pieces: **`ProcessGameLauncher`** (`CONTROL_PLANE_LAUNCHER=process`) spawns one child JVM
+        per game (no Docker daemon/image; handle=PID; `reap`=`destroyForcibly`; `-Xmx` cap via `GAME_WEB_SERVER_OPTS` is
+        the resource knob) — default stays `docker` so dev/e2e harnesses are unchanged. **Single origin**: the per-game WS
+        is now a same-origin path (`/game/{id}/ws`); `GameWsProxy` (JDK `java.net.http.WebSocket`, no new dep) pipes
+        browser↔game's internal `ws://localhost:<port>` with session auth + close-code relay (4502 upstream-unreachable
+        vs the game's 4401), so **no game port faces the internet**. Caddy (`deploy/Caddyfile`) terminates TLS, serves the
+        SPA, reverse-proxies `/api/*` `/ws/lobby` `/game/*/ws` → `:7000`. Artifacts: `deploy/triplea-control-plane.service`,
+        `deploy/control-plane.env.example`, runbook `docs/web-port/DEPLOY.md`. Verified e2e via `/tmp/px-build-run.sh`:
+        **both** launchers pass the full lobby flow through the proxy pipe (auth→roster→running→state); process mode
+        confirmed 1 child JVM, 0 Docker containers, heap respects `-Xmx`. On-box manual run is the user's step.
+  - [ ] **Real Google/Discord OAuth (Phase-4 tail).** Switch `CONTROL_PLANE_PROFILE=prod` + `DEV_LOGIN=false`; register
+        OAuth apps; set client id/secret + callback (the `LoginService` seam is provider-agnostic; prod profile marks
+        cookies Secure). Replaces dev-login for a public audience.
+  - [ ] **"Your turn" Web Push (Phase-4 tail, now unblocked).** VAPID: service worker + push subscription + send on a
+        turn transition to the *disconnected* seat-holder (uses presence above + the `turn` report's current power →
+        `seats.user_id`). Needed HTTPS — now satisfied by the deploy above.
   - [x] **End-game: victory surfacing, end-reason, no round cap for human games** ✅ (built + verified 2026-06-03).
         `GameEndReason` recorded on loop exit; `{type:"gameOver", reason, winners, message}` WS envelope (cached +
         re-sent on connect) + a client `GameOverScreen` that halts the reconnect loop; reason + winner persisted to
