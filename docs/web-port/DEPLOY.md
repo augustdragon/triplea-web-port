@@ -178,11 +178,18 @@ the proxy and the SPA in mutually-exclusive `handle` blocks keeps `try_files` sc
 
 ## 9. Updating
 
+**One command:** `sudo /opt/triplea-web/deploy/redeploy.sh` — pulls `web-port`, rebuilds the backend
+(control plane + game container), rebuilds the SPA only if `web-client/` changed (re-exporting
+`geometry.json`, which `vite build` wipes from `dist/`), restarts the service, and prints the deployed
+commit. Pass `--with-web` to force an SPA rebuild. The script self-updates if it changed in the pull.
+
+The equivalent manual steps:
+
 ```bash
 cd /opt/triplea-web
 sudo -u triplea git pull
 sudo -u triplea ./gradlew :game-control-plane:installDist :game-web-server:installDist
-sudo -u triplea npm --prefix web-client run build
+sudo -u triplea npm --prefix web-client run build   # only if the web client changed
 sudo systemctl restart triplea-control-plane
 # Caddy only needs a restart if the Caddyfile changed.
 ```
