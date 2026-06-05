@@ -19,12 +19,29 @@ transport and client are new.
 
 ## Hard rules
 
-1. **The engine stays unmodified.** Adapt it only at existing seams (`Player`, `IDisplay`,
-   `LaunchAction`, `GameDataManager`/`GameData.toBytes()`). If a `game-core` change seems necessary,
-   **STOP and reconsider** — respect the save-game serialization and `@RemoteActionCode`
-   constraints documented in the root `AGENTS.md`. (Note: the web port's own networking does **not**
-   travel over the `@RemoteActionCode` path; it uses `WebPlayer`/`WebDecisionBridge` over
-   WebSocket+JSON. That constraint matters here only as a "don't modify game-core" guardrail.)
+1. **Prefer to leave the engine unmodified — change it deliberately, never casually.** The default
+   is to adapt `game-core` at its existing seams (`Player`, `IDisplay`, `LaunchAction`,
+   `GameDataManager`/`GameData.toBytes()`) and to keep new browser/control-plane concerns in the web
+   modules. This is a **strong default, not a prohibition**: modifying `game-core` is allowed when it
+   is genuinely the right call — but it is a considered decision that weighs real costs, not a reflex.
+
+   Before changing `game-core`, weigh:
+   - **Upstream mergeability (the big one).** Every engine edit diverges from
+     `triplea-game/triplea` and erodes our ability to pull upstream rule/map fixes. Prefer changes
+     that could be contributed *upstream* over fork-only divergence.
+   - **Save-game serialization.** `GameData` and its object graph use Java serialization for saves;
+     renaming, moving, or removing serialized fields/classes can break existing saves. Treat the
+     on-disk format as a compatibility contract.
+   - **`@RemoteActionCode` / remote contracts.** `IDisplay`, `IDelegateBridge`, and peers carry the
+     **legacy networked-desktop-play** remote API (this is upstream code, not web-port leakage). The
+     web port does **not** use that path — it uses `WebPlayer`/`WebDecisionBridge` over
+     WebSocket+JSON — so touching those interfaces is risk without web-port benefit. Avoid unless the
+     desktop/remote path itself is the goal.
+
+   Rule of thumb: refactor **freely** in the web modules (`:game-web-server`, `:game-control-plane`,
+   `web-client/`); in `game-core`, prefer seams and adapters and reserve direct edits for cases where
+   the benefit clearly outweighs the divergence cost. When unsure, surface the trade-off rather than
+   silently editing the engine.
 
 2. **The web port is the active workstream.** The desktop client (`:game-headed`) still builds, but
    it is not the focus. New work targets `:game-web-server` (game container), `:game-control-plane`
@@ -54,3 +71,41 @@ transport and client are new.
   For local auth: also `CONTROL_PLANE_DEV_LOGIN=true` and `CONTROL_PLANE_ALLOWLIST="google:<subject>,…"`,
   then `POST /api/dev-login {"subject":"…"}` to get a session cookie. Run with `./gradlew :game-control-plane:run`.
   (`profile=prod` forbids dev-login and marks cookies Secure; startup fails fast if misconfigured.)
+
+## Decision log (ADR-style)
+
+Material changes to the rules above are recorded here with their reasoning, so the governance isn't
+a set of unexplained commands. Newest first.
+
+### ADR-001 — Hard Rule #1: engine modification goes from *prohibited* to *strong default* (2026-06-04)
+
+**Status:** Accepted.
+
+**Context.** Hard Rule #1 originally **banned** any `game-core` change ("STOP and reconsider"). A
+refactoring assessment then proposed cleaning up "web-port concerns that crossed into engine
+interfaces" — chiefly `IDelegateBridge.sendMessage(WebSocketMessage)` and the `WebSocketMessage`
+DTOs nested in `IDisplay`. Investigation found two things:
+- Those web-socket references are **upstream legacy networking**, not web-port leakage. `git blame`
+  attributes them to the upstream maintainer (Dan Van Atta, 2020 and 2022) — years before this fork.
+  They are part of TripleA's own networked-desktop-play remote API, which the web port does not use.
+- The absolute ban was **self-imposed, not required**. The GPLv3 license explicitly grants the right
+  to modify the engine; "don't touch `game-core`" was our strategy, not a legal or technical law.
+
+So the real reason to be cautious with `game-core` is **strategic** (upstream mergeability) plus two
+genuine **technical hazards** (save-game serialization; the `@RemoteActionCode` remote contracts) —
+not an absolute rule. An unconditional STOP both overstated the constraint and, ironically, pointed
+refactoring energy at upstream legacy code we have no reason to touch.
+
+**Decision.** Downgrade "the engine stays unmodified" to a **strong default with an informed
+exception**: `game-core` changes are permitted as deliberate decisions that weigh upstream
+divergence, serialization compatibility, and the remote contracts. Web-module refactoring
+(`:game-web-server`, `:game-control-plane`, `web-client/`) is explicitly free.
+
+**Consequences.**
+- We can now *consider* engine changes on their merits instead of reflexively stopping — "handcuffs
+  off while we think," with the costs kept visible rather than hidden behind a ban.
+- The genuine hazards (mergeability, save format, remote contracts) are now stated as costs to weigh,
+  so relaxing the rule doesn't lose the protections that actually mattered.
+- Near-term refactoring nonetheless stays **in the web modules** (decompose `GameController` and
+  `WebPlayer`; add a guardrail that blocks web-port types from leaking *into* `game-core`). Touching
+  the engine remains available but unused for now — see the refactor plan in `docs/web-port/`.
