@@ -668,5 +668,23 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
 - [ ] **Exit check:** a second, structurally different map plays end-to-end
 
 ## Notes / decisions
-- Engine stays unmodified — if a `game-core` change seems necessary, STOP and reconsider (respect save-game + `@RemoteActionCode` compatibility rules in root `AGENTS.md`).
+- **Engine modification is now a strong default, not a ban** (Charter ADR-001, 2026-06-04). `game-core`
+  changes are permitted as deliberate decisions weighing upstream mergeability, save-game serialization,
+  and the `@RemoteActionCode` contracts; web-module refactoring is free. (The root `AGENTS.md` still says
+  "unmodified" — the charter takes precedence.)
 - Pacific 1940 is a feature-heavy first map (naval/scramble/kamikaze); Phase 3 is larger than it would be for a simpler map. Accepted deliberately.
+
+## Parked threads (after 2026-06-04 session)
+Tonight: victory detection confirmed live (Japanese VICTORY r15); **human-play bug fixed** (`wasNull`
+ordering in `LobbyDao` poisoned human seats' turn deadline to 0 → instant AI takeover); container now
+logs lifecycle at INFO; `deploy/redeploy.sh` added; serialization-seam regression tests added; charter
+relaxed (ADR-001) + `docs/web-port/REFACTOR-PLAN.md` written. Picked up next, in priority order:
+- [ ] **Refactor plan** (`docs/web-port/REFACTOR-PLAN.md`) — web-module decomposition. Start with the
+      guardrail (Item 3), then `SaveStoreFacade` (gentlest `GameController` cut), then the rest. Behavior-
+      preserving, one extraction per commit. *(User is weighing this while testing.)*
+- [ ] **Structured PG audit events** — a `game_events` table (seat_bound / launched / ai_takeover /
+      game_over) written transactionally; smoke + Testcontainers tests assert against it. Chosen as the
+      behavioral "seat holds" guard (the lobby path the e2e doesn't cover). Establishes the control-plane
+      Testcontainers harness too. Held when we pivoted to the refactoring review.
+- [ ] **Uncap conceded (formerly-human) games** so an all-AI continuation has the rounds to *reach* a
+      victory (today it re-caps at `--max-rounds`). Original deferred follow-up from the victory work.
