@@ -9,9 +9,9 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Sends a "your turn" Web Push when a game advances to a disconnected human seat. Wired to the
- * turn-transition report (fired once per change of the active power, not per phase). Work happens on
- * a background executor so a slow/unreachable push service never blocks the reporting request, and a
- * subscription the push service reports as gone is pruned.
+ * turn-transition report (fired once per change of the active power, not per phase). Work happens
+ * on a background executor so a slow/unreachable push service never blocks the reporting request,
+ * and a subscription the push service reports as gone is pruned.
  */
 @Slf4j
 public final class TurnNotifier {
@@ -29,7 +29,9 @@ public final class TurnNotifier {
     this.executor = executor;
   }
 
-  /** It is now {@code power}'s turn ({@code phase}) in {@code gameId} — alert them if they're away. */
+  /**
+   * It is now {@code power}'s turn ({@code phase}) in {@code gameId} — alert them if they're away.
+   */
   public void onTurnAdvanced(final UUID gameId, final String power, final String phase) {
     executor.submit(
         () -> {

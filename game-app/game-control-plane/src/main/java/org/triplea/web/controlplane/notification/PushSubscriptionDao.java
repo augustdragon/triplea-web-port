@@ -10,9 +10,9 @@ import org.jdbi.v3.core.statement.StatementContext;
 
 /**
  * Reads and writes {@code push_subscriptions} (parameterized SQL, never concatenated). Also answers
- * the turn-alert question — "who, if anyone, should be pushed when it becomes {@code power}'s turn?"
- * — which is the only cross-table read: a push is sent only to the <em>human</em> holder of the seat
- * when they are <em>disconnected</em>.
+ * the turn-alert question — "who, if anyone, should be pushed when it becomes {@code power}'s
+ * turn?" — which is the only cross-table read: a push is sent only to the <em>human</em> holder of
+ * the seat when they are <em>disconnected</em>.
  */
 public final class PushSubscriptionDao {
 
@@ -40,7 +40,9 @@ public final class PushSubscriptionDao {
                 .execute());
   }
 
-  /** Remove a subscription by endpoint (on unsubscribe, or when the push service says it's gone). */
+  /**
+   * Remove a subscription by endpoint (on unsubscribe, or when the push service says it's gone).
+   */
   public void deleteByEndpoint(final String endpoint) {
     jdbi.useHandle(
         handle ->
@@ -64,9 +66,10 @@ public final class PushSubscriptionDao {
   }
 
   /**
-   * The user holding {@code power} in {@code gameId} if (and only if) that seat is a human seat that
-   * is currently disconnected — i.e. the player who should get a "your turn" push. Returns empty for
-   * a connected human (they're already looking at the game), an AI/open seat, or no such seat.
+   * The user holding {@code power} in {@code gameId} if (and only if) that seat is a human seat
+   * that is currently disconnected — i.e. the player who should get a "your turn" push. Returns
+   * empty for a connected human (they're already looking at the game), an AI/open seat, or no such
+   * seat.
    */
   public Optional<Long> disconnectedHumanSeatUserId(final UUID gameId, final String power) {
     return jdbi.withHandle(

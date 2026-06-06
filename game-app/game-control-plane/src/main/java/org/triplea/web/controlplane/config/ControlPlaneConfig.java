@@ -35,11 +35,16 @@ import java.util.Set;
  * @param gameIdleSeconds reap a game container after this many seconds with no committed turn (its
  *     state is safe on disk; reconnecting respawns it from the latest save).
  * @param vapidPublicKey the VAPID public key (base64url, uncompressed P-256 point) for "your turn"
- *     Web Push; blank disables push. Also handed to the browser as the {@code applicationServerKey}.
- * @param vapidPrivateKey the VAPID private key (base64url, raw 32-byte scalar); blank disables push.
- *     Must be paired with the public key.
+ *     Web Push; blank disables push. Also handed to the browser as the {@code
+ *     applicationServerKey}.
+ * @param vapidPrivateKey the VAPID private key (base64url, raw 32-byte scalar); blank disables
+ *     push. Must be paired with the public key.
  * @param vapidSubject the VAPID {@code sub} claim — a {@code mailto:} or {@code https:} URL
  *     identifying the sender to the push service; required when push is enabled.
+ * @param googleClientId the Google OAuth client id; blank disables Google login (dev-login covers
+ *     dev).
+ * @param googleClientSecret the Google OAuth client secret; blank disables Google login. Paired
+ *     with the client id.
  */
 public record ControlPlaneConfig(
     String dbUrl,
@@ -64,7 +69,9 @@ public record ControlPlaneConfig(
     String publicUrl,
     String vapidPublicKey,
     String vapidPrivateKey,
-    String vapidSubject) {
+    String vapidSubject,
+    String googleClientId,
+    String googleClientSecret) {
 
   private static final String DEFAULT_DB_URL = "jdbc:postgresql://localhost:5432/triplea_web";
   private static final String DEFAULT_DB_USER = "triplea_web";
@@ -92,13 +99,23 @@ public record ControlPlaneConfig(
     return !isBlank(vapidPublicKey) && !isBlank(vapidPrivateKey);
   }
 
+  /** Google OAuth login is wired only when a client id + secret are configured. */
+  public boolean googleOAuthEnabled() {
+    return !isBlank(googleClientId) && !isBlank(googleClientSecret);
+  }
+
+  /** The OAuth redirect URI Google calls back, derived from the public URL. */
+  public String googleRedirectUri() {
+    return publicUrl + "/api/oauth/google/callback";
+  }
+
   /** Build config from the process environment, validating and failing fast on any problem. */
   public static ControlPlaneConfig fromEnv() {
     return fromEnv(System.getenv());
   }
 
-  /** Package-visible for unit testing without touching the real environment. */
-  static ControlPlaneConfig fromEnv(final Map<String, String> env) {
+  /** Build from an explicit env map — for unit tests that shouldn't touch the real environment. */
+  public static ControlPlaneConfig fromEnv(final Map<String, String> env) {
     final List<String> problems = new ArrayList<>();
 
     final String dbUrl = env.getOrDefault("CONTROL_PLANE_DB_URL", DEFAULT_DB_URL);
@@ -180,6 +197,28 @@ public record ControlPlaneConfig(
           "CONTROL_PLANE_VAPID_SUBJECT (a mailto: or https: URL) is required when VAPID keys are set");
     }
 
+    // Google OAuth (RFC 8292-style authorization-code login). Both id+secret together; the redirect
+    // needs the public URL; and prod must have a real login path since dev-login is forbidden
+    // there.
+    final String googleClientId =
+        env.getOrDefault("CONTROL_PLANE_OAUTH_GOOGLE_CLIENT_ID", "").trim();
+    final String googleClientSecret =
+        env.getOrDefault("CONTROL_PLANE_OAUTH_GOOGLE_CLIENT_SECRET", "").trim();
+    final boolean googleOAuth = !isBlank(googleClientId) && !isBlank(googleClientSecret);
+    if (isBlank(googleClientId) != isBlank(googleClientSecret)) {
+      problems.add(
+          "CONTROL_PLANE_OAUTH_GOOGLE_CLIENT_ID and CONTROL_PLANE_OAUTH_GOOGLE_CLIENT_SECRET"
+              + " must be set together");
+    }
+    if (googleOAuth && isBlank(publicUrl)) {
+      problems.add("CONTROL_PLANE_PUBLIC_URL is required when Google OAuth is enabled");
+    }
+    if (profile.equals("prod") && !googleOAuth) {
+      problems.add(
+          "prod requires a real login path: set CONTROL_PLANE_OAUTH_GOOGLE_CLIENT_ID/SECRET"
+              + " (dev-login is forbidden in prod)");
+    }
+
     if (!problems.isEmpty()) {
       throw new IllegalStateException(
           "Invalid control-plane configuration: " + String.join("; ", problems));
@@ -207,7 +246,9 @@ public record ControlPlaneConfig(
         publicUrl,
         vapidPublicKey,
         vapidPrivateKey,
-        vapidSubject);
+        vapidSubject,
+        googleClientId,
+        googleClientSecret);
   }
 
   private static int parseIdleSeconds(final Map<String, String> env, final List<String> problems) {

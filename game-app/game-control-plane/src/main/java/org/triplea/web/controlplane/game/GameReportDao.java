@@ -33,9 +33,9 @@ public final class GameReportDao {
 
   /**
    * A committed step: record the save and advance the game's live Round/Power/Phase position.
-   * Returns the active power <em>before</em> this update (null if none / unchanged-from-null) so the
-   * caller can tell a real turn handover from a same-power phase change and fire a "your turn" push
-   * only on the former.
+   * Returns the active power <em>before</em> this update (null if none / unchanged-from-null) so
+   * the caller can tell a real turn handover from a same-power phase change and fire a "your turn"
+   * push only on the former.
    */
   public Optional<String> recordTurn(
       final UUID gameId,

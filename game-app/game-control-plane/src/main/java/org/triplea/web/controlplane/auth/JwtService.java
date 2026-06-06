@@ -20,6 +20,7 @@ public final class JwtService {
   private static final String ISSUER = "triplea-control-plane";
   private static final String CLAIM_PROVIDER = "provider";
   private static final String CLAIM_NAME = "name";
+  private static final String CLAIM_EMAIL = "email";
 
   private final Algorithm algorithm;
   private final JWTVerifier verifier;
@@ -34,14 +35,18 @@ public final class JwtService {
   /** Sign a token for this identity, expiring after the configured TTL. */
   public String mint(final Identity identity) {
     final Instant now = Instant.now();
-    return JWT.create()
-        .withIssuer(ISSUER)
-        .withSubject(identity.subject())
-        .withClaim(CLAIM_PROVIDER, identity.provider())
-        .withClaim(CLAIM_NAME, identity.displayName())
-        .withIssuedAt(now)
-        .withExpiresAt(now.plus(ttl))
-        .sign(algorithm);
+    final var builder =
+        JWT.create()
+            .withIssuer(ISSUER)
+            .withSubject(identity.subject())
+            .withClaim(CLAIM_PROVIDER, identity.provider())
+            .withClaim(CLAIM_NAME, identity.displayName())
+            .withIssuedAt(now)
+            .withExpiresAt(now.plus(ttl));
+    if (identity.email() != null) {
+      builder.withClaim(CLAIM_EMAIL, identity.email());
+    }
+    return builder.sign(algorithm);
   }
 
   /** Verify signature + expiry and return the identity, or empty if the token is not valid. */
@@ -53,7 +58,12 @@ public final class JwtService {
       if (provider == null || subject == null) {
         return Optional.empty();
       }
-      return Optional.of(new Identity(provider, subject, jwt.getClaim(CLAIM_NAME).asString()));
+      return Optional.of(
+          new Identity(
+              provider,
+              subject,
+              jwt.getClaim(CLAIM_NAME).asString(),
+              jwt.getClaim(CLAIM_EMAIL).asString()));
     } catch (final JWTVerificationException e) {
       return Optional.empty();
     }

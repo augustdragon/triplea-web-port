@@ -4,6 +4,7 @@ import io.javalin.http.Context;
 import io.javalin.http.ForbiddenResponse;
 import io.javalin.http.Handler;
 import io.javalin.http.UnauthorizedResponse;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -17,7 +18,15 @@ public final class AuthFilter implements Handler {
   /** Request-attribute key under which the authenticated identity is stored. */
   public static final String IDENTITY_ATTR = "identity";
 
-  private static final Set<String> PUBLIC_PATHS = Set.of("/api/dev-login", "/api/logout");
+  // No session yet: login routes and logout. The OAuth login/callback establish the session.
+  private static final Set<String> PUBLIC_PATHS = publicPaths();
+
+  private static Set<String> publicPaths() {
+    final Set<String> paths =
+        new HashSet<>(Set.of("/api/dev-login", "/api/logout", "/api/auth/methods"));
+    paths.addAll(GoogleOAuthController.publicPaths());
+    return Set.copyOf(paths);
+  }
 
   private final JwtService jwt;
   private final AllowList allowList;
@@ -38,7 +47,7 @@ public final class AuthFilter implements Handler {
     }
     final Identity identity =
         jwt.verify(token).orElseThrow(() -> new UnauthorizedResponse("Invalid session"));
-    if (!allowList.isAllowed(identity.provider(), identity.subject())) {
+    if (!allowList.isAllowed(identity)) {
       throw new ForbiddenResponse("Not allow-listed");
     }
     ctx.attribute(IDENTITY_ATTR, identity);

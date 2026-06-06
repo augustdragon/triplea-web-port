@@ -516,12 +516,30 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
         rewrites `/api/*`→`index.html` before the proxy runs); `useradd` must omit `-m`; clone needs `git checkout web-port`
         (default branch is `main`); geometry.json is generated via `:game-web-server:exportGeometry` into `dist/`; git ops
         on `/opt/triplea-web` must be `sudo -u triplea git`. More user testing to follow.
-  - [ ] **Real Google/Discord OAuth (Phase-4 tail).** Switch `CONTROL_PLANE_PROFILE=prod` + `DEV_LOGIN=false`; register
-        OAuth apps; set client id/secret + callback (the `LoginService` seam is provider-agnostic; prod profile marks
-        cookies Secure). Replaces dev-login for a public audience.
-  - [ ] **"Your turn" Web Push (Phase-4 tail, now unblocked).** VAPID: service worker + push subscription + send on a
-        turn transition to the *disconnected* seat-holder (uses presence above + the `turn` report's current power →
-        `seats.user_id`). Needed HTTPS — now satisfied by the deploy above.
+  - [x] **Real Google OAuth (Phase-4 tail)** ✅ (built + verified, session 2026-06-06). Hand-rolled minimal OIDC
+        (authorization-code) via the JDK `HttpClient` — no pac4j (the seam only needed to produce an `Identity`).
+        `GoogleOAuthController` (`/api/oauth/google/login` → state cookie + redirect; `/callback` → CSRF-checked,
+        token exchange, decode id_token (verified iss/aud/email_verified, signature trusted as it came direct from
+        Google's token endpoint over TLS), build `Identity`, `LoginService.login`, set cookie, → `/lobby`). Feeds
+        the **same `LoginService` seam** dev-login uses. **Allow-list now email-aware**: `Identity` carries the
+        verified email; `ConfigAllowList` matches `google:<email>` OR `google:<subject>` (email is invitable in
+        advance; the opaque subject isn't). `email` rides in the session JWT so the per-request revocation check
+        sees it. Config: `CONTROL_PLANE_OAUTH_GOOGLE_CLIENT_ID/SECRET` (+ reuses `PUBLIC_URL` for the redirect);
+        **prod now requires OAuth** (dev-login forbidden there). New public `GET /api/auth/methods` drives the
+        login page; client shows **Sign in with Google** + dev-login (dev only). Tests: id_token iss/aud/
+        email-verified handling, email allow-list, config validation. Verified live (smoke): methods endpoint,
+        login redirect (client_id/redirect_uri/scope/state cookie), callback CSRF rejection. **Remaining (user):**
+        register the Google Cloud OAuth app + set `PROFILE=prod`/`DEV_LOGIN=false` for live login verification.
+        (Discord deferred — not implemented.)
+  - [x] **"Your turn" Web Push (Phase-4 tail)** ✅ (built + verified live, session 2026-06-06). VAPID push to the
+        *disconnected* human seat-holder when the game advances to their turn (uses presence + the `turn` report's
+        power → `seats.user_id`). **JDK-crypto only** (no BouncyCastle/Netty): RFC 8291/8188 aes128gcm encryption
+        pinned byte-for-byte to the RFC's test vector + VAPID auth via the existing java-jwt. `notification/` package
+        (crypto, sender, DAO, controller, `TurnNotifier`), `V1.08` `push_subscriptions`, VAPID config +
+        `generateVapidKeys` task; `recordTurn` returns the prior power so the alert fires once per real handover (not
+        per phase) and only to a disconnected human. Client: service worker + PWA manifest + opt-in "Enable turn
+        alerts" toggle. Optional — disabled with no VAPID keys. Verified live end-to-end (handover → one push;
+        same-power repeat suppressed). Commit `af2e0686c`.
   - [x] **End-game: victory surfacing, end-reason, no round cap for human games** ✅ (built + verified 2026-06-03).
         `GameEndReason` recorded on loop exit; `{type:"gameOver", reason, winners, message}` WS envelope (cached +
         re-sent on connect) + a client `GameOverScreen` that halts the reconnect loop; reason + winner persisted to
@@ -613,7 +631,9 @@ needs no MapData; count all units). ⚠ Any `StateSnapshot` shape change needs a
         is in the jar, and logback debug shows `org.triplea.web.server → INFO, ROOT → WARN`. **Redeploy** (game-web-server
         installDist) for the box to pick it up.
 - [ ] **Exit check:** a private group plays a full Pacific 1940 game over the internet, browser-only, resumable
-      across days, with an abandoned seat caretaken by AI, **ending with a winner announced**.
+      across days, with an abandoned seat caretaken by AI, **ending with a winner announced**. _All build pieces
+      are now in place (incl. Google login + "your turn" push). Remaining is the live human play-through with the
+      real Google OAuth app registered — the last gating step the user runs on the box._
 - Related: 3g hotseat (pass-and-play on one machine) shares the seat-routing mechanism — falls out of P4.1.
 - Deferred to "when we open up": moderation/ban/audit tooling (schema known, see spec §4/§10.4); R2/S3 save store.
 

@@ -36,8 +36,7 @@ final class WebPushCrypto {
   private static final byte LAST_RECORD_DELIMITER = 0x02; // RFC 8188 §2 (padding delimiter)
 
   /** Encrypt with a fresh random salt and ephemeral sender key pair (the production path). */
-  static byte[] encrypt(
-      final byte[] plaintext, final byte[] uaPublicKey, final byte[] authSecret) {
+  static byte[] encrypt(final byte[] plaintext, final byte[] uaPublicKey, final byte[] authSecret) {
     return encrypt(
         plaintext, uaPublicKey, authSecret, EcUtil.randomBytes(SALT_LEN), EcUtil.generateKeyPair());
   }

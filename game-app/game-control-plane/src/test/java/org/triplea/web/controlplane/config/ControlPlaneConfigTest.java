@@ -89,15 +89,63 @@ class ControlPlaneConfigTest {
         config.allowList(), containsInAnyOrder("google:alice", "discord:bob", "google:carol"));
   }
 
-  @Test
-  void prodMarksCookiesSecure() {
+  /**
+   * A valid prod environment requires a real login path (OAuth) and a public URL for its redirect.
+   */
+  private static Map<String, String> validProdEnv() {
     final Map<String, String> env = validEnv();
     env.put("CONTROL_PLANE_PROFILE", "prod");
+    env.put("CONTROL_PLANE_OAUTH_GOOGLE_CLIENT_ID", "client-id");
+    env.put("CONTROL_PLANE_OAUTH_GOOGLE_CLIENT_SECRET", "client-secret");
+    env.put("CONTROL_PLANE_PUBLIC_URL", "https://triplea.example.com");
+    return env;
+  }
 
-    final ControlPlaneConfig config = ControlPlaneConfig.fromEnv(env);
+  @Test
+  void prodMarksCookiesSecure() {
+    final ControlPlaneConfig config = ControlPlaneConfig.fromEnv(validProdEnv());
 
     assertThat(config.isProd(), is(true));
     assertThat(config.secureCookies(), is(true));
+    assertThat(config.googleOAuthEnabled(), is(true));
+  }
+
+  @Test
+  void rejectsProdWithoutOAuthLoginPath() {
+    final Map<String, String> env = validEnv();
+    env.put("CONTROL_PLANE_PROFILE", "prod");
+    assertThat(
+        assertThrows(IllegalStateException.class, () -> ControlPlaneConfig.fromEnv(env))
+            .getMessage(),
+        containsString("prod requires a real login path"));
+  }
+
+  @Test
+  void rejectsOAuthClientIdWithoutSecret() {
+    final Map<String, String> env = validEnv();
+    env.put("CONTROL_PLANE_OAUTH_GOOGLE_CLIENT_ID", "client-id");
+    assertThat(
+        assertThrows(IllegalStateException.class, () -> ControlPlaneConfig.fromEnv(env))
+            .getMessage(),
+        containsString("CONTROL_PLANE_OAUTH_GOOGLE_CLIENT_ID"));
+  }
+
+  @Test
+  void rejectsOAuthWithoutPublicUrl() {
+    final Map<String, String> env = validEnv();
+    env.put("CONTROL_PLANE_OAUTH_GOOGLE_CLIENT_ID", "client-id");
+    env.put("CONTROL_PLANE_OAUTH_GOOGLE_CLIENT_SECRET", "client-secret");
+    assertThat(
+        assertThrows(IllegalStateException.class, () -> ControlPlaneConfig.fromEnv(env))
+            .getMessage(),
+        containsString("CONTROL_PLANE_PUBLIC_URL"));
+  }
+
+  @Test
+  void buildsGoogleRedirectUriFromPublicUrl() {
+    final ControlPlaneConfig config = ControlPlaneConfig.fromEnv(validProdEnv());
+    assertThat(
+        config.googleRedirectUri(), is("https://triplea.example.com/api/oauth/google/callback"));
   }
 
   @Test

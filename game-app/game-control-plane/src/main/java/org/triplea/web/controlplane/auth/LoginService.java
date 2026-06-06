@@ -27,7 +27,7 @@ public final class LoginService {
 
   /** Log in an authenticated identity, or empty if it is not on the allow-list. */
   public Optional<LoginResult> login(final Identity identity) {
-    if (!allowList.isAllowed(identity.provider(), identity.subject())) {
+    if (!allowList.isAllowed(identity)) {
       return Optional.empty();
     }
     final User user = userDao.upsertOnLogin(identity);

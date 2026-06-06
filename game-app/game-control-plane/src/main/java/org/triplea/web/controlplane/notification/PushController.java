@@ -47,10 +47,7 @@ public final class PushController {
 
   private void subscribe(final Context ctx) {
     final SubscribeRequest req = ctx.bodyAsClass(SubscribeRequest.class);
-    if (req == null
-        || isBlank(req.endpoint())
-        || isBlank(req.p256dh())
-        || isBlank(req.auth())) {
+    if (req == null || isBlank(req.endpoint()) || isBlank(req.p256dh()) || isBlank(req.auth())) {
       throw new BadRequestResponse("endpoint, p256dh and auth are required");
     }
     dao.upsert(

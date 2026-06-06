@@ -17,7 +17,11 @@ public final class ConfigAllowList implements AllowList {
   }
 
   @Override
-  public boolean isAllowed(final String provider, final String subject) {
-    return entries.contains(provider + ":" + subject);
+  public boolean isAllowed(final Identity identity) {
+    if (entries.contains(identity.provider() + ":" + identity.subject())) {
+      return true;
+    }
+    final String email = identity.email();
+    return email != null && entries.contains(identity.provider() + ":" + email);
   }
 }

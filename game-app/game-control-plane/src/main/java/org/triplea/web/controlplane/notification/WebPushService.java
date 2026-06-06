@@ -10,8 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Sends a single VAPID-authenticated, {@code aes128gcm}-encrypted Web Push to a subscription's
- * endpoint via the JDK {@link HttpClient}. Stateless and thread-safe; callers run it off the request
- * thread.
+ * endpoint via the JDK {@link HttpClient}. Stateless and thread-safe; callers run it off the
+ * request thread.
  *
  * <p>The result tells the caller whether to prune: {@link Result#GONE} means the push service says
  * the subscription no longer exists (404/410) and its row should be deleted.
@@ -38,7 +38,8 @@ public final class WebPushService {
   private final HttpClient httpClient;
 
   public WebPushService(final VapidKeys vapidKeys, final String subject) {
-    this(vapidKeys, subject, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build());
+    this(
+        vapidKeys, subject, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build());
   }
 
   WebPushService(final VapidKeys vapidKeys, final String subject, final HttpClient httpClient) {

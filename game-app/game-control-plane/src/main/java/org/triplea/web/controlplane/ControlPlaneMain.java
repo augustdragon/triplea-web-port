@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.triplea.web.controlplane.auth.AllowList;
 import org.triplea.web.controlplane.auth.AuthFilter;
 import org.triplea.web.controlplane.auth.ConfigAllowList;
+import org.triplea.web.controlplane.auth.GoogleOAuthController;
 import org.triplea.web.controlplane.auth.Identity;
 import org.triplea.web.controlplane.auth.JwtService;
 import org.triplea.web.controlplane.auth.LoginService;
@@ -22,6 +23,7 @@ import org.triplea.web.controlplane.game.GameReportDao;
 import org.triplea.web.controlplane.game.GameRouteController;
 import org.triplea.web.controlplane.game.GameWsProxy;
 import org.triplea.web.controlplane.game.InternalSeatsController;
+import org.triplea.web.controlplane.http.AuthConfigController;
 import org.triplea.web.controlplane.http.DevLoginController;
 import org.triplea.web.controlplane.http.HealthController;
 import org.triplea.web.controlplane.http.MeController;
@@ -47,9 +49,10 @@ import org.triplea.web.controlplane.user.UserDao;
  * HTTP server. If config is missing or the DB is unreachable at startup, this throws and the
  * process exits rather than serving a half-wired server.
  *
- * <p>M2 adds session auth: a JWT cookie, an allow-list checked on every request, and {@code
- * /api/me}. Real Google/Discord OAuth (pac4j) drops in behind the same {@code LoginService} seam
- * once apps are registered; until then the dev-login route (dev profile only) exercises the flow.
+ * <p>Session auth: a JWT cookie, an allow-list checked on every request, and {@code /api/me}. Real
+ * Google OAuth ({@link GoogleOAuthController}) and dev-login both feed the same {@code
+ * LoginService} seam; OAuth is wired when a client id/secret are configured, dev-login only in the
+ * dev profile.
  */
 @Slf4j
 public final class ControlPlaneMain {
@@ -106,6 +109,7 @@ public final class ControlPlaneMain {
 
     new HealthController(database).register(app);
     app.before("/api/*", new AuthFilter(jwt, allowList));
+    new AuthConfigController(config.devLoginEnabled(), config.googleOAuthEnabled()).register(app);
     new MeController(userDao).register(app);
     if (pushController != null) {
       pushController.register(app);
@@ -145,8 +149,7 @@ public final class ControlPlaneMain {
               ctx -> {
                 final String token = SessionCookies.read(ctx);
                 final Identity identity = token == null ? null : jwt.verify(token).orElse(null);
-                if (identity == null
-                    || !allowList.isAllowed(identity.provider(), identity.subject())) {
+                if (identity == null || !allowList.isAllowed(identity)) {
                   ctx.closeSession();
                   return;
                 }
@@ -169,8 +172,7 @@ public final class ControlPlaneMain {
               ctx -> {
                 final String token = SessionCookies.read(ctx);
                 final Identity identity = token == null ? null : jwt.verify(token).orElse(null);
-                if (identity == null
-                    || !allowList.isAllowed(identity.provider(), identity.subject())) {
+                if (identity == null || !allowList.isAllowed(identity)) {
                   ctx.closeSession();
                   return;
                 }
@@ -226,6 +228,12 @@ public final class ControlPlaneMain {
     if (config.devLoginEnabled()) {
       new DevLoginController(loginService, sessionCookies).register(app);
       log.warn("DEV LOGIN ENABLED — POST /api/dev-login is active (never permitted in prod)");
+    }
+    if (config.googleOAuthEnabled()) {
+      new GoogleOAuthController(loginService, sessionCookies, config).register(app);
+      log.info("Google OAuth login enabled (redirect_uri={})", config.googleRedirectUri());
+    } else {
+      log.info("Google OAuth login disabled (no client id/secret configured)");
     }
 
     Runtime.getRuntime()

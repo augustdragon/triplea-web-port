@@ -109,8 +109,27 @@ sudo chmod 600 /etc/triplea-web/control-plane.env
 sudoedit /etc/triplea-web/control-plane.env   # set DB password, JWT secret, allow-list, game token, GAME_XML, PUBLIC_URL
 ```
 
-Generate secrets with `openssl rand -base64 48`. The allow-list is your invited players
-(`google:alice,google:bob,…`); with dev-login each picks their listed name to log in.
+Generate secrets with `openssl rand -base64 48`. The allow-list is your invited players: with
+dev-login each is `google:<name>` and the player types that name; with Google OAuth (below) invite by
+email, `google:<email>`.
+
+### 5a. Google OAuth (production login)
+
+`profile=dev` + dev-login is fine for a trusted group over HTTPS. For real accounts, switch to Google
+OAuth — **required when `CONTROL_PLANE_PROFILE=prod`** (which also forbids dev-login and marks cookies
+Secure). Steps:
+
+1. In Google Cloud Console → APIs & Services → Credentials, create an **OAuth client ID** of type
+   **Web application**. Add the authorized redirect URI (exactly, must match `CONTROL_PLANE_PUBLIC_URL`):
+   `https://<your-domain>/api/oauth/google/callback`.
+2. Put the client id/secret in `/etc/triplea-web/control-plane.env`:
+   `CONTROL_PLANE_OAUTH_GOOGLE_CLIENT_ID`, `CONTROL_PLANE_OAUTH_GOOGLE_CLIENT_SECRET`, and ensure
+   `CONTROL_PLANE_PUBLIC_URL=https://<your-domain>`.
+3. Invite players by email in the allow-list (`google:alice@example.com,…`).
+4. To go full prod: set `CONTROL_PLANE_PROFILE=prod` and `CONTROL_PLANE_DEV_LOGIN=false`. Restart; the
+   journal logs `Google OAuth login enabled`. The login page then shows **Sign in with Google**. A
+   Google account that authenticates but isn't on the allow-list is rejected and its subject+email are
+   logged so you can add them.
 
 ### 5b. "Your turn" Web Push (optional)
 
@@ -218,7 +237,5 @@ sudo systemctl restart triplea-control-plane
   (~1–1.5 GB) + `Xmx` × concurrently-active games. Games are reaped when idle and when no player is
   connected, so you only pay for games in active play.
 - **Logs:** the control plane and its child game JVMs log to `journalctl -u triplea-control-plane`.
-- **Real OAuth (next task):** register Google/Discord apps, set the client id/secret + callback URL,
-  switch `CONTROL_PLANE_PROFILE=prod` and `CONTROL_PLANE_DEV_LOGIN=false` (the `LoginService` seam is
-  provider-agnostic). Prod profile also marks cookies Secure.
-- **"Your turn" Web Push (next task):** unblocked now that the deploy is HTTPS and presence is wired.
+- **Google OAuth:** see §5a — required in prod; invite by email. (Discord is not implemented.)
+- **"Your turn" Web Push:** see §5b — optional VAPID push to absent players on their turn.

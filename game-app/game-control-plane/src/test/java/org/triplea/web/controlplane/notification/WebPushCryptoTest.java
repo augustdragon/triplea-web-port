@@ -10,8 +10,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Pins the Web Push payload encryption to the worked example in RFC 8291 Appendix A. If the ECDH /
  * HKDF derivation or the aes128gcm record framing drifts, this fails — and a real browser would
- * silently fail to decrypt, which is far harder to diagnose. Every constant below is copied verbatim
- * from the RFC.
+ * silently fail to decrypt, which is far harder to diagnose. Every constant below is copied
+ * verbatim from the RFC.
  */
 class WebPushCryptoTest {
 

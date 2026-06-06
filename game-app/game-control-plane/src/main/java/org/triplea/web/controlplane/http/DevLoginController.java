@@ -44,7 +44,8 @@ public final class DevLoginController {
         req.displayName() == null || req.displayName().isBlank()
             ? req.subject()
             : req.displayName();
-    final Identity identity = new Identity(DEV_PROVIDER, req.subject(), displayName);
+    // Dev-login has no email — the allow-list matches it by provider:subject.
+    final Identity identity = new Identity(DEV_PROVIDER, req.subject(), displayName, null);
     final LoginService.LoginResult result =
         loginService
             .login(identity)

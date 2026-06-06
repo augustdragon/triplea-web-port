@@ -8,6 +8,9 @@ package org.triplea.web.controlplane.auth;
  */
 public interface AllowList {
 
-  /** True if {@code (provider, subject)} is on the invite list. */
-  boolean isAllowed(String provider, String subject);
+  /**
+   * True if the identity is on the invite list — matched by {@code provider:subject} or, when the
+   * provider supplied one, {@code provider:email}.
+   */
+  boolean isAllowed(Identity identity);
 }

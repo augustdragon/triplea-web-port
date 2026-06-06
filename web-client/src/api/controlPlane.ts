@@ -58,6 +58,17 @@ export async function me(): Promise<User | null> {
   return res.ok ? ((await res.json()) as User) : null;
 }
 
+/** Which login methods the server has wired (drives the login page). */
+export interface AuthMethods {
+  devLogin: boolean;
+  google: boolean;
+}
+
+export async function authMethods(): Promise<AuthMethods> {
+  const res = await req("/auth/methods");
+  return res.ok ? ((await res.json()) as AuthMethods) : { devLogin: true, google: false };
+}
+
 export async function devLogin(subject: string, displayName: string): Promise<Response> {
   return req("/dev-login", { method: "POST", body: JSON.stringify({ subject, displayName }) });
 }

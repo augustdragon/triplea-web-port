@@ -31,8 +31,7 @@ class VapidKeysTest {
 
     assertThat(header, startsWith("vapid t="));
     final String token = header.substring("vapid t=".length(), header.indexOf(",k="));
-    final ECPublicKey publicKey =
-        EcUtil.publicKeyFromPoint(EcUtil.B64URL_DEC.decode(generated[0]));
+    final ECPublicKey publicKey = EcUtil.publicKeyFromPoint(EcUtil.B64URL_DEC.decode(generated[0]));
     final DecodedJWT decoded =
         JWT.require(Algorithm.ECDSA256(publicKey, null)).build().verify(token);
 

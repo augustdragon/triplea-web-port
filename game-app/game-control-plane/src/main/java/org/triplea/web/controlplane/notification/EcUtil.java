@@ -25,8 +25,8 @@ import javax.crypto.spec.SecretKeySpec;
  * P-256 elliptic-curve, ECDH, and HKDF helpers for Web Push — JDK crypto only (no BouncyCastle).
  *
  * <p>Key wire formats follow the Web Push convention the browser's {@code PushManager} uses: a
- * public key is the uncompressed EC point ({@code 0x04 || X(32) || Y(32)} = 65 bytes), and a private
- * key is the raw 32-byte scalar — both base64url without padding.
+ * public key is the uncompressed EC point ({@code 0x04 || X(32) || Y(32)} = 65 bytes), and a
+ * private key is the raw 32-byte scalar — both base64url without padding.
  */
 final class EcUtil {
   private EcUtil() {}
@@ -108,7 +108,9 @@ final class EcUtil {
     return toFixedLength(key.getS(), COORD_LEN);
   }
 
-  /** The ECDH shared secret (the 32-byte X coordinate of the agreed point) — RFC 8291's {@code Z}. */
+  /**
+   * The ECDH shared secret (the 32-byte X coordinate of the agreed point) — RFC 8291's {@code Z}.
+   */
   static byte[] ecdh(final ECPrivateKey privateKey, final ECPublicKey publicKey) {
     try {
       final KeyAgreement agreement = KeyAgreement.getInstance("ECDH");

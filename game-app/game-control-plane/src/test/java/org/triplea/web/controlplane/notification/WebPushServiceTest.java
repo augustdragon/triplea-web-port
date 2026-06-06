@@ -19,8 +19,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Exercises the whole send path against a stand-in push service (a local {@link HttpServer}): the
- * VAPID {@code Authorization} header, the {@code aes128gcm} content headers, the encrypted body, and
- * the status-to-{@link WebPushService.Result} mapping. The payload crypto itself is pinned
+ * VAPID {@code Authorization} header, the {@code aes128gcm} content headers, the encrypted body,
+ * and the status-to-{@link WebPushService.Result} mapping. The payload crypto itself is pinned
  * separately by {@link WebPushCryptoTest}; here we confirm a real, well-formed HTTPS request is
  * produced and that a "gone" status drives pruning.
  */
@@ -40,11 +40,14 @@ class WebPushServiceTest {
     server.start();
 
     final String[] vapid = VapidKeys.generate();
-    service = new WebPushService(VapidKeys.fromConfig(vapid[0], vapid[1]), "mailto:test@example.com");
+    service =
+        new WebPushService(VapidKeys.fromConfig(vapid[0], vapid[1]), "mailto:test@example.com");
 
-    // A stand-in browser subscription: a real EC public point (so encryption succeeds) + random auth.
+    // A stand-in browser subscription: a real EC public point (so encryption succeeds) + random
+    // auth.
     final KeyPair ua = EcUtil.generateKeyPair();
-    final String p256dh = EcUtil.B64URL.encodeToString(EcUtil.encodePoint((ECPublicKey) ua.getPublic()));
+    final String p256dh =
+        EcUtil.B64URL.encodeToString(EcUtil.encodePoint((ECPublicKey) ua.getPublic()));
     final String auth = EcUtil.B64URL.encodeToString(EcUtil.randomBytes(16));
     final String base = "http://127.0.0.1:" + server.getAddress().getPort();
     okSubscription = new PushSubscription(base + "/push/ok", p256dh, auth);
@@ -67,7 +70,8 @@ class WebPushServiceTest {
     assertThat(request.contentEncoding, is("aes128gcm"));
     assertThat(request.authorization, startsWith("vapid t="));
     assertThat(request.ttl, notNullValue());
-    // aes128gcm body = 16-byte salt + 4 + 1 + 65-byte key header + ciphertext+tag → comfortably > 86.
+    // aes128gcm body = 16-byte salt + 4 + 1 + 65-byte key header + ciphertext+tag → comfortably >
+    // 86.
     assertThat(request.bodyLength, greaterThan(86));
   }
 
@@ -90,9 +94,5 @@ class WebPushServiceTest {
   }
 
   private record RequestCapture(
-      String method,
-      String contentEncoding,
-      String authorization,
-      String ttl,
-      int bodyLength) {}
+      String method, String contentEncoding, String authorization, String ttl, int bodyLength) {}
 }

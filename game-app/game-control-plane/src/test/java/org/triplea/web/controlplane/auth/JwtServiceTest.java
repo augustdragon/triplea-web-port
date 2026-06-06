@@ -14,7 +14,7 @@ class JwtServiceTest {
 
   @Test
   void mintedTokenRoundTripsToTheSameIdentity() {
-    final Identity identity = new Identity("google", "sub-123", "Alice");
+    final Identity identity = new Identity("google", "sub-123", "Alice", "alice@example.com");
 
     final Optional<Identity> verified = jwt.verify(jwt.mint(identity));
 
@@ -30,14 +30,14 @@ class JwtServiceTest {
   @Test
   void rejectsTokenSignedWithADifferentSecret() {
     final JwtService other = new JwtService("ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ", 60);
-    final String foreign = other.mint(new Identity("google", "s", "N"));
+    final String foreign = other.mint(new Identity("google", "s", "N", null));
 
     assertThat(jwt.verify(foreign).isEmpty(), is(true));
   }
 
   @Test
   void rejectsTamperedToken() {
-    final String token = jwt.mint(new Identity("google", "sub", "N"));
+    final String token = jwt.mint(new Identity("google", "sub", "N", null));
     final String tampered =
         token.substring(0, token.length() - 1) + (token.endsWith("A") ? "B" : "A");
 
