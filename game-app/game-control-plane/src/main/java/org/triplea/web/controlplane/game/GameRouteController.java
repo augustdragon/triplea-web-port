@@ -86,9 +86,19 @@ public final class GameRouteController {
       ctx.json(new FinishedResponse("finished", info.endReason(), info.winner()));
       return;
     }
-    if (info.wsEndpoint() != null) {
+    if (info.wsEndpoint() != null && isReachable(info.wsEndpoint())) {
       ctx.json(response(gameId, info, user, info.wsEndpoint())); // container already running
       return;
+    }
+    if (info.wsEndpoint() != null) {
+      // A stored endpoint that no longer accepts connections is stale — typically the game JVM died
+      // with a control-plane restart (a restart isn't a graceful reap, so the row keeps its old
+      // ws_endpoint). Without this check the WS proxy would dial the dead port forever. Fall through
+      // to the spawn path; setContainer below overwrites the stale endpoint with the fresh one.
+      log.info(
+          "Game {} endpoint {} is unreachable (stale after a restart?) — respawning",
+          gameId,
+          info.wsEndpoint());
     }
     // Lazy spawn: resume from the latest save if there is one (rehydration), else a fresh game.
     final LaunchedGame launched =
@@ -137,6 +147,21 @@ public final class GameRouteController {
             UUID.randomUUID().toString(),
             Instant.now().getEpochSecond() + TICKET_TTL_SECONDS);
     return ConnectTicket.sign(payload, gameToken);
+  }
+
+  /**
+   * Quick liveness probe: can we open a TCP connection to the game's WS port right now? Used to
+   * distinguish a genuinely-running game from a stale endpoint left in the DB by a restart. A short
+   * timeout keeps the common (alive) path fast; a refused/timed-out connect means respawn.
+   */
+  private static boolean isReachable(final String wsEndpoint) {
+    final URI uri = URI.create(wsEndpoint);
+    try (Socket socket = new Socket()) {
+      socket.connect(new InetSocketAddress(uri.getHost(), uri.getPort()), 1000);
+      return true;
+    } catch (final IOException e) {
+      return false;
+    }
   }
 
   /** Poll the container's WS port until it accepts a connection (the JVM is up and listening). */
