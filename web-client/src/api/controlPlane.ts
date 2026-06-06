@@ -120,3 +120,30 @@ export async function setReady(gameId: string, power: string, ready: boolean): P
 export async function launchGame(gameId: string): Promise<Response> {
   return req(`/games/${gameId}/launch`, { method: "POST" });
 }
+
+// --- "Your turn" Web Push ---
+
+/** The server's VAPID public key, or null when push is not configured (endpoint returns 404). */
+export async function vapidPublicKey(): Promise<string | null> {
+  const res = await req("/push/vapid-key");
+  if (!res.ok) {
+    return null;
+  }
+  return ((await res.json()) as { key: string }).key;
+}
+
+/** Register a browser push subscription (keys flattened from PushSubscription.toJSON()). */
+export async function subscribePush(
+  endpoint: string,
+  p256dh: string,
+  auth: string,
+): Promise<Response> {
+  return req("/push/subscribe", {
+    method: "POST",
+    body: JSON.stringify({ endpoint, p256dh, auth }),
+  });
+}
+
+export async function unsubscribePush(endpoint: string): Promise<Response> {
+  return req("/push/subscribe", { method: "DELETE", body: JSON.stringify({ endpoint }) });
+}

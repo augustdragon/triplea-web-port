@@ -109,4 +109,44 @@ class ControlPlaneConfigTest {
             .getMessage(),
         containsString("CONTROL_PLANE_HTTP_PORT"));
   }
+
+  @Test
+  void pushDisabledByDefault() {
+    final ControlPlaneConfig config = ControlPlaneConfig.fromEnv(validEnv());
+    assertThat(config.pushEnabled(), is(false));
+  }
+
+  @Test
+  void pushEnabledWhenVapidConfigured() {
+    final Map<String, String> env = validEnv();
+    env.put("CONTROL_PLANE_VAPID_PUBLIC_KEY", "pub");
+    env.put("CONTROL_PLANE_VAPID_PRIVATE_KEY", "priv");
+    env.put("CONTROL_PLANE_VAPID_SUBJECT", "mailto:admin@example.com");
+
+    final ControlPlaneConfig config = ControlPlaneConfig.fromEnv(env);
+
+    assertThat(config.pushEnabled(), is(true));
+    assertThat(config.vapidSubject(), is("mailto:admin@example.com"));
+  }
+
+  @Test
+  void rejectsVapidKeyWithoutItsPair() {
+    final Map<String, String> env = validEnv();
+    env.put("CONTROL_PLANE_VAPID_PUBLIC_KEY", "pub");
+    assertThat(
+        assertThrows(IllegalStateException.class, () -> ControlPlaneConfig.fromEnv(env))
+            .getMessage(),
+        containsString("CONTROL_PLANE_VAPID_PUBLIC_KEY"));
+  }
+
+  @Test
+  void rejectsVapidKeysWithoutSubject() {
+    final Map<String, String> env = validEnv();
+    env.put("CONTROL_PLANE_VAPID_PUBLIC_KEY", "pub");
+    env.put("CONTROL_PLANE_VAPID_PRIVATE_KEY", "priv");
+    assertThat(
+        assertThrows(IllegalStateException.class, () -> ControlPlaneConfig.fromEnv(env))
+            .getMessage(),
+        containsString("CONTROL_PLANE_VAPID_SUBJECT"));
+  }
 }

@@ -52,3 +52,12 @@ tasks.named<JavaExec>("run") {
     group = "web-port"
     description = "Runs the web-port control plane (reads config from env vars)."
 }
+
+// One-off: print a fresh VAPID key pair for "your turn" Web Push (the CONTROL_PLANE_VAPID_* env
+// vars). Run: ./gradlew :game-control-plane:generateVapidKeys -q
+tasks.register<JavaExec>("generateVapidKeys") {
+    group = "web-port"
+    description = "Prints a fresh VAPID key pair for Web Push configuration."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.triplea.web.controlplane.notification.VapidKeyGenerator")
+}

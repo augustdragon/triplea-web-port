@@ -16,6 +16,7 @@ import {
 } from "../api/controlPlane";
 import type { CatalogEntry, LobbyTable, MyGame, SeatView, User } from "../api/controlPlane";
 import { useLobbySocket } from "../lobby/useLobbySocket";
+import { NotificationsToggle } from "../NotificationsToggle";
 
 /** Run an action and surface a server rejection (409/403/…) inline rather than failing silently. */
 async function act(p: Promise<Response>): Promise<void> {
@@ -69,6 +70,7 @@ export function Lobby() {
         <span style={{ fontSize: 18, fontWeight: 600 }}>TripleA Web — Lobby</span>
         <span style={{ color: "#999", fontSize: 13 }}>
           {user.displayName} · {user.playerChatId}
+          <NotificationsToggle style={{ ...btn, marginLeft: 10 }} />
           <button
             style={{ ...btn, marginLeft: 10 }}
             onClick={() => logout().then(() => navigate("/login"))}

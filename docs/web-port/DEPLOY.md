@@ -112,6 +112,24 @@ sudoedit /etc/triplea-web/control-plane.env   # set DB password, JWT secret, all
 Generate secrets with `openssl rand -base64 48`. The allow-list is your invited players
 (`google:alice,google:bob,…`); with dev-login each picks their listed name to log in.
 
+### 5b. "Your turn" Web Push (optional)
+
+Out-of-site turn notifications for multi-day play. Skip this and leave the `CONTROL_PLANE_VAPID_*`
+vars blank to disable push entirely (the client hides the opt-in). Push needs HTTPS — already
+satisfied by the Caddy single-origin setup below.
+
+```bash
+# Generate a VAPID key pair once (prints the three env lines). Run from the repo on the box:
+cd /opt/triplea-web && sudo -u triplea ./gradlew :game-control-plane:generateVapidKeys -q
+```
+
+Paste the printed `CONTROL_PLANE_VAPID_PUBLIC_KEY` / `CONTROL_PLANE_VAPID_PRIVATE_KEY` into
+`/etc/triplea-web/control-plane.env` and set `CONTROL_PLANE_VAPID_SUBJECT=mailto:you@example.com`.
+Both keys must be present together; the private key is a secret (env only — never commit it).
+Restart the service to pick them up; the journal logs `Web Push enabled`. Players opt in per browser
+via the lobby's **Enable turn alerts** button; they're then notified only when it becomes their turn
+and they're not connected.
+
 ## 6. systemd service (the control plane + its child game JVMs)
 
 ```bash
@@ -120,7 +138,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now triplea-control-plane
 sleep 6                                                       # let it connect + run Flyway
 sudo systemctl status triplea-control-plane --no-pager
-sudo journalctl -u triplea-control-plane --no-pager -n 40     # expect 8 migrations + "Listening on :7000"
+sudo journalctl -u triplea-control-plane --no-pager -n 40     # expect 9 migrations + "Listening on :7000"
 curl -s -o /dev/null -w "health: %{http_code}\n" localhost:7000/health   # → 200
 ```
 

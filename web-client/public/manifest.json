@@ -1,0 +1,9 @@
+{
+  "name": "TripleA Web",
+  "short_name": "TripleA",
+  "description": "Play TripleA in the browser.",
+  "start_url": "/lobby",
+  "display": "standalone",
+  "background_color": "#1e1e1e",
+  "theme_color": "#1e1e1e"
+}

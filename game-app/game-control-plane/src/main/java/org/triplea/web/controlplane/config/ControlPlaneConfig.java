@@ -34,6 +34,12 @@ import java.util.Set;
  * @param gameWsHost the host the browser dials for a game container's WebSocket.
  * @param gameIdleSeconds reap a game container after this many seconds with no committed turn (its
  *     state is safe on disk; reconnecting respawns it from the latest save).
+ * @param vapidPublicKey the VAPID public key (base64url, uncompressed P-256 point) for "your turn"
+ *     Web Push; blank disables push. Also handed to the browser as the {@code applicationServerKey}.
+ * @param vapidPrivateKey the VAPID private key (base64url, raw 32-byte scalar); blank disables push.
+ *     Must be paired with the public key.
+ * @param vapidSubject the VAPID {@code sub} claim — a {@code mailto:} or {@code https:} URL
+ *     identifying the sender to the push service; required when push is enabled.
  */
 public record ControlPlaneConfig(
     String dbUrl,
@@ -55,7 +61,10 @@ public record ControlPlaneConfig(
     String launcher,
     String gameBin,
     String gameHeap,
-    String publicUrl) {
+    String publicUrl,
+    String vapidPublicKey,
+    String vapidPrivateKey,
+    String vapidSubject) {
 
   private static final String DEFAULT_DB_URL = "jdbc:postgresql://localhost:5432/triplea_web";
   private static final String DEFAULT_DB_USER = "triplea_web";
@@ -72,6 +81,15 @@ public record ControlPlaneConfig(
   /** Cookies are marked Secure only in prod (local dev runs over plain HTTP). */
   public boolean secureCookies() {
     return isProd();
+  }
+
+  /**
+   * "Your turn" Web Push is enabled only when a VAPID keypair is configured. Absent keys → the
+   * subscribe endpoints still work but no push is ever sent (and the client never prompts), so dev
+   * without keys boots cleanly.
+   */
+  public boolean pushEnabled() {
+    return !isBlank(vapidPublicKey) && !isBlank(vapidPrivateKey);
   }
 
   /** Build config from the process environment, validating and failing fast on any problem. */
@@ -147,6 +165,21 @@ public record ControlPlaneConfig(
     // now.
     final String publicUrl = env.getOrDefault("CONTROL_PLANE_PUBLIC_URL", "");
 
+    // "Your turn" Web Push (VAPID). All optional — push is simply off when keys are absent. But the
+    // keys are a pair (a public key without its private key, or vice versa, is a misconfiguration),
+    // and an enabled push must have a subject (the push services require the JWT `sub` claim).
+    final String vapidPublicKey = env.getOrDefault("CONTROL_PLANE_VAPID_PUBLIC_KEY", "").trim();
+    final String vapidPrivateKey = env.getOrDefault("CONTROL_PLANE_VAPID_PRIVATE_KEY", "").trim();
+    final String vapidSubject = env.getOrDefault("CONTROL_PLANE_VAPID_SUBJECT", "").trim();
+    if (isBlank(vapidPublicKey) != isBlank(vapidPrivateKey)) {
+      problems.add(
+          "CONTROL_PLANE_VAPID_PUBLIC_KEY and CONTROL_PLANE_VAPID_PRIVATE_KEY must be set together");
+    }
+    if (!isBlank(vapidPublicKey) && isBlank(vapidSubject)) {
+      problems.add(
+          "CONTROL_PLANE_VAPID_SUBJECT (a mailto: or https: URL) is required when VAPID keys are set");
+    }
+
     if (!problems.isEmpty()) {
       throw new IllegalStateException(
           "Invalid control-plane configuration: " + String.join("; ", problems));
@@ -171,7 +204,10 @@ public record ControlPlaneConfig(
         launcher,
         gameBin,
         gameHeap,
-        publicUrl);
+        publicUrl,
+        vapidPublicKey,
+        vapidPrivateKey,
+        vapidSubject);
   }
 
   private static int parseIdleSeconds(final Map<String, String> env, final List<String> problems) {

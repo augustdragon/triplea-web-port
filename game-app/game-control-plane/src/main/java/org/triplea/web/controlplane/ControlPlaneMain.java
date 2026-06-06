@@ -2,6 +2,7 @@ package org.triplea.web.controlplane;
 
 import io.javalin.Javalin;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -28,6 +29,11 @@ import org.triplea.web.controlplane.json.GsonJsonMapper;
 import org.triplea.web.controlplane.lobby.LobbyBroadcaster;
 import org.triplea.web.controlplane.lobby.LobbyController;
 import org.triplea.web.controlplane.lobby.LobbyDao;
+import org.triplea.web.controlplane.notification.PushController;
+import org.triplea.web.controlplane.notification.PushSubscriptionDao;
+import org.triplea.web.controlplane.notification.TurnNotifier;
+import org.triplea.web.controlplane.notification.VapidKeys;
+import org.triplea.web.controlplane.notification.WebPushService;
 import org.triplea.web.controlplane.orchestrator.DockerGameLauncher;
 import org.triplea.web.controlplane.orchestrator.GameLauncher;
 import org.triplea.web.controlplane.orchestrator.GameReaper;
@@ -71,9 +77,39 @@ public final class ControlPlaneMain {
     final LobbyDao lobbyDao = new LobbyDao(database.jdbi());
     final LobbyBroadcaster lobbyBroadcaster = new LobbyBroadcaster(lobbyDao);
 
+    // "Your turn" Web Push (optional — only when VAPID keys are configured). The notifier is wired
+    // into the turn reporter below; the controller (registered after the AuthFilter) exposes the
+    // subscribe endpoints to the browser.
+    final TurnNotifier turnNotifier;
+    final PushController pushController;
+    if (config.pushEnabled()) {
+      final PushSubscriptionDao pushDao = new PushSubscriptionDao(database.jdbi());
+      final VapidKeys vapidKeys =
+          VapidKeys.fromConfig(config.vapidPublicKey(), config.vapidPrivateKey());
+      final WebPushService webPushService = new WebPushService(vapidKeys, config.vapidSubject());
+      final ExecutorService pushExecutor =
+          Executors.newFixedThreadPool(
+              2,
+              r -> {
+                final Thread t = new Thread(r, "web-push-sender");
+                t.setDaemon(true);
+                return t;
+              });
+      turnNotifier = new TurnNotifier(pushDao, webPushService, pushExecutor);
+      pushController = new PushController(pushDao, userDao, vapidKeys);
+      log.info("Web Push enabled (\"your turn\" notifications)");
+    } else {
+      turnNotifier = null;
+      pushController = null;
+      log.info("Web Push disabled (no VAPID keys configured)");
+    }
+
     new HealthController(database).register(app);
     app.before("/api/*", new AuthFilter(jwt, allowList));
     new MeController(userDao).register(app);
+    if (pushController != null) {
+      pushController.register(app);
+    }
     new LobbyController(lobbyDao, gameCatalog, userDao, lobbyBroadcaster::broadcast).register(app);
     // Lazy spawn + route the browser to a launched game's container; mint the connect-ticket that
     // proves the caller's seat to the container (signed with the shared game token it also holds).
@@ -84,7 +120,8 @@ public final class ControlPlaneMain {
     // next connect respawns from the save.
     final GameReportDao gameReportDao = new GameReportDao(database.jdbi());
     final GameReaper gameReaper = new GameReaper(gameLauncher, gameReportDao);
-    new GameReportController(gameReportDao, gameReaper, config.gameToken()).register(app);
+    new GameReportController(gameReportDao, gameReaper, config.gameToken(), turnNotifier)
+        .register(app);
     new InternalSeatsController(lobbyDao, config.gameToken()).register(app);
     new IdleReaper(gameReportDao, gameReaper, config.gameIdleSeconds()).start();
 

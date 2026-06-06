@@ -5,8 +5,10 @@ import io.javalin.http.BadRequestResponse;
 import io.javalin.http.Context;
 import io.javalin.http.NotFoundResponse;
 import io.javalin.http.UnauthorizedResponse;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.triplea.web.controlplane.notification.TurnNotifier;
 import org.triplea.web.controlplane.orchestrator.GameReaper;
 
 /**
@@ -33,12 +35,19 @@ public final class GameReportController {
   private final GameReportDao dao;
   private final GameReaper reaper;
   private final String expectedToken;
+  // null when "your turn" Web Push is not configured (no VAPID keys) — reports are recorded as
+  // usual, just without firing notifications.
+  private final TurnNotifier turnNotifier;
 
   public GameReportController(
-      final GameReportDao dao, final GameReaper reaper, final String expectedToken) {
+      final GameReportDao dao,
+      final GameReaper reaper,
+      final String expectedToken,
+      final TurnNotifier turnNotifier) {
     this.dao = dao;
     this.reaper = reaper;
     this.expectedToken = expectedToken;
+    this.turnNotifier = turnNotifier;
   }
 
   public void register(final Javalin app) {
@@ -62,9 +71,18 @@ public final class GameReportController {
     }
     switch (event.type()) {
       case "started" -> dao.markStarted(gameId);
-      case "turn" ->
-          dao.recordTurn(
-              gameId, intOr(event.round(), 0), event.power(), event.phase(), event.bytesRef());
+      case "turn" -> {
+        final Optional<String> previousPower =
+            dao.recordTurn(
+                gameId, intOr(event.round(), 0), event.power(), event.phase(), event.bytesRef());
+        // Fire "your turn" only on a real handover to a (non-null) new power, not on the several
+        // same-power phase steps within one turn.
+        if (turnNotifier != null
+            && event.power() != null
+            && !event.power().equals(previousPower.orElse(null))) {
+          turnNotifier.onTurnAdvanced(gameId, event.power(), event.phase());
+        }
+      }
       case "finished" -> {
         dao.markFinished(gameId, event.reason(), event.winner());
         reaper.reapGame(gameId); // the game is over — stop its container

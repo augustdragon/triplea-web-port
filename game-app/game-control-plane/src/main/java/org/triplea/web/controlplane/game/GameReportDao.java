@@ -31,15 +31,26 @@ public final class GameReportDao {
                 .execute());
   }
 
-  /** A committed step: record the save and advance the game's live Round/Power/Phase position. */
-  public void recordTurn(
+  /**
+   * A committed step: record the save and advance the game's live Round/Power/Phase position.
+   * Returns the active power <em>before</em> this update (null if none / unchanged-from-null) so the
+   * caller can tell a real turn handover from a same-power phase change and fire a "your turn" push
+   * only on the former.
+   */
+  public Optional<String> recordTurn(
       final UUID gameId,
       final int round,
       final String power,
       final String phase,
       final String bytesRef) {
-    jdbi.useTransaction(
+    return jdbi.inTransaction(
         handle -> {
+          final Optional<String> previousPower =
+              handle
+                  .createQuery("SELECT current_power FROM games WHERE id = :gid")
+                  .bind("gid", gameId)
+                  .mapTo(String.class)
+                  .findOne();
           final long saveId =
               handle
                   .createUpdate(
@@ -64,6 +75,7 @@ public final class GameReportDao {
               .bind("save", saveId)
               .bind("gid", gameId)
               .execute();
+          return previousPower;
         });
   }
 
