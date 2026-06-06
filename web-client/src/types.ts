@@ -315,6 +315,8 @@ export interface DecisionRequest {
  */
 export interface BattleEvent {
   kind: "result";
+  /** Stable per-battle id (engine battle UUID); used to dedup the cache replayed on reconnect. */
+  id: string;
   gameRound: number;
   attacker: string;
   defender: string;

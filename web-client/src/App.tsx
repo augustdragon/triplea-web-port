@@ -147,8 +147,11 @@ export default function App() {
       } else if (env.type === "request") {
         setRequest(env);
       } else if (env.type === "battle") {
-        // One result per battle now, so keep a long history (still bounded for safety).
-        setBattleLog((prev) => [...prev, env].slice(-500));
+        // The server replays its whole battle-log cache on every (re)connect, so dedup by id:
+        // a battle is logged once no matter how often the cache is re-sent. Bounded for safety.
+        setBattleLog((prev) =>
+          prev.some((b) => b.id === env.id) ? prev : [...prev, env].slice(-500),
+        );
       } else if (env.type === "notes") {
         setNotesHtml(env.html);
       } else if (env.type === "objectives") {

@@ -56,8 +56,8 @@ export function BattleLog({ events }: { events: BattleEvent[] }) {
             {[...rounds.get(round)!.entries()].map(([nation, battles]) => (
               <div key={nation} style={{ marginBottom: 3 }}>
                 <div style={{ color: "#9fb6c9", paddingLeft: 4 }}>{nation}</div>
-                {battles.map((b, i) => (
-                  <BattleResult key={i} battle={b} />
+                {battles.map((b) => (
+                  <BattleResult key={b.id} battle={b} />
                 ))}
               </div>
             ))}

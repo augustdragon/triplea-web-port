@@ -96,6 +96,8 @@ public final class WebDisplay extends HeadlessDisplay {
     final JsonObject event = new JsonObject();
     event.addProperty("type", "battle");
     event.addProperty("kind", "result");
+    // Stable per-battle id so a client can dedup the cache the server replays on every (re)connect.
+    event.addProperty("id", battleId.toString());
     event.addProperty("gameRound", battle.gameRound);
     event.addProperty("attacker", battle.attacker);
     event.addProperty("defender", battle.defender);
