@@ -195,6 +195,13 @@ public final class ControlPlaneMain {
                 final GameWsProxy proxy = new GameWsProxy(ctx, info.wsEndpoint());
                 ctx.attribute("proxy", proxy);
                 proxy.connectUpstream();
+                // Native WS keepalive: ping the browser every 25s. A turn parked on a human
+                // decision produces no app traffic, so without this the connection hits Jetty's
+                // 30s WebSocket idle timeout and is dropped — which also tears down this proxy's
+                // upstream leg to the game, forcing a reconnect every 30s. The browser auto-pongs
+                // at the protocol level (works even for a backgrounded tab), so no client code is
+                // involved.
+                ctx.enableAutomaticPings(25, TimeUnit.SECONDS);
               });
           ws.onMessage(
               ctx -> {
