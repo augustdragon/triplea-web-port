@@ -708,3 +708,29 @@ relaxed (ADR-001) + `docs/web-port/REFACTOR-PLAN.md` written. Picked up next, in
       Testcontainers harness too. Held when we pivoted to the refactoring review.
 - [ ] **Uncap conceded (formerly-human) games** so an all-AI continuation has the rounds to *reach* a
       victory (today it re-caps at `--max-rounds`). Original deferred follow-up from the victory work.
+
+## Parked threads (after 2026-06-06 session)
+Brought **Google OAuth live** end-to-end on the box (real client id/secret, email allow-list,
+`triplea.prototypeandpray.com` redirect), then play-tested the deployed game and fixed a cluster of
+resume/connection bugs found live. Also set up **direct SSH + deploy access** to the VPS so
+diagnostics/deploys no longer round-trip through manual relay (see memory `[[vps-ssh-deploy-access]]`).
+Shipped this session (all on `web-port`, deployed):
+- `16e22dc18` — battle log dedup against reconnect-replay (stable per-battle `id` from the engine UUID).
+- `f27b26182` — publish board state at the decision choke point (`WebPlayer.await`) so a game **resumed
+  onto a human turn** isn't blank (round/owners/units/player-stats now ship with the decision request).
+- `8e0de29f8` — native WS keepalive pings (25s, `enableAutomaticPings`) so a **parked turn** survives
+  Jetty's 30s idle timeout — no more metronomic 30s reconnect (kept even for a backgrounded tab).
+- `b3618bdad` — `/connect` verifies a stored `ws_endpoint` is live before trusting it; **stale endpoints
+  after a restart now self-heal** (respawn) instead of looping on a dead port. *Every redeploy is now
+  non-stranding.*
+- Config (not in git — `/etc/triplea-web/control-plane.env`): `CONTROL_PLANE_GAME_IDLE_SECONDS` 1800→**14400 (4h)**.
+
+Remaining follow-ups from this session (priority next):
+- [ ] **Flush-on-reap (idle-reaper data loss).** The durable autosave flushes only at *completed* step
+      boundaries, so a turn abandoned **mid-step** loses everything since the last step when the
+      `IdleReaper` kills the JVM (the original "my units reset" report). The 4h idle bump only widens the
+      window — real fix is to flush the current `GameData` before the reaper terminates a game. See the
+      matching `tasks/lessons.md` entry.
+- [ ] **(optional) Mirror the `/connect` liveness probe in the WS proxy `onConnect`** — it reads
+      `info.wsEndpoint()` directly, so a game dying *between* `/connect` and the WS dial still loops. The
+      `/connect` self-heal covers the redeploy case; this closes the narrow race.
