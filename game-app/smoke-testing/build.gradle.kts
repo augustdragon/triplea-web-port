@@ -8,7 +8,6 @@ plugins {
 dependencies {
     implementation(project(":domain-data"))
     implementation(project(":game-core"))
-    testImplementation(project(":game-headless"))
     testImplementation(project(":java-extras"))
     testImplementation(project(":test-common"))
 }

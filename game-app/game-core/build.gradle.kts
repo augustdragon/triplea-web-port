@@ -44,7 +44,6 @@ dependencies {
     implementation(project(":swing-lib"))
     implementation(project(":websocket-client"))
     implementation(project(":xml-reader"))
-    testImplementation(project(":swing-lib-test-support"))
     testImplementation(project(":test-common"))
     // Configures mockito to use the legacy "subclass mock maker"
     // see https://github.com/mockito/mockito/releases/tag/v5.0.0 for more information
