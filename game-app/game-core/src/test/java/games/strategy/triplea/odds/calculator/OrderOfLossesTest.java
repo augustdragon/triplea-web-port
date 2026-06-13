@@ -1,7 +1,7 @@
 package games.strategy.triplea.odds.calculator;
 
-import static games.strategy.triplea.odds.calculator.OrderOfLossesInputPanel.splitOrderOfLoss;
-import static games.strategy.triplea.odds.calculator.OrderOfLossesInputPanel.splitOrderOfLossSection;
+import static games.strategy.triplea.odds.calculator.OrderOfLosses.splitOrderOfLoss;
+import static games.strategy.triplea.odds.calculator.OrderOfLosses.splitOrderOfLossSection;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.arrayContaining;
 import static org.hamcrest.Matchers.contains;
@@ -10,7 +10,7 @@ import static org.hamcrest.Matchers.is;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-final class OrderOfLossesInputPanelTest {
+final class OrderOfLossesTest {
   @Nested
   final class SplitOrderOfLossTest {
     @Test

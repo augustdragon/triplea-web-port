@@ -1,9 +1,7 @@
 package games.strategy.net;
 
 import com.google.common.annotations.VisibleForTesting;
-import games.strategy.engine.chat.ChatController;
 import games.strategy.engine.chat.IChatChannel;
-import games.strategy.engine.chat.IChatController;
 import games.strategy.engine.message.ChannelMessenger;
 import games.strategy.engine.message.IChannelMessenger;
 import games.strategy.engine.message.IChannelSubscriber;
@@ -43,11 +41,6 @@ public class Messengers implements IMessenger, IRemoteMessenger, IChannelMesseng
   // constructor.
   public IServerMessenger getServerMessenger() {
     return (IServerMessenger) messenger;
-  }
-
-  public IChatController getRemoteChatController(final String chatName) {
-    return (IChatController)
-        remoteMessenger.getRemote(ChatController.getChatControllerRemoteName(chatName));
   }
 
   public void addChatChannelSubscriber(

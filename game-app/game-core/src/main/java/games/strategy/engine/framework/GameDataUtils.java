@@ -30,7 +30,7 @@ public final class GameDataUtils {
     final var cloneOptions = GameDataManager.Options.builder().withHistory(true).build();
     Optional<GameData> optionalGameDataClone = cloneGameData(gameData, cloneOptions);
     if (enableSeeking) {
-      optionalGameDataClone.ifPresent(clone -> clone.getHistory().enableSeeking(null));
+      optionalGameDataClone.ifPresent(clone -> clone.getHistory().enableSeeking());
     }
     return optionalGameDataClone.orElseThrow(
         () -> new IllegalStateException("Game data clone expected."));

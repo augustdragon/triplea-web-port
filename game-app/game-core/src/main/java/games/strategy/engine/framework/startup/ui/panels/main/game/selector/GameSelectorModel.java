@@ -9,8 +9,6 @@ import games.strategy.engine.framework.GameDataManager;
 import games.strategy.engine.framework.GameRunner;
 import games.strategy.engine.framework.GameShutdownRegistry;
 import games.strategy.engine.framework.HeadlessAutoSaveFileUtils;
-import games.strategy.engine.framework.startup.mc.ClientModel;
-import games.strategy.engine.framework.startup.mc.GameSelector;
 import games.strategy.triplea.settings.ClientSetting;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -25,7 +23,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.function.Predicate;
 import javax.annotation.Nullable;
 import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.triplea.java.ThreadRunner;
 
@@ -34,19 +31,14 @@ import org.triplea.java.ThreadRunner;
  * selector panel on the staging screens, eg: map, round, filename.
  */
 @Slf4j
-public class GameSelectorModel extends Observable implements GameSelector {
-  @Nullable
-  @Getter(onMethod_ = {@Override})
-  private GameData gameData = null;
+public class GameSelectorModel extends Observable {
+  @Nullable @Getter private GameData gameData = null;
 
   @Getter private String gameName = "-";
   @Getter private String gameRound = "-";
   @Nullable private String fileName;
   @Getter private boolean canSelect = true;
   @Getter private boolean hostIsHeadlessBot = false;
-  // just for host bots, so we can get the actions for loading/saving games on the bots from this
-  // model
-  @Setter @Getter private ClientModel clientModelForHostBots = null;
 
   // Don't load a save game before the startup task to load the initial map has run, else that task
   // may "lose" the race and overwrite the loaded saved game.
@@ -178,7 +170,6 @@ public class GameSelectorModel extends Observable implements GameSelector {
   }
 
   /** Clears AI game over cache and loads default game in a new thread. */
-  @Override
   public void onGameEnded() {
     // clear out AI cached properties (this ended up being the best place to put it,
     // as we have definitely left a game at this point)

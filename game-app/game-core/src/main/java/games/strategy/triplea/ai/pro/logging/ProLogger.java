@@ -3,8 +3,10 @@ package games.strategy.triplea.ai.pro.logging;
 import games.strategy.triplea.ai.pro.AbstractProAi;
 import java.util.logging.Level;
 import javax.annotation.Nullable;
+import lombok.extern.slf4j.Slf4j;
 
-/** Class to log messages to log window and console. */
+/** Class to log Pro AI messages to the application log. */
+@Slf4j
 public final class ProLogger {
   private ProLogger() {}
 
@@ -55,7 +57,7 @@ public final class ProLogger {
     if (logDepth.equals(Level.FINER) && level.equals(Level.FINEST)) {
       return;
     }
-    ProLogUi.notifyAiLogMessage(formatMessage(message, t, level));
+    log.debug(formatMessage(message, t, level));
   }
 
   /**

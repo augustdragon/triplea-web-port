@@ -20,8 +20,6 @@ import games.strategy.engine.delegate.IDelegateBridge;
 import games.strategy.engine.delegate.IPersistentDelegate;
 import games.strategy.engine.framework.save.game.GameDataWriter;
 import games.strategy.engine.framework.startup.launcher.LaunchAction;
-import games.strategy.engine.framework.startup.mc.IObserverWaitingToJoin;
-import games.strategy.engine.framework.startup.ui.InGameLobbyWatcherWrapper;
 import games.strategy.engine.history.DelegateHistoryWriter;
 import games.strategy.engine.history.Event;
 import games.strategy.engine.history.EventChild;
@@ -76,7 +74,6 @@ public class ServerGame extends AbstractGame {
   private IRandomSource randomSource = new PlainRandomSource();
   private @Nullable IRandomSource delegateRandomSource;
   private final DelegateExecutionManager delegateExecutionManager = new DelegateExecutionManager();
-  @Nullable @Getter private final InGameLobbyWatcherWrapper inGameLobbyWatcher;
   private boolean needToInitialize = true;
   private final LaunchAction launchAction;
   private final ClientNetworkBridge clientNetworkBridge;
@@ -101,28 +98,9 @@ public class ServerGame extends AbstractGame {
       final Messengers messengers,
       final ClientNetworkBridge clientNetworkBridge,
       final LaunchAction launchAction) {
-    this(
-        data,
-        localPlayers,
-        remotePlayerMapping,
-        messengers,
-        clientNetworkBridge,
-        launchAction,
-        null);
-  }
-
-  public ServerGame(
-      final GameData data,
-      final Set<Player> localPlayers,
-      final Map<String, INode> remotePlayerMapping,
-      final Messengers messengers,
-      final ClientNetworkBridge clientNetworkBridge,
-      final LaunchAction launchAction,
-      @Nullable final InGameLobbyWatcherWrapper inGameLobbyWatcher) {
     super(data, localPlayers, remotePlayerMapping, messengers, clientNetworkBridge);
     this.clientNetworkBridge = clientNetworkBridge;
     this.launchAction = launchAction;
-    this.inGameLobbyWatcher = inGameLobbyWatcher;
     // Keep a ref to the history writer. This not only makes the calls below more concise, but also
     // prevents a need to grab the lock on gameData (as its history object can get reset temporarily
     // during game cloning operations for the battle calculator, e.g. by AIs).
@@ -215,58 +193,6 @@ public class ServerGame extends AbstractGame {
 
     for (int i = 0; i < node.getChildCount(); i++) {
       importDiceStats((HistoryNode) node.getChildAt(i));
-    }
-  }
-
-  /** Adds a new observer (non-participant) node to this server game. */
-  public void addObserver(
-      final IObserverWaitingToJoin blockingObserver,
-      final IObserverWaitingToJoin nonBlockingObserver,
-      final INode newNode) {
-    try {
-      if (!delegateExecutionManager.blockDelegateExecution(2000)) {
-        nonBlockingObserver.cannotJoinGame("Could not block delegate execution");
-        return;
-      }
-    } catch (final InterruptedException e) {
-      Thread.currentThread().interrupt();
-      nonBlockingObserver.cannotJoinGame(e.getMessage());
-      return;
-    }
-    try {
-      final CountDownLatch waitOnObserver = new CountDownLatch(1);
-      final byte[] bytes = GameDataWriter.writeToBytes(gameData, delegateExecutionManager);
-      ThreadRunner.runInNewThread(
-          () -> {
-            try {
-              blockingObserver.joinGame(bytes, playerManager.getPlayerMapping());
-            } catch (final Exception e) {
-              if (e.getCause() instanceof ConnectionLostException) {
-                log.error("Connection lost to observer while joining: " + newNode.getName(), e);
-              } else {
-                log.error("Failed to join game", e);
-              }
-            } finally {
-              // Always release the awaiter so the host doesn't sit on the delegate
-              // write lock for serverObserverJoinWaitTime (default 180s) when a join
-              // aborts mid-flight.
-              waitOnObserver.countDown();
-            }
-          });
-      try {
-        if (!waitOnObserver.await(
-            ClientSetting.serverObserverJoinWaitTime.getValueOrThrow(), TimeUnit.SECONDS)) {
-          nonBlockingObserver.cannotJoinGame("Taking too long to join.");
-        }
-      } catch (final InterruptedException e) {
-        Thread.currentThread().interrupt();
-        nonBlockingObserver.cannotJoinGame(e.getMessage());
-      }
-    } catch (final Exception e) {
-      log.error("Failed to join game", e);
-      nonBlockingObserver.cannotJoinGame(e.getMessage());
-    } finally {
-      delegateExecutionManager.resumeDelegateExecution();
     }
   }
 
@@ -413,9 +339,6 @@ public class ServerGame extends AbstractGame {
     // if this is a bot, shut down the bot. We will rely on systemctl to restart the bot
     // instance. This restart will help us pick up any new maps and/or new bot versions.
     if (GameRunner.headless() && GameRunner.exitOnEndGame()) {
-      if (inGameLobbyWatcher != null) {
-        inGameLobbyWatcher.shutDown();
-      }
       ExitStatus.SUCCESS.exit();
     }
   }
@@ -724,9 +647,8 @@ public class ServerGame extends AbstractGame {
   }
 
   public void stopGameSequence(final String status, final String title) {
-    delegateExecutionStopped =
-        launchAction.promptGameStop(
-            status, title, getResourceLoader().getAssetPaths().stream().findAny().orElse(null));
+    // The networked launcher used to prompt the user to confirm; server-side hosting always stops.
+    delegateExecutionStopped = true;
   }
 
   public boolean isGameSequenceRunning() {

@@ -130,10 +130,4 @@ public final class SoundPath {
     soundOptions.put(SoundPath.CLIP_USER_ACTION_SUCCESSFUL, "Action Operation Successful");
     return soundOptions;
   }
-
-  static List<SoundOptionCheckBox> getSoundOptions() {
-    return getAllSoundOptionsWithDescription().entrySet().stream()
-        .map(e -> new SoundOptionCheckBox(e.getKey(), e.getValue()))
-        .collect(Collectors.toList());
-  }
 }

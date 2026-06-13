@@ -5,8 +5,6 @@ import games.strategy.engine.data.Change;
 import games.strategy.engine.data.CompositeChange;
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
-import games.strategy.triplea.ui.history.HistoryPanel;
-import games.strategy.ui.Util;
 import java.io.Serial;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -35,7 +33,6 @@ public class History extends DefaultTreeModel {
   private final HistoryWriter writer = new HistoryWriter(this);
   private final List<Change> changes = new ArrayList<>();
   private final GameData gameData;
-  private HistoryPanel panel;
   // Index at which point we are in history. Only valid if seekingEnabled is true.
   private int nextChangeIndex;
   private boolean seekingEnabled = false;
@@ -46,29 +43,21 @@ public class History extends DefaultTreeModel {
   }
 
   private void assertCorrectThread() {
-    if (gameData.areChangesOnlyInSwingEventThread()) {
-      Util.ensureOnEventDispatchThread();
-    }
+    // Headless engine: history changes are not constrained to a Swing event-dispatch thread.
   }
 
   public HistoryWriter getHistoryWriter() {
     return writer;
   }
 
-  public HistoryNode enableSeeking(final HistoryPanel panel) {
+  /** Enables history seeking (time-travel through recorded changes) for this game. */
+  public HistoryNode enableSeeking() {
     Preconditions.checkState(!seekingEnabled);
-    this.panel = panel;
     nextChangeIndex = changes.size();
     seekingEnabled = true;
     HistoryNode lastNode = getLastNode();
     gotoNode(lastNode);
     return lastNode;
-  }
-
-  public void goToEnd() {
-    if (panel != null) {
-      panel.goToEnd();
-    }
   }
 
   public HistoryNode getLastNode() {

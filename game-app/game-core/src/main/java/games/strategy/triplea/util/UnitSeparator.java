@@ -6,7 +6,6 @@ import games.strategy.engine.data.Territory;
 import games.strategy.engine.data.Unit;
 import games.strategy.engine.data.UnitType;
 import games.strategy.triplea.delegate.Matches;
-import games.strategy.triplea.ui.mapdata.MapData;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -49,35 +48,6 @@ public class UnitSeparator {
   }
 
   /**
-   * Finds unit categories from units of the <code>Territory</code>, removes not displayed ones
-   * according to <code>MapData</code> and then sorts them
-   */
-  public static List<UnitCategory> getSortedUnitCategories(
-      @Nonnull final Territory territory, final MapData mapData) {
-    final List<UnitCategory> categories =
-        new ArrayList<>(UnitSeparator.categorize(territory.getUnits()));
-    categories.removeIf(uc -> !mapData.shouldDrawUnit(uc.getType().getName()));
-    categories.sort(getComparatorUnitCategories(territory));
-    return categories;
-  }
-
-  /**
-   * Finds unit categories from <code>units</code> of the <code>Territory</code>, removes not
-   * displayed ones according to <code>MapData</code> and then sorts them using also the <code>
-   * GamePlayer</code>
-   */
-  public static List<UnitCategory> getSortedUnitCategories(
-      final Collection<Unit> units,
-      @Nullable final Territory territory,
-      final MapData mapData,
-      final GamePlayer gamePlayer) {
-    final List<UnitCategory> categories = new ArrayList<>(UnitSeparator.categorize(units));
-    categories.removeIf(uc -> !mapData.shouldDrawUnit(uc.getType().getName()));
-    categories.sort(getComparatorUnitCategories(territory, gamePlayer));
-    return categories;
-  }
-
-  /**
    * Finds unit categories from <code>units</code> of the <code>Territory</code> and then sorts them
    * using also the <code>GamePlayer</code>
    */
@@ -87,18 +57,6 @@ public class UnitSeparator {
       final GamePlayer gamePlayer) {
     final List<UnitCategory> categories = new ArrayList<>(UnitSeparator.categorize(units));
     categories.sort(getComparatorUnitCategories(territory, gamePlayer));
-    return categories;
-  }
-
-  /**
-   * Finds unit categories from <code>units</code>, removes not displayed ones according to <code>
-   * MapData</code> and then sorts them
-   */
-  public static List<UnitCategory> getSortedUnitCategories(
-      final Collection<Unit> units, final GameData gameData, final MapData mapData) {
-    final List<UnitCategory> categories = new ArrayList<>(UnitSeparator.categorize(units));
-    categories.removeIf(uc -> !mapData.shouldDrawUnit(uc.getType().getName()));
-    categories.sort(getComparatorUnitCategories(gameData));
     return categories;
   }
 
