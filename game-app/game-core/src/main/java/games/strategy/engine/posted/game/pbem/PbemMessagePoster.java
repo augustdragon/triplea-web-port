@@ -9,7 +9,6 @@ import games.strategy.engine.history.IDelegateHistoryWriter;
 import games.strategy.engine.posted.game.pbf.IForumPoster;
 import games.strategy.engine.posted.game.pbf.NodeBbForumPoster;
 import games.strategy.engine.posted.game.pbf.NodeBbForumPoster.SaveGameParameter;
-import games.strategy.triplea.delegate.remote.IAbstractForumPosterDelegate;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;

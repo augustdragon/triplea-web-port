@@ -3,16 +3,20 @@ plugins {
     id("java-test-fixtures")
 }
 
-// Web-port guardrail: game-core is becoming a headless engine library. Desktop-UI and
-// web-module imports are forbidden in main sources. Warn-only until the Option A prune
-// completes (flip ENFORCE to true in Tier 4); see docs/web-port/CHARTER.md.
+// Web-port guardrail: game-core is a headless engine library. Desktop-UI and web-module
+// imports are forbidden in main sources. Enforced as of the Option A prune; see
+// docs/web-port/CHARTER.md.
 val checkForbiddenImports = tasks.register("checkForbiddenImports") {
     description = "Forbids javax.swing / java.awt.event / org.triplea.swing / org.triplea.web imports in game-core main sources."
     group = "verification"
-    val enforce = false
-    // History extends javax.swing.tree.DefaultTreeModel and is serialized into save games;
-    // removing that parent is Option C (serialization replacement) work, not pruning work.
-    val allowlist = setOf("games/strategy/engine/history/History.java")
+    val enforce = true
+    // The history tree model extends javax.swing.tree.DefaultTreeModel / DefaultMutableTreeNode
+    // and is serialized into save games; removing that base is Option C (serialization
+    // replacement) work, not pruning work.
+    val allowlist = setOf(
+        "games/strategy/engine/history/History.java",
+        "games/strategy/engine/history/HistoryNode.java",
+        "games/strategy/engine/history/SerializedHistory.java")
     val srcRoot = layout.projectDirectory.dir("src/main/java").asFile
     inputs.dir(srcRoot)
     outputs.upToDateWhen { false }

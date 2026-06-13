@@ -1,10 +1,8 @@
 package org.triplea.sound;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import org.jetbrains.annotations.NonNls;
 
 /** Contains the sound file names and the directory of all sound files. */

@@ -1,7 +1,6 @@
 package games.strategy.triplea.util;
 
 import static games.strategy.triplea.Constants.UNIT_ATTACHMENT_NAME;
-import static games.strategy.triplea.delegate.GameDataTestUtil.territory;
 import static games.strategy.triplea.delegate.battle.steps.MockGameData.givenGameData;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -29,7 +28,6 @@ class UnitSeparatorTest {
     unitType.addAttachment(UNIT_ATTACHMENT_NAME, unitAttachment);
     return unitType;
   }
-
 
   @Test
   void testCategorizeWithAirUnitsWithDifferentMovement_simplePositiveCase() {

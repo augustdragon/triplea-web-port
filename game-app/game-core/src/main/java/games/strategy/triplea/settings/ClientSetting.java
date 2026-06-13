@@ -65,8 +65,7 @@ public abstract class ClientSetting<T> implements GameSetting<T> {
   public static final ClientSetting<String> defaultGameUri =
       new StringClientSetting("DEFAULT_GAME_URI_PREF");
   public static final ClientSetting<URI> diceRollerUri =
-      new UriClientSetting(
-          "DICE_ROLLER_URI", URI.create("https://dice.marti.triplea-game.org"));
+      new UriClientSetting("DICE_ROLLER_URI", URI.create("https://dice.marti.triplea-game.org"));
   public static final ClientSetting<Integer> fasterArrowKeyScrollMultiplier =
       new IntegerClientSetting("FASTER_ARROW_KEY_SCROLL_MULTIPLIER", 2);
   public static final ClientSetting<Boolean> spaceBarConfirmsCasualties =

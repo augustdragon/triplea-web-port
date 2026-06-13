@@ -16,8 +16,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 /**
  * Deserialization tripwire for the web-port pruning work (Option A): loads real production saves
  * captured from the live server. If a class deleted from game-core was actually part of the
- * serialized GameData graph, this test fails before the change ships. See
- * docs/web-port/CHARTER.md and the prune/option-a plan.
+ * serialized GameData graph, this test fails before the change ships. See docs/web-port/CHARTER.md
+ * and the prune/option-a plan.
  */
 class ProdSaveCompatibilityTest {
 

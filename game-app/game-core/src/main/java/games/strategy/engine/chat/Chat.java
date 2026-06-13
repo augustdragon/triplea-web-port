@@ -181,5 +181,4 @@ public class Chat implements ChatClient {
         .map(UserName::of)
         .collect(Collectors.toSet());
   }
-
 }

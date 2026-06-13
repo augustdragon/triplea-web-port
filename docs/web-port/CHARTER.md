@@ -77,6 +77,43 @@ transport and client are new.
 Material changes to the rules above are recorded here with their reasoning, so the governance isn't
 a set of unexplained commands. Newest first.
 
+### ADR-002 — The fork becomes a server-only product; game-core carved to a headless engine (2026-06-12)
+
+**Status:** Accepted.
+
+**Context.** This fork's destiny is the web product, but the repo still carried the full desktop
+client (`:game-headed`), the bot/headless host, the experimental FlowField `:ai` module, the
+map-making tools, and the entire networked-multiplayer/lobby stack (lobby client, relay server,
+websocket libraries, swing-lib). `game-core` itself mixed the mature game rules and AI with ~200
+Swing-importing UI classes. That freight slowed builds, widened the read surface, and — more
+importantly — blocked the next two planned steps (de-static the engine; replace Java serialization),
+which need a small, headless `game-core` to be tractable. ADR-001 had already cleared the way by
+relaxing the engine-modification ban to a strong default.
+
+**Decision.** Execute "Option A": prune the fork to a server-only product. Delete the desktop/bot/
+tools modules and the networked-lobby stack; carve `game-core` down to a headless engine library by
+deleting all Swing UI and surgically stripping Swing from the data-model classes that must stay
+(game properties' editor components, the history tree's UI hooks, PBEM dialogs, etc.). Preserve the
+rules, delegates, attachments, and the Pro/Fast/Weak AI unchanged. Add an enforced Gradle guardrail
+(`:game-core:checkForbiddenImports`) banning `javax.swing` / `java.awt.event` / `org.triplea.swing`
+/ `org.triplea.web` imports in `game-core` main sources, with a small allowlist for the history
+tree-model classes whose `javax.swing.tree` base is serialized into save games.
+
+**Consequences.**
+- The Gradle module count drops from ~16 to 10, all server-relevant. `game-core` main no longer
+  imports `javax.swing` except the three allowlisted history files.
+- Upstream merges from `triplea-game/triplea` are now substantially harder — accepted, since this is
+  a distinct product, not a tracking fork.
+- The desktop client and bot are recoverable from git history if ever needed; the FlowField `:ai`
+  module likewise (the mature Pro AI lives in `game-core` and is retained).
+- Verified by a prod-save deserialization tripwire (real saves pulled from the live server), the
+  smoke-testing `AiGameTest` (full Pro-AI games to victory), and the `:game-web-server` /
+  `:game-control-plane` `installDist` targets — all green.
+- Order-of-losses parsing was relocated from a deleted UI panel into a non-UI `OrderOfLosses` helper;
+  Pro AI logging now routes through slf4j instead of the removed AI log window.
+- Unblocks Option B (de-static the engine for N games per JVM) and Option C (replace Java
+  serialization), which can now operate on a far smaller surface.
+
 ### ADR-001 — Hard Rule #1: engine modification goes from *prohibited* to *strong default* (2026-06-04)
 
 **Status:** Accepted.

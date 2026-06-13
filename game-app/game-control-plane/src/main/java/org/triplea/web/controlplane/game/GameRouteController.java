@@ -93,7 +93,8 @@ public final class GameRouteController {
     if (info.wsEndpoint() != null) {
       // A stored endpoint that no longer accepts connections is stale — typically the game JVM died
       // with a control-plane restart (a restart isn't a graceful reap, so the row keeps its old
-      // ws_endpoint). Without this check the WS proxy would dial the dead port forever. Fall through
+      // ws_endpoint). Without this check the WS proxy would dial the dead port forever. Fall
+      // through
       // to the spawn path; setContainer below overwrites the stale endpoint with the fresh one.
       log.info(
           "Game {} endpoint {} is unreachable (stale after a restart?) — respawning",
