@@ -37,12 +37,8 @@ tasks.named("check") { dependsOn(checkForbiddenImports) }
 dependencies {
     implementation(project(":domain-data"))
     implementation(project(":map-data"))
-    implementation(project(":game-relay-server"))
-    implementation(project(":lobby-client"))
     implementation(project(":lobby-client-data"))
     implementation(project(":java-extras"))
-    implementation(project(":swing-lib"))
-    implementation(project(":websocket-client"))
     implementation(project(":xml-reader"))
     testImplementation(project(":test-common"))
     // Configures mockito to use the legacy "subclass mock maker"
