@@ -9,7 +9,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import javax.swing.JComponent;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NonNls;
@@ -67,11 +66,6 @@ public class MapProperty<V> extends AbstractEditableProperty<Map<String, V>> {
   }
 
   @Override
-  public int getRowsNeeded() {
-    return Math.max(1, properties.size());
-  }
-
-  @Override
   public Map<String, V> getValue() {
     return map;
   }
@@ -82,16 +76,6 @@ public class MapProperty<V> extends AbstractEditableProperty<Map<String, V>> {
 
     map = value;
     resetProperties(map, properties, getDescription());
-  }
-
-  @Override
-  public JComponent getEditorComponent() {
-    return new PropertiesUi(properties, true);
-  }
-
-  @Override
-  public JComponent getViewComponent() {
-    return new PropertiesUi(properties, false);
   }
 
   @Override

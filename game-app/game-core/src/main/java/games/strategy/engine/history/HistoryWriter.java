@@ -4,7 +4,6 @@ import games.strategy.engine.data.Change;
 import games.strategy.engine.data.GameData;
 import games.strategy.engine.data.GamePlayer;
 import java.io.Serializable;
-import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
 
 /** Used to write to a history object. Delegates should use a DelegateHistoryWriter. */
@@ -20,10 +19,7 @@ public class HistoryWriter implements Serializable {
   }
 
   private void assertCorrectThread() {
-    if (history.getGameData().areChangesOnlyInSwingEventThread()
-        && !SwingUtilities.isEventDispatchThread()) {
-      throw new IllegalStateException("Wrong thread");
-    }
+    // Headless engine: history writes are not constrained to a Swing event-dispatch thread.
   }
 
   /** Can only be called if we are currently in a round or a step. */
@@ -106,7 +102,6 @@ public class HistoryWriter implements Serializable {
     try (GameData.Unlocker ignored = history.getGameData().acquireWriteLock()) {
       history.insertNodeInto(newNode, current, current.getChildCount());
     }
-    history.goToEnd();
   }
 
   /** Fires a new event with the given event name. */
@@ -173,6 +168,5 @@ public class HistoryWriter implements Serializable {
     try (GameData.Unlocker ignored = history.getGameData().acquireWriteLock()) {
       ((Event) current).setRenderingData(details);
     }
-    history.goToEnd();
   }
 }

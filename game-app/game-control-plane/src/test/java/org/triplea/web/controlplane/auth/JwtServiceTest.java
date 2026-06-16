@@ -38,8 +38,13 @@ class JwtServiceTest {
   @Test
   void rejectsTamperedToken() {
     final String token = jwt.mint(new Identity("google", "sub", "N", null));
+    // Tamper the first signature character: the last one only carries base64 padding bits,
+    // which lenient decoders discard, so flipping it does not change the signature bytes.
+    final int sigStart = token.lastIndexOf('.') + 1;
     final String tampered =
-        token.substring(0, token.length() - 1) + (token.endsWith("A") ? "B" : "A");
+        token.substring(0, sigStart)
+            + (token.charAt(sigStart) == 'A' ? 'B' : 'A')
+            + token.substring(sigStart + 1);
 
     assertThat(jwt.verify(tampered).isEmpty(), is(true));
   }

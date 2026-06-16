@@ -18,7 +18,6 @@ import games.strategy.triplea.delegate.PoliticsDelegate;
 import games.strategy.triplea.delegate.TechTracker;
 import games.strategy.triplea.delegate.TechnologyDelegate;
 import games.strategy.triplea.delegate.battle.BattleDelegate;
-import games.strategy.ui.Util;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -570,9 +569,6 @@ public class GameData implements Serializable, GameState {
 
   /** Executes a change and notifies listeners. */
   public void performChange(final Change change) {
-    if (areChangesOnlyInSwingEventThread()) {
-      Util.ensureOnEventDispatchThread();
-    }
     try (Unlocker ignored = acquireWriteLock()) {
       change.perform(this);
     }

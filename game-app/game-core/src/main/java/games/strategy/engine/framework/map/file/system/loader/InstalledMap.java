@@ -1,6 +1,5 @@
 package games.strategy.engine.framework.map.file.system.loader;
 
-import games.strategy.triplea.ui.mapdata.MapData;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Collection;
@@ -25,6 +24,9 @@ import org.triplea.util.LocalizeHtml;
 @RequiredArgsConstructor
 @ToString
 public class InstalledMap {
+  // The polygons file marks a map's content root; formerly MapData.POLYGON_FILE (UI, removed).
+  private static final String POLYGON_FILE = "polygons.txt";
+
   @Nonnull private final MapDescriptionYaml mapDescriptionYaml;
   @Nullable private Instant lastModifiedDate;
   @Nullable private Path contentRoot;
@@ -45,7 +47,7 @@ public class InstalledMap {
       // a polygons file, the location of the polygons file is the map content root.
       final Path mapYamlParentFolder = mapDescriptionYaml.getYamlFileLocation().getParent();
       contentRoot =
-          FileUtils.findClosestToRoot(mapYamlParentFolder, 3, MapData.POLYGON_FILE)
+          FileUtils.findClosestToRoot(mapYamlParentFolder, 3, POLYGON_FILE)
               .map(Path::getParent)
               .orElse(null);
     }

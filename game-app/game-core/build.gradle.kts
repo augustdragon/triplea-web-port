@@ -3,17 +3,47 @@ plugins {
     id("java-test-fixtures")
 }
 
+// Web-port guardrail: game-core is a headless engine library. Desktop-UI and web-module
+// imports are forbidden in main sources. Enforced as of the Option A prune; see
+// docs/web-port/CHARTER.md.
+val checkForbiddenImports = tasks.register("checkForbiddenImports") {
+    description = "Forbids javax.swing / java.awt.event / org.triplea.swing / org.triplea.web imports in game-core main sources."
+    group = "verification"
+    val enforce = true
+    // The history tree model extends javax.swing.tree.DefaultTreeModel / DefaultMutableTreeNode
+    // and is serialized into save games; removing that base is Option C (serialization
+    // replacement) work, not pruning work.
+    val allowlist = setOf(
+        "games/strategy/engine/history/History.java",
+        "games/strategy/engine/history/HistoryNode.java",
+        "games/strategy/engine/history/SerializedHistory.java")
+    val srcRoot = layout.projectDirectory.dir("src/main/java").asFile
+    inputs.dir(srcRoot)
+    outputs.upToDateWhen { false }
+    doLast {
+        val forbidden = Regex("""^import\s+(static\s+)?(javax\.swing|java\.awt\.event|org\.triplea\.swing|org\.triplea\.web)""")
+        val violations = srcRoot.walkTopDown()
+            .filter { it.isFile && it.extension == "java" }
+            .filterNot { it.relativeTo(srcRoot).invariantSeparatorsPath in allowlist }
+            .filter { file -> file.useLines { lines -> lines.any { forbidden.containsMatchIn(it) } } }
+            .map { it.relativeTo(srcRoot).invariantSeparatorsPath }
+            .sorted()
+            .toList()
+        if (violations.isNotEmpty()) {
+            val message = "game-core forbidden-import violations (${violations.size} files):\n" +
+                violations.joinToString("\n") { "  $it" }
+            if (enforce) throw GradleException(message) else logger.warn(message)
+        }
+    }
+}
+tasks.named("check") { dependsOn(checkForbiddenImports) }
+
 dependencies {
     implementation(project(":domain-data"))
     implementation(project(":map-data"))
-    implementation(project(":game-relay-server"))
-    implementation(project(":lobby-client"))
     implementation(project(":lobby-client-data"))
     implementation(project(":java-extras"))
-    implementation(project(":swing-lib"))
-    implementation(project(":websocket-client"))
     implementation(project(":xml-reader"))
-    testImplementation(project(":swing-lib-test-support"))
     testImplementation(project(":test-common"))
     // Configures mockito to use the legacy "subclass mock maker"
     // see https://github.com/mockito/mockito/releases/tag/v5.0.0 for more information

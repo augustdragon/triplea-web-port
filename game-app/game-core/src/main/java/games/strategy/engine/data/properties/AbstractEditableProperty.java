@@ -2,7 +2,6 @@ package games.strategy.engine.data.properties;
 
 import java.io.Serializable;
 import java.util.Objects;
-import javax.swing.JComponent;
 
 /**
  * Superclass for all implementations of {@link IEditableProperty}.
@@ -22,11 +21,6 @@ public abstract class AbstractEditableProperty<T>
   }
 
   @Override
-  public int getRowsNeeded() {
-    return 1;
-  }
-
-  @Override
   public String getName() {
     return name;
   }
@@ -34,13 +28,6 @@ public abstract class AbstractEditableProperty<T>
   @Override
   public String getDescription() {
     return description;
-  }
-
-  @Override
-  public JComponent getViewComponent() {
-    final JComponent component = getEditorComponent();
-    component.setEnabled(false);
-    return component;
   }
 
   @Override

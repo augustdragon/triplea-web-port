@@ -15,7 +15,6 @@ import games.strategy.triplea.ai.AbstractAi;
 import games.strategy.triplea.ai.pro.data.ProBattleResult;
 import games.strategy.triplea.ai.pro.data.ProPurchaseTerritory;
 import games.strategy.triplea.ai.pro.data.ProTerritory;
-import games.strategy.triplea.ai.pro.logging.ProLogUi;
 import games.strategy.triplea.ai.pro.logging.ProLogger;
 import games.strategy.triplea.ai.pro.simulate.ProDummyDelegateBridge;
 import games.strategy.triplea.ai.pro.simulate.ProSimulateTurnUtils;
@@ -120,7 +119,6 @@ public abstract class AbstractProAi extends AbstractAi {
       final GameData data,
       final GamePlayer player) {
     final Instant start = Instant.now();
-    ProLogUi.notifyStartOfRound(data.getSequence().getRound(), player.getName());
     initializeData();
     prepareData(data);
     boolean didCombatMove = false;
@@ -161,7 +159,6 @@ public abstract class AbstractProAi extends AbstractAi {
       final GameData data,
       final GamePlayer player) {
     final long start = System.currentTimeMillis();
-    ProLogUi.notifyStartOfRound(data.getSequence().getRound(), player.getName());
     initializeData();
     if (pusToSpend <= 0) {
       return;
@@ -295,7 +292,6 @@ public abstract class AbstractProAi extends AbstractAi {
       final GameState data,
       final GamePlayer player) {
     final long start = System.currentTimeMillis();
-    ProLogUi.notifyStartOfRound(data.getSequence().getRound(), player.getName());
     initializeData();
     purchaseAi.place(storedPurchaseTerritories, placeDelegate);
     storedPurchaseTerritories = null;

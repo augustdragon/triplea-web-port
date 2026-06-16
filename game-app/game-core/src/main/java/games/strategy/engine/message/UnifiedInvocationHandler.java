@@ -4,7 +4,6 @@ import games.strategy.engine.message.unifiedmessenger.UnifiedMessenger;
 import java.io.Serializable;
 import java.lang.reflect.Method;
 import java.util.Optional;
-import javax.swing.SwingUtilities;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -47,10 +46,6 @@ class UnifiedInvocationHandler extends WrappedInvocationHandler {
     if (ignoreResults) {
       messenger.invoke(endPointName, remoteMethodMsg);
       return null;
-    }
-
-    if (SwingUtilities.isEventDispatchThread()) {
-      log.info("Blocking network operation performed from EDT", new Exception());
     }
 
     final RemoteMethodCallResults response = messenger.invokeAndWait(endPointName, remoteMethodMsg);

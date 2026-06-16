@@ -26,9 +26,9 @@ import org.junit.jupiter.api.Test;
  *
  * <p>A triggered allied-ownership victory's <b>condition</b> evaluates as satisfied, but the engine
  * only <b>fires</b> the victory (records winners via {@code signalGameOver}) when a {@code
- * ResourceLoader} is present — it is used to resolve the victory notification message
- * ({@code TriggerAttachment.triggerVictory}, the {@code bridge.getResourceLoader().ifPresent(...)}
- * gate). With no resource loader — as in any headless host, and here via {@code MockDelegateBridge} —
+ * ResourceLoader} is present — it is used to resolve the victory notification message ({@code
+ * TriggerAttachment.triggerVictory}, the {@code bridge.getResourceLoader().ifPresent(...)} gate).
+ * With no resource loader — as in any headless host, and here via {@code MockDelegateBridge} —
  * {@code signalGameOver} is skipped and no winner is recorded.
  *
  * <p>If this test ever fails (the engine fires victory without a resource loader), the host-side
@@ -42,9 +42,11 @@ class TriggeredVictoryFiringTest {
   void conditionIsSatisfiedButEngineDoesNotFireVictoryWithoutAResourceLoader() {
     final IDelegateBridge bridge = newDelegateBridge(germans);
 
-    // Seed the Axis (German alliance) owning all four territories of conditionAttachmentAxisVictory1.
+    // Seed the Axis (German alliance) owning all four territories of
+    // conditionAttachmentAxisVictory1.
     for (final String territoryName : List.of("United Kingdom", "Russia", "Germany", "Japan")) {
-      gameData.performChange(ChangeFactory.changeOwner(territory(territoryName, gameData), germans));
+      gameData.performChange(
+          ChangeFactory.changeOwner(territory(territoryName, gameData), germans));
     }
 
     // The engine evaluates the victory trigger's condition as SATISFIED ...
@@ -57,11 +59,15 @@ class TriggeredVictoryFiringTest {
             Set.copyOf(gameData.getPlayerList().getPlayers()), endRoundMatch);
     final Map<ICondition, Boolean> tested =
         TriggerAttachment.collectTestsForAllTriggers(toFire, bridge);
-    final Predicate<TriggerAttachment> satisfied = AbstractTriggerAttachment.isSatisfiedMatch(tested);
+    final Predicate<TriggerAttachment> satisfied =
+        AbstractTriggerAttachment.isSatisfiedMatch(tested);
     final boolean anyVictorySatisfied =
-        toFire.stream().anyMatch(t -> TriggerAttachment.victoryMatch().test(t) && satisfied.test(t));
+        toFire.stream()
+            .anyMatch(t -> TriggerAttachment.victoryMatch().test(t) && satisfied.test(t));
     assertThat(
-        "a victory trigger's condition must be satisfied after seeding", anyVictorySatisfied, is(true));
+        "a victory trigger's condition must be satisfied after seeding",
+        anyVictorySatisfied,
+        is(true));
 
     // ... yet the engine records NO winner, because the bridge has no ResourceLoader.
     final EndRoundDelegate endRound = gameData.getEndRoundDelegate();

@@ -89,8 +89,10 @@ public final class WebPlayer extends AbstractBasePlayer {
   private JsonObject await(final String kind, final Object payload) {
     // Publish current board state before every decision request so the client always has a
     // snapshot to render the decision against. This is load-bearing on RESUME: the game loop only
-    // publishes state after a step *completes* (GameController.publishStep), but a human step blocks
-    // inside runNextStep waiting on us — so a game resumed directly onto a human turn would park here
+    // publishes state after a step *completes* (GameController.publishStep), but a human step
+    // blocks
+    // inside runNextStep waiting on us — so a game resumed directly onto a human turn would park
+    // here
     // having never published any state, leaving the board (round / owners / units / stats) blank.
     bridge.publishState(GSON.toJson(StateProjector.project(getGameData())));
     return bridge.await(getGamePlayer().getName(), kind, payload);

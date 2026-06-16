@@ -702,6 +702,30 @@ relaxed (ADR-001) + `docs/web-port/REFACTOR-PLAN.md` written. Picked up next, in
 - [ ] **Refactor plan** (`docs/web-port/REFACTOR-PLAN.md`) — web-module decomposition. Start with the
       guardrail (Item 3), then `SaveStoreFacade` (gentlest `GameController` cut), then the rest. Behavior-
       preserving, one extraction per commit. *(User is weighing this while testing.)*
+
+## Refactor: Option A — server-only prune (2026-06-12, branch `prune/option-a`)
+
+Engine modernization sequence agreed with the user: **A) prune to a server product → B) de-static the
+engine (N games per JVM) → C) replace Java serialization.** A is done; B and C are next (each warrants a
+`/decide` ADR). See `docs/web-port/CHARTER.md` ADR-002. Six commits on `prune/option-a`:
+- [x] **Tier 0** — prod-save deserialization tripwire (`ProdSaveCompatibilityTest`, real saves from the
+      VPS), warn-mode forbidden-import guardrail, fixed a flaky `JwtServiceTest`.
+- [x] **Tier 1** — deleted `:game-headed` (Swing desktop), `:game-headless` (bot), `:ai` (FlowField),
+      `:swing-lib-test-support`; rewired smoke-testing onto a new `TestLaunchAction`.
+- [x] **Tier 2** — carved `game-core` to a headless engine: deleted all Swing UI + map tools + the
+      networked-lobby stack; stripped Swing from kept data-model classes (properties, History, PBEM,
+      RandomStatsDetails); relocated OOL parsing to `OrderOfLosses`; Pro AI logs via slf4j.
+- [x] **Tier 3** — deleted orphaned libs (`:game-relay-server`, `:lobby-client`, `:feign-common`,
+      `:swing-lib`, `:websocket-client`, `:websocket-server`); module count ~16 → 10.
+- [x] **Tier 4** — flipped the guardrail to enforcing (`./gradlew check` blocks new Swing in game-core);
+      recorded ADR-002.
+- **Verified locally:** full `./gradlew check`, smoke `AiGameTest`, prod-save tripwire, and both
+      `installDist` targets all green. game-core main imports `javax.swing` only in the 3 allowlisted
+      history tree-model files.
+- [ ] **NOT YET DEPLOYED.** `prune/option-a` is local only (6 commits ahead of `origin/web-port`).
+      Deploying = merge to `web-port` + push + `sudo /opt/triplea-web/deploy/redeploy.sh` on the VPS,
+      which restarts the control plane (live multi-day games resume from Postgres). User decision —
+      load every active game's latest save on staging first.
 - [ ] **Structured PG audit events** — a `game_events` table (seat_bound / launched / ai_takeover /
       game_over) written transactionally; smoke + Testcontainers tests assert against it. Chosen as the
       behavioral "seat holds" guard (the lobby path the e2e doesn't cover). Establishes the control-plane

@@ -1,7 +1,5 @@
 package games.strategy.engine.data;
 
-import static org.mockito.Mockito.mock;
-
 import games.strategy.engine.ClientFileSystemHelper;
 import games.strategy.engine.data.gameparser.GameParser;
 import games.strategy.engine.framework.GameRunner;
@@ -24,8 +22,6 @@ import java.util.function.Predicate;
 import lombok.experimental.UtilityClass;
 import lombok.extern.slf4j.Slf4j;
 import org.sonatype.goodies.prefs.memory.MemoryPreferences;
-import org.triplea.game.server.HeadlessGameServer;
-import org.triplea.game.server.HeadlessLaunchAction;
 import org.triplea.io.FileUtils;
 import org.triplea.java.collections.CollectionUtils;
 
@@ -33,8 +29,7 @@ import org.triplea.java.collections.CollectionUtils;
 @Slf4j
 public class GameTestUtils {
   public static void setUp() throws IOException {
-
-    HeadlessLaunchAction.setSkipMapResourceLoading(true);
+    // TestLaunchAction always skips map resource loading, so no flag is needed here.
 
     ClientSetting.setPreferences(new MemoryPreferences());
     ClientSetting.aiMovePauseDuration.setValue(0);
@@ -62,7 +57,7 @@ public class GameTestUtils {
       playerTypes.put(player.getName(), PlayerTypes.PRO_AI);
     }
     Set<Player> gamePlayers = gameData.getGameLoader().newPlayers(playerTypes);
-    HeadlessLaunchAction launchAction = new HeadlessLaunchAction(mock(HeadlessGameServer.class));
+    TestLaunchAction launchAction = new TestLaunchAction();
     Messengers messengers = new Messengers(new LocalNoOpMessenger());
     ServerGame game =
         new ServerGame(

@@ -5,13 +5,9 @@ import static java.util.function.Predicate.not;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import games.strategy.engine.ClientFileSystemHelper;
-import games.strategy.engine.framework.lookandfeel.LookAndFeel;
-import games.strategy.engine.framework.startup.ui.posted.game.DiceServerEditor;
 import games.strategy.engine.framework.system.HttpProxy;
 import games.strategy.engine.framework.system.SystemProperties;
 import games.strategy.triplea.UrlConstants;
-import games.strategy.triplea.ui.screen.UnitsDrawer;
-import java.awt.Frame;
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.Collection;
@@ -69,7 +65,7 @@ public abstract class ClientSetting<T> implements GameSetting<T> {
   public static final ClientSetting<String> defaultGameUri =
       new StringClientSetting("DEFAULT_GAME_URI_PREF");
   public static final ClientSetting<URI> diceRollerUri =
-      new UriClientSetting("DICE_ROLLER_URI", DiceServerEditor.PRODUCTION_URI);
+      new UriClientSetting("DICE_ROLLER_URI", URI.create("https://dice.marti.triplea-game.org"));
   public static final ClientSetting<Integer> fasterArrowKeyScrollMultiplier =
       new IntegerClientSetting("FASTER_ARROW_KEY_SCROLL_MULTIPLIER", 2);
   public static final ClientSetting<Boolean> spaceBarConfirmsCasualties =
@@ -90,8 +86,10 @@ public abstract class ClientSetting<T> implements GameSetting<T> {
   public static final BooleanClientSetting lockMap = new BooleanClientSetting("LOCK_MAP");
   public static final BooleanClientSetting loginAnonymously =
       new BooleanClientSetting("LOGIN_ANONYMOUSLY", true);
+  // Desktop-only look-and-feel preference; unused by the headless server but retained for
+  // save/preferences compatibility.
   public static final ClientSetting<String> lookAndFeel =
-      new StringClientSetting("LOOK_AND_FEEL_PREF", LookAndFeel.getDefaultLookAndFeelClassName());
+      new StringClientSetting("LOOK_AND_FEEL_PREF", "");
   public static final ClientSetting<Integer> mapEdgeScrollSpeed =
       new IntegerClientSetting("MAP_EDGE_SCROLL_SPEED", 30);
   public static final ClientSetting<Integer> mapEdgeScrollZoneSize =
@@ -143,11 +141,6 @@ public abstract class ClientSetting<T> implements GameSetting<T> {
       new LongClientSetting("TRIPLEA_LAST_CHECK_FOR_MAP_UPDATES_EPOCH_MILLI", 0);
   public static final ClientSetting<Boolean> promptToDownloadTutorialMap =
       new BooleanClientSetting("TRIPLEA_PROMPT_TO_DOWNLOAD_TUTORIAL_MAP", true);
-  public static final ClientSetting<UnitsDrawer.UnitFlagDrawMode> unitFlagDrawMode =
-      new EnumClientSetting<>(
-          UnitsDrawer.UnitFlagDrawMode.class,
-          "UNIT_FLAG_DRAW_MODE",
-          UnitsDrawer.UnitFlagDrawMode.NONE);
   public static final ClientSetting<Integer> wheelScrollAmount =
       new IntegerClientSetting("WHEEL_SCROLL_AMOUNT", 60);
   public static final ClientSetting<String> playerName =
@@ -244,10 +237,6 @@ public abstract class ClientSetting<T> implements GameSetting<T> {
   @Override
   public final void removeListener(final Consumer<GameSetting<T>> listener) {
     listeners.remove(listener);
-  }
-
-  public static void showSettingsWindow(final Frame owner) {
-    SettingsWindow.INSTANCE.open(owner);
   }
 
   /** Persists all pending client setting changes to the backing store. */

@@ -1,7 +1,6 @@
-package org.triplea.web.server.game;
+package games.strategy.engine.data;
 
 import games.strategy.engine.chat.Chat;
-import games.strategy.engine.display.IDisplay;
 import games.strategy.engine.framework.AutoSaveFileUtils;
 import games.strategy.engine.framework.IGame;
 import games.strategy.engine.framework.LocalPlayers;
@@ -10,6 +9,7 @@ import games.strategy.engine.framework.startup.launcher.LaunchAction;
 import games.strategy.engine.framework.startup.ui.PlayerTypes;
 import games.strategy.engine.player.Player;
 import games.strategy.triplea.ResourceLoader;
+import games.strategy.triplea.ui.display.HeadlessDisplay;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
@@ -18,19 +18,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.triplea.sound.HeadlessSoundChannel;
 
 /**
- * Minimal {@link LaunchAction} for running a game in-process inside the web server. Only {@link
- * #startGame} is exercised by the direct game-loader path ({@code TripleA#startGame}); it wires the
- * engine to the supplied {@link IDisplay} (the seam where {@code WebDisplay} plugs in). The
- * lobby/network methods belong to the networked {@code ServerLauncher} flow that this path never
- * uses, so they throw to fail fast if that assumption ever changes.
+ * Minimal {@link LaunchAction} for the smoke-testing AI harness. Replaces the dependency on
+ * game-headless's {@code HeadlessLaunchAction} (deleted in the server-only prune). Only {@link
+ * #startGame} is exercised by {@link GameTestUtils}; map resources are always skipped (test context
+ * never needs map images), and the networked launcher methods throw to fail fast if a test ever
+ * routes through the unused networked flow.
  */
 @Slf4j
-public final class WebLaunchAction implements LaunchAction {
-  private final IDisplay display;
-
-  public WebLaunchAction(final IDisplay display) {
-    this.display = display;
-  }
+public final class TestLaunchAction implements LaunchAction {
 
   @Override
   public void startGame(
@@ -38,9 +33,9 @@ public final class WebLaunchAction implements LaunchAction {
       final IGame game,
       final Set<Player> players,
       final Chat chat) {
-    // Headless/AI play needs no map image resources.
+    // Test/AI play needs no map image resources.
     game.setResourceLoader(new ResourceLoader(List.of()));
-    game.setDisplay(display);
+    game.setDisplay(new HeadlessDisplay());
     game.setSoundChannel(new HeadlessSoundChannel());
   }
 
@@ -56,13 +51,11 @@ public final class WebLaunchAction implements LaunchAction {
 
   @Override
   public PlayerTypes.Type getDefaultLocalPlayerType() {
-    return PlayerTypes.FAST_AI;
+    return PlayerTypes.WEAK_AI;
   }
 
   @Override
-  public void onLaunch(final ServerGame serverGame) {
-    // The web server owns the ServerGame instance directly; nothing to register here.
-  }
+  public void onLaunch(final ServerGame serverGame) {}
 
   @Override
   public void onEnd(final String message) {
@@ -76,13 +69,11 @@ public final class WebLaunchAction implements LaunchAction {
 
   @Override
   public Path getAutoSaveFile() {
-    // Called at game end; the engine also auto-saves at round boundaries via getAutoSaveFileUtils.
     return getAutoSaveFileUtils().getOddRoundAutoSaveFile();
   }
 
   @Override
   public AutoSaveFileUtils getAutoSaveFileUtils() {
-    // ServerGame writes a round-boundary autosave; WebGameHost points saves at a temp folder.
     return new AutoSaveFileUtils();
   }
 }

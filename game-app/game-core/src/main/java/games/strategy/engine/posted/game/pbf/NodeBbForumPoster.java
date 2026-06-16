@@ -24,7 +24,6 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
 import org.jetbrains.annotations.NonNls;
-import org.triplea.awt.OpenFileUtility;
 import org.triplea.yaml.YamlReader;
 
 /**
@@ -210,10 +209,5 @@ public class NodeBbForumPoster {
               + json,
           cause);
     }
-  }
-
-  /** Opens a browser and go to the forum post, identified by the forumId. */
-  public void viewPosted() {
-    OpenFileUtility.openUrl(null, forumUrl + "/topic/" + topicId);
   }
 }
