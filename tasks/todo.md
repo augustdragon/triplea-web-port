@@ -722,10 +722,11 @@ engine (N games per JVM) → C) replace Java serialization.** A is done; B and C
 - **Verified locally:** full `./gradlew check`, smoke `AiGameTest`, prod-save tripwire, and both
       `installDist` targets all green. game-core main imports `javax.swing` only in the 3 allowlisted
       history tree-model files.
-- [ ] **NOT YET DEPLOYED.** `prune/option-a` is local only (6 commits ahead of `origin/web-port`).
-      Deploying = merge to `web-port` + push + `sudo /opt/triplea-web/deploy/redeploy.sh` on the VPS,
-      which restarts the control plane (live multi-day games resume from Postgres). User decision —
-      load every active game's latest save on staging first.
+- [x] **DEPLOYED to production 2026-06-16.** Merged `prune/option-a` → `web-port` (69b8daddc), pushed,
+      ran `redeploy.sh` on the VPS. Pre-flight: all 6 live saves validated to deserialize on the new
+      build before merging. Post: control plane healthy on :7000, public site + `/health` return 200,
+      no errors since restart. Rollback point was `b3618bdad`. (Interactive game-launch smoke — playing
+      a turn through OAuth — left to the user.)
 - [ ] **Structured PG audit events** — a `game_events` table (seat_bound / launched / ai_takeover /
       game_over) written transactionally; smoke + Testcontainers tests assert against it. Chosen as the
       behavioral "seat holds" guard (the lobby path the e2e doesn't cover). Establishes the control-plane
